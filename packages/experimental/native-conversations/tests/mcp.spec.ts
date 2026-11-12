@@ -1,6 +1,7 @@
 /** Real MCP HTTP requests use Agent-scoped admission, ordinary tool policies, and durable logs. */
 import { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
+import { ServerResponse } from 'node:http'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -15,7 +16,8 @@ class UnusedAdapter extends LlmAdapter {
   override async *stream(): AsyncIterable<StreamChunk> { yield { type: 'finish', reason: { kind: 'stop' } } }
 }
 
-async function fixture(tools: readonly ToolDefinition[] = [], onBatch?: (batch: ToolBatchResult) => void | Promise<void>) {
+async function fixture(tools: readonly ToolDefinition[] = [], onBatch?: (batch: ToolBatchResult) => void | Promise<void>,
+  onBatchDelivered?: (batch: ToolBatchResult) => void | Promise<void>) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
   ctx.llm.registerAdapter(['fixture'], new UnusedAdapter())
@@ -30,6 +32,7 @@ async function fixture(tools: readonly ToolDefinition[] = [], onBatch?: (batch: 
   const endpoint = await startHarnessMcp({ ctx, agent, schemas, instructions: 'Follow the committed Harness system guidance.',
     modelSelection: { provider: 'fixture', model: 'fixture' }, log: { turn: 1, step: 3 }, signal: controller.signal,
     ...onBatch === undefined ? {} : { onBatch },
+    ...onBatchDelivered === undefined ? {} : { onBatchDelivered },
   })
   const clients: Client[] = []
   const client = async (target: HarnessMcpEndpoint = endpoint) => {
@@ -110,10 +113,66 @@ describe('native Harness MCP tools', () => {
     })
     const h = await fixture([tool], batch => { batches.push(batch) })
     const result = await (await h.client()).callTool({ name: 'conclude', arguments: {} })
-    expect(result).toMatchObject({ isError: false, content: [{ type: 'text', text: '{"type":"reasoning","text":"Structured content"}' }] })
+    expect(result.isError).toBe(false)
+    expect(result.content[0]).toEqual({ type: 'text', text: '{"type":"reasoning","text":"Structured content"}' })
+    const context = result.content[1]
+    expect(context?.type).toBe('text')
+    if (context?.type !== 'text') throw new Error('The deferred context was not delivered as MCP text')
+    expect(JSON.parse(context.text)).toMatchObject({ kind: 'harness-deferred-context', message: {
+      role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Deferred guidance' }],
+    } })
     expect(batches).toHaveLength(1)
     expect(batches[0]?.concluded).toBe(true)
     expect(batches[0]?.additionalContexts[0]?.content).toEqual([{ type: 'text', text: 'Deferred guidance' }])
+    await expect((await h.client()).callTool({ name: 'conclude', arguments: {} })).rejects.toThrow()
+    expect(batches).toHaveLength(1)
+  })
+
+  it('reports batch delivery only after the actual tool HTTP response finishes', async () => {
+    const trace: string[] = []
+    let batchCompleted = false
+    const h = await fixture([defineContentToolFixture({ name: 'finish', description: 'Finish this turn.', parameters: {},
+      async execute(_args, exec) { exec.concludeTurn(); return [{ type: 'text', text: 'complete' }] },
+    })], () => { batchCompleted = true; trace.push('batch') }, () => { trace.push('delivered') })
+    const client = await h.client()
+    const originalEmit = ServerResponse.prototype.emit
+    const emitted = vi.spyOn(ServerResponse.prototype, 'emit').mockImplementation(function (this: ServerResponse, event, ...args) {
+      if (batchCompleted && event === 'finish') trace.push('http-finish')
+      return originalEmit.call(this, event, ...args)
+    })
+    try {
+      expect((await client.callTool({ name: 'finish', arguments: {} })).isError).toBe(false)
+      await vi.waitFor(() => { expect(trace).toContain('delivered') })
+      expect(trace.indexOf('batch')).toBeLessThan(trace.indexOf('http-finish'))
+      expect(trace.indexOf('http-finish')).toBeLessThan(trace.indexOf('delivered'))
+    } finally { emitted.mockRestore() }
+  })
+
+  it('drains response-delivery callbacks during close and refuses calls after a concluded batch', async () => {
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    let laterCalls = 0
+    const h = await fixture([
+      defineContentToolFixture({ name: 'finish', description: 'Finish this turn.', parameters: {},
+        async execute(_args, exec) { exec.concludeTurn(); return [{ type: 'text', text: 'complete' }] },
+      }),
+      defineContentToolFixture({ name: 'later', description: 'Must not run after completion.', parameters: {},
+        async execute() { laterCalls++; return [{ type: 'text', text: 'unexpected' }] },
+      }),
+    ], () => {}, async () => { entered.resolve(); await release.promise })
+    const client = await h.client()
+    await client.callTool({ name: 'finish', arguments: {} })
+    await entered.promise
+    await expect(client.callTool({ name: 'later', arguments: {} })).rejects.toThrow()
+    expect(laterCalls).toBe(0)
+    let closed = false
+    const closing = h.endpoint.close().then(() => { closed = true })
+    try {
+      await Promise.resolve()
+      expect(closed).toBe(false)
+    } finally { release.resolve() }
+    await closing
+    expect(closed).toBe(true)
   })
 
   it('fails closed if a caller omits deferred-context handling', async () => {

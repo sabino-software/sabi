@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-attachment'
 import { HarnessError, ToolCallId, type ContentBlock, type ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { ToolBatchResult } from '@deepseek-ai/dsh-tools'
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createMcpHandler, McpServer, ProtocolError, INVALID_PARAMS, type CallToolResult, type Tool } from '@modelcontextprotocol/server'
 import { toNodeHandler, type NodeIncomingMessageLike } from '@modelcontextprotocol/node'
@@ -20,6 +21,8 @@ export interface HarnessMcpOptions {
   readonly signal: AbortSignal
   /** Must consume deferred context and turn conclusions before the native model continues. */
   readonly onBatch?: (batch: ToolBatchResult) => void | Promise<void>
+  /** Runs after the tool result's HTTP response finishes; never await endpoint.close() inside it. */
+  readonly onBatchDelivered?: (batch: ToolBatchResult) => void | Promise<void>
 }
 
 /** Credentials exist only in memory for this model turn. */
@@ -28,6 +31,15 @@ export interface HarnessMcpEndpoint {
   readonly token: string
   /** Abort and drain tool calls before releasing step admission and the HTTP endpoint. */
   close(): Promise<void>
+}
+
+interface ExecutedCall {
+  readonly batch: ToolBatchResult
+  readonly result: CallToolResult
+}
+
+interface ResponseDelivery {
+  readonly batches: ToolBatchResult[]
 }
 
 function denied(response: ServerResponse, status: number): void {
@@ -68,27 +80,37 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
   const toolSet = await ctx.agents.withInitiator(agent, () => ctx.tools.resolve({ agent, modelSelection: options.modelSelection, signal }))
   const token = randomBytes(32).toString('base64url')
   const credential = Buffer.from(`Bearer ${token}`)
-  const calls = new Set<Promise<CallToolResult>>()
+  const calls = new Set<Promise<ExecutedCall>>()
   const requests = new Set<Promise<void>>()
+  const responses = new Set<Promise<void>>()
+  const deliveryScope = new AsyncLocalStorage<ResponseDelivery>()
+  let deliveryFailed = false
+  let concluded = false
   // Native MCP requests arrive individually; serialize them so exclusive Harness tools cannot overlap.
   let queue: Promise<void> = Promise.resolve()
   let authorities = new Set<string>()
   let closing: Promise<void> | undefined
 
-  const execute = async (name: string, args: Record<string, unknown>, requestSignal: AbortSignal): Promise<CallToolResult> => {
+  const execute = async (name: string, args: Record<string, unknown>, requestSignal: AbortSignal): Promise<ExecutedCall> => {
     const active = AbortSignal.any([signal, requestSignal])
     active.throwIfAborted()
+    if (concluded) throw new ProtocolError(INVALID_PARAMS, 'The Harness tool batch concluded this turn; no further tools are admitted.')
     const batch = await ctx.agents.withInitiator(agent, () => ctx.tools.execute({
       calls: [{ type: 'tool-call', id: ToolCallId(`native_mcp_${randomUUID()}`), name, arguments: JSON.stringify(args) }],
       agent, log: options.log, signal: active, toolSet,
     }))
+    concluded ||= batch.concluded
     if (options.onBatch !== undefined) await options.onBatch(batch)
     else if (batch.additionalContexts.length > 0 || batch.concluded) {
       throw new HarnessError('Native tool context requires an owning continuation handler.', 'NATIVE_MCP_CONTEXT_UNHANDLED')
     }
     const result = batch.results[0]?.result
     if (result === undefined) throw new HarnessError('The tool executor omitted its result.', 'NATIVE_MCP_RESULT_MISSING')
-    return { isError: result.isError, content: await Promise.all(result.content.map(block => content(block, ctx, active))) }
+    const projected = await Promise.all(result.content.map(block => content(block, ctx, active)))
+    for (const message of batch.additionalContexts) {
+      projected.push({ type: 'text', text: JSON.stringify({ kind: 'harness-deferred-context', message }) })
+    }
+    return { batch, result: { isError: result.isError, content: projected } }
   }
 
   const handler = createMcpHandler(() => {
@@ -97,10 +119,17 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
     mcp.server.setRequestHandler('tools/call', async (request, context) => {
       signal.throwIfAborted()
       if (!schemas.has(request.params.name)) throw new ProtocolError(INVALID_PARAMS, 'This tool is not declared for the current model step.')
+      const delivery = deliveryScope.getStore()
+      if (delivery === undefined) throw new HarnessError('The MCP response has no delivery owner.', 'NATIVE_MCP_DELIVERY_SCOPE')
       const run = queue.then(() => execute(request.params.name, request.params.arguments ?? {}, context.mcpReq.signal))
       calls.add(run)
       queue = run.then(() => {}, () => {})
-      try { return mcp.server.projectCallToolResult(await run, undefined) }
+      try {
+        const completed = await run
+        const result = mcp.server.projectCallToolResult(completed.result, undefined)
+        delivery.batches.push(completed.batch)
+        return result
+      }
       finally { calls.delete(run) }
     })
     return mcp
@@ -117,7 +146,25 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
   }
 
   const server = createServer((request, response) => {
-    const pending = admit(request, response).catch((_requestFailure: unknown) => {
+    const delivery: ResponseDelivery = { batches: [] }
+    const completion = Promise.withResolvers<void>()
+    let finished = false
+    responses.add(completion.promise)
+    void completion.promise.then(() => { responses.delete(completion.promise) })
+    response.once('finish', () => {
+      finished = true
+      const delivered = async (): Promise<void> => {
+        if (response.statusCode < 200 || response.statusCode >= 300) return
+        for (const batch of delivery.batches) await options.onBatchDelivered?.(batch)
+      }
+      void delivered().then(completion.resolve, (_deliveryFailure: unknown) => {
+        deliveryFailed = true
+        ctx.logger.warn('A native MCP result delivery callback failed.')
+        completion.resolve()
+      })
+    })
+    response.once('close', () => { if (!finished) completion.resolve() })
+    const pending = deliveryScope.run(delivery, () => admit(request, response)).catch((_requestFailure: unknown) => {
       if (!response.headersSent) denied(response, 500)
       else response.destroy()
     })
@@ -136,7 +183,9 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
       try {
         const closingHandler = Promise.resolve().then(() => handler.close())
         await Promise.allSettled([closingHandler, ...calls, ...requests])
+        await Promise.allSettled([...responses])
         await closingHandler
+        if (deliveryFailed) throw new HarnessError('A native MCP delivery callback failed.', 'NATIVE_MCP_DELIVERY')
       } finally {
         server.closeAllConnections()
         try { await stopped }
