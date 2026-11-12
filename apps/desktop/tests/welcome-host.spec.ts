@@ -4,6 +4,7 @@ import { connectDesktopWelcome } from '../src/welcome-backend.ts'
 
 function transport(preference?: string) {
   const keys = new Map<string, string>()
+  const authorizations: { key: string; configured: boolean; methods: { id: string; label: string }[] }[] = []
   const namespaces = [
     { ns: 'llm-deepseek', value: { apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY' } },
     { ns: 'llm-pi-ai', value: { profiles: { example: { apiKeyEnv: 'EXAMPLE_API_KEY' } } } },
@@ -19,13 +20,14 @@ function transport(preference?: string) {
     if (method === 'account/getState') value = { links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null }
     else if (method === 'settings/describe') value = { namespaces }
     else if (method === 'llm/listConfigurableProviders') value = [{ settingsNs: 'llm-pi-ai', settingsPath: ['profiles', 'example'] }]
+    else if (method === 'authorization/list') value = authorizations
     else if (method === 'productAnalytics/enabled') value = true
     else if (method === 'productAnalytics/report') value = undefined
     else if (method === 'credentials/set') keys.set(payload.args.ref, payload.args.value)
     else value = Object.fromEntries(payload.args.refs.map(ref => [ref, { configured: keys.has(ref), writable: true }]))
     return Response.json({ type: 'server-response', rpcId, result: { ok: true, value } })
   })
-  return { send, keys, namespaces }
+  return { send, keys, namespaces, authorizations }
 }
 
 const url = 'http://127.0.0.1:19387/'
@@ -74,6 +76,21 @@ describe('desktop welcome Web operations', () => {
     host.keys.clear()
     expect(await backend.read()).toMatchObject({ hasApiKey: false })
     expect(host.send.mock.calls.every(([, init]) => !(init?.body as string | undefined)?.includes('credentials/set'))).toBe(true)
+  })
+
+  it.each(['openai-codex', 'another-provider'])('recognizes a stored %s provider sign-in without requesting its secret', async (provider) => {
+    const host = transport()
+    host.authorizations.push({ key: `llm-pi-ai/${provider}`, configured: true, methods: [{ id: 'oauth', label: 'Sign in' }] })
+    const backend = connectDesktopWelcome(url, cookie, host.send)
+    expect(await backend.read()).toMatchObject({ loggedIn: false, hasApiKey: true, writable: true })
+    expect(host.keys.size).toBe(0)
+    const requests = host.send.mock.calls.map(([, init]) => JSON.parse(init!.body as string) as { method: string; payload: { args: object } })
+    expect(requests.find(request => request.method === 'authorization/list')?.payload.args).toEqual({})
+    expect(requests.map(request => request.method)).not.toContain('credentials/get')
+    expect(requests.map(request => request.method)).not.toContain('authorization/begin')
+    expect(requests.map(request => request.method)).not.toContain('credentials/set')
+    host.authorizations[0]!.configured = false
+    expect(await backend.read()).toMatchObject({ hasApiKey: false })
   })
 
   it('reads language without querying account or model providers', async () => {

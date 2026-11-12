@@ -7,6 +7,7 @@ import { desktopAccountBackend, type DesktopAccountBackend } from './account-bac
 /** Metadata needed before the native entry or workspace becomes visible. */
 export interface WelcomeState {
   readonly loggedIn: boolean
+  /** A provider API key or a stored provider sign-in is configured; no secret values are read. */
   readonly hasApiKey: boolean
   readonly writable: boolean
   readonly localePreference: string | null
@@ -21,7 +22,7 @@ export interface DesktopWelcomeBackend {
   readonly account: DesktopAccountBackend
   /** @param event - desktop-owned fields. @returns after local Host intake. */
   report(event: ProductEvent): Promise<void>
-  /** @returns Configured-key presence and the shared language and theme preferences, without credential values. */
+  /** @returns Configured provider credential presence and shared preferences, without credential values. */
   read(): Promise<WelcomeState>
   /** @returns The saved UI language without account or provider requests. */
   readLocalePreference(): Promise<string | null>
@@ -121,9 +122,15 @@ export function connectDesktopWelcome(
       Object.assign(states, batch)
     }
     if (ref !== undefined && !record(states[ref])) throw new Error('desktop welcome: missing credential metadata')
+    const authorizations = await invoke({ namespace: 'authorization', method: 'list', args: {} })
+    if (!Array.isArray(authorizations) || authorizations.some((entry: unknown) =>
+      !record(entry) || typeof entry.configured !== 'boolean')) {
+      throw new Error('desktop welcome: invalid provider sign-in metadata')
+    }
+    const hasProviderSignIn = authorizations.some((entry: unknown) => record(entry) && entry.configured === true)
     return {
       loggedIn: (await account.state()).status === 'credential-stored',
-      hasApiKey: Object.values(states).some(value => record(value) && value.configured === true),
+      hasApiKey: hasProviderSignIn || Object.values(states).some(value => record(value) && value.configured === true),
       writable: ref !== undefined && record(states[ref]) && states[ref].writable === true,
       localePreference: localePreference(namespaces),
       themePreference: themePreference(namespaces),
