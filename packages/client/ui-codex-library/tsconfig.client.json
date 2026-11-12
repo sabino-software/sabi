@@ -42,7 +42,13 @@
       "path": "../ui-slots"
     },
     {
-      "path": "../../api/codex-library-controller"
+      "path": "../../experimental/native-conversations"
+    },
+    {
+      "path": "../ui-workspace/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-conversation/tsconfig.client.json"
     }
   ]
 }

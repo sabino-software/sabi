@@ -143,11 +143,9 @@
     - id: ui-account-notifications
       name: '@deepseek-ai/dsh-client-ui-account-notifications'
 
-    - id: codex-library-controller
-      name: '@deepseek-ai/dsh-api-codex-library-controller'
-
     - id: codex-library
       name: '@deepseek-ai/dsh-client-ui-codex-library'
+      disabled: !!js process.env.DSH_NATIVE_CONVERSATIONS !== '1'
 
     - id: authorization-controller
       name: '@deepseek-ai/dsh-api-authorization-controller'
@@ -627,3 +625,16 @@
       name: '@deepseek-ai/dsh-agent-preset-registry'
       config:
         default: standard
+
+# Native adapters attach after the base execution, persistence and approval services.
+- insert:
+    - id: codex-app-server
+      name: '@deepseek-ai/dsh-host-codex-app-server'
+      disabled: !!js process.env.DSH_NATIVE_CONVERSATIONS !== '1'
+      config:
+        clientName: skeinlet
+        clientVersion: !!js process.env.DSH_CLIENT_VERSION
+
+    - id: native-conversations
+      name: '@deepseek-ai/dsh-experimental-native-conversations'
+      disabled: !!js process.env.DSH_NATIVE_CONVERSATIONS !== '1'

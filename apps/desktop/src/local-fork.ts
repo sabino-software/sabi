@@ -34,6 +34,7 @@ export function configureLocalFork(manifest: unknown, application: LocalForkAppl
   application.setPath('userData', electron)
   application.setPath('sessionData', electron)
   environment.DSH_HOME = join(root, 'harness-home')
+  environment.DSH_NATIVE_CONVERSATIONS = '1'
   return { productName: fork.productName, scheme: fork.scheme }
 }
 

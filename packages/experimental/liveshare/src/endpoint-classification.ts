@@ -105,8 +105,10 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'session/selectModel': 'owner-only', // owner selects a Session model
   'session/updateQueue': 'owner-only', // owner edits queued input
   'session/workspacePathApplications': 'owner-only', // owner applies a Workspace path
-  'codexLibrary/list': 'owner-only', // local work Codex history is private
-  'codexLibrary/read': 'owner-only',
+  'nativeConversations/status': 'owner-only', // external work conversations are private
+  'nativeConversations/syncCodex': 'owner-only',
+  'nativeConversations/connectAxiom': 'owner-only',
+  'nativeConversations/showAxiomLogin': 'owner-only',
   'authorization/list': 'owner-only', // provider sign-in and stored account presence
   'authorization/begin': 'owner-only',
   'authorization/answer': 'owner-only',

@@ -288,6 +288,8 @@
   ],
   "references": [
     { "path": "./packages/api/codex-library-controller" },
+    { "path": "./packages/host/codex-app-server" },
+    { "path": "./packages/experimental/native-conversations" },
     { "path": "./packages/client/ui-codex-library/tsconfig.host.json" },
     { "path": "./packages/experimental/action-cards" },
     { "path": "./packages/experimental/creation-recommendations" },
