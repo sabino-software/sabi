@@ -25,6 +25,8 @@ Install `@deepseek-ai/dsh-subagent-codex` into a Profile when delegated work sho
 <a id="use-this-package"></a>
 ## Use this package
 
+Native child processes disable analytics, feedback submission, and OpenTelemetry exports without changing the user's Codex configuration.
+
 Enable **Codex subagent** in the Web or Desktop Plugins page when a task needs a fresh native Codex session in the parent workspace.
 
 ### Installing the Bundle

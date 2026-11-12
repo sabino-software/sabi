@@ -271,7 +271,14 @@ export async function startOarRun(
       ...spec.model === undefined ? {} : { model: spec.model },
       ...spec.effort === undefined ? {} : { effort: spec.effort },
       env: oarEnvironment(spec.env),
-      launchArgs: spec.launchArgs,
+      launchArgs: spec.runtime.id === 'codex' ? [
+        ...spec.launchArgs,
+        '-c', 'analytics.enabled=false',
+        '-c', 'feedback.enabled=false',
+        '-c', 'otel.exporter="none"',
+        '-c', 'otel.trace_exporter="none"',
+        '-c', 'otel.metrics_exporter="none"',
+      ] : spec.launchArgs,
     })
   } catch (error: unknown) {
     if (isAborted(request.signal)) throw cancellationFailure()

@@ -25,6 +25,8 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
+原生子进程禁用非必要流量、遥测、错误报告和 OpenTelemetry 导出。
+
 当任务需要在父工作区中运行全新的原生 Claude Code 会话时，在 Web 或 Desktop 插件页启用 **Claude Code 子智能体**。
 
 ### 安装 Bundle

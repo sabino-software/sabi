@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+本提供方禁用原生 Claude 遥测和错误报告，并禁用 Codex 分析、反馈及 OpenTelemetry 导出。其他可选运行时保留各自的隐私控制。
+
 ### 组合 Profile
 
 委派前，请先安装并认证原生 Codex 和 Claude Code CLI。DSH Host 必须能访问它们的可执行文件。提供方在接受委派之前不会启动原生会话。

@@ -703,6 +703,12 @@ describe('task admission and package contracts', () => {
     }))
     expect(spawn.mock.calls[0]?.[0].env).toMatchObject({
       ANTHROPIC_API_KEY: 'provider-fake-key',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      DISABLE_TELEMETRY: '1',
+      DISABLE_ERROR_REPORTING: '1',
+      CLAUDE_CODE_ENABLE_TELEMETRY: '0',
+      OTEL_SDK_DISABLED: 'true',
+      DO_NOT_TRACK: '1',
     })
     await run.dispose()
     await ctx.fiber.dispose()

@@ -326,7 +326,15 @@ export function claudeQueryOptions(
     abortController: controller,
     cwd: spec.cwd,
     ...spec.model === undefined ? {} : { model: spec.model },
-    env: { ...scrubbedParentEnv(), ...spec.env },
+    env: {
+      ...scrubbedParentEnv(), ...spec.env,
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      DISABLE_TELEMETRY: '1',
+      DISABLE_ERROR_REPORTING: '1',
+      CLAUDE_CODE_ENABLE_TELEMETRY: '0',
+      OTEL_SDK_DISABLED: 'true',
+      DO_NOT_TRACK: '1',
+    },
     persistSession: false,
     disallowedTools: spec.permissionMode === 'plan'
       ? ['AskUserQuestion', 'ExitPlanMode']

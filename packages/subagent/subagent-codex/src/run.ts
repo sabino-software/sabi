@@ -133,7 +133,15 @@ export function codexStartupFailure(cause: unknown): Error {
  * @returns Node, the official wrapper, and the fixed app-server arguments.
  */
 export function codexAppServerArgv(): string[] {
-  return [process.execPath, CODEX_PACKAGE_BIN, 'app-server', '--stdio']
+  return [
+    process.execPath, CODEX_PACKAGE_BIN,
+    '-c', 'analytics.enabled=false',
+    '-c', 'feedback.enabled=false',
+    '-c', 'otel.exporter="none"',
+    '-c', 'otel.trace_exporter="none"',
+    '-c', 'otel.metrics_exporter="none"',
+    'app-server', '--stdio',
+  ]
 }
 
 /** Fully resolved inputs for one Codex app-server run. */
@@ -238,7 +246,7 @@ export async function startCodexRun(
       cwd: spec.cwd,
       stdio: { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' },
       graceMs: spec.disposeGraceMs,
-      env: spec.env,
+      env: { ...spec.env, OTEL_SDK_DISABLED: 'true', DO_NOT_TRACK: '1' },
     })
   } catch (error: unknown) {
     throw new CodexRunFailure({

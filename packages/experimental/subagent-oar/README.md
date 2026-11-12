@@ -25,6 +25,8 @@ Compose this experimental provider with the `subagent_oar` tool to delegate stan
 <a id="use-this-package"></a>
 ## Use this package
 
+The provider disables native Claude telemetry and error reporting, and disables Codex analytics, feedback, and OpenTelemetry exporters. Other optional runtimes retain their own privacy controls.
+
 ### Compose a profile
 
 Install and authenticate the native Codex and Claude Code CLIs before delegating to them. Their executables must be available to the DSH Host. The provider starts no native session until a delegation is accepted.

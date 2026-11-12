@@ -25,6 +25,8 @@ Install this Profile Bundle when a delegated task should run as a fresh, unatten
 <a id="use-this-package"></a>
 ## Use this package
 
+Native child processes disable nonessential traffic, telemetry, error reports, and OpenTelemetry exports.
+
 Enable **Claude Code subagent** in the Web or Desktop Plugins page when a task needs a fresh native Claude Code session in the parent workspace.
 
 ### Installing the Bundle

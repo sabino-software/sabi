@@ -182,6 +182,11 @@ describe('OAR one-shot execution', () => {
     await run.dispose()
     const overlay = installation.mock.calls[0]?.[0]?.env
     expect(overlay).toMatchObject({ OAR_EXPLICIT_TOKEN: 'configured', OAR_DELETE: null })
+    expect(overlay).toMatchObject({
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_TELEMETRY: '1',
+      DISABLE_ERROR_REPORTING: '1', CLAUDE_CODE_ENABLE_TELEMETRY: '0',
+      OTEL_SDK_DISABLED: 'true', DO_NOT_TRACK: '1',
+    })
     expect(overlay).not.toHaveProperty('PATH')
   })
   it('runs an arbitrary runtime and returns only root assistant text', async () => {
@@ -227,6 +232,18 @@ describe('OAR one-shot execution', () => {
     const run = await startOarRun(await request(), spec(observed.runtime))
     await expect(run.result).resolves.toMatchObject({ output: [], stopReason: 'completed' })
     await run.dispose()
+  })
+
+  it('disables native Codex reporting when the optional runtime is selected', async () => {
+    const observed = observedRuntime(scriptedRuntime({ id: 'codex', turn: (turn) => { turn.say('answer') } }))
+    const run = await startOarRun(await request(), spec(observed.runtime))
+    await run.result
+    await run.dispose()
+    expect(observed.options[0]?.launchArgs).toEqual([
+      '-c', 'analytics.enabled=false', '-c', 'feedback.enabled=false',
+      '-c', 'otel.exporter="none"', '-c', 'otel.trace_exporter="none"',
+      '-c', 'otel.metrics_exporter="none"',
+    ])
   })
 
   it('does not install a runtime whose installation is missing', async () => {

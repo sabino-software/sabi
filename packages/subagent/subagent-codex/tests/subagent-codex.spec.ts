@@ -392,6 +392,11 @@ describe('task admission and package contracts', () => {
     expect(codexAppServerArgv()).toEqual([
       process.execPath,
       resolve(dirname(codexPackageJson), codexManifest.bin.codex),
+      '-c', 'analytics.enabled=false',
+      '-c', 'feedback.enabled=false',
+      '-c', 'otel.exporter="none"',
+      '-c', 'otel.trace_exporter="none"',
+      '-c', 'otel.metrics_exporter="none"',
       'app-server',
       '--stdio',
     ])
@@ -552,6 +557,8 @@ describe('task admission and package contracts', () => {
       { instance: 'safe', graceMs: 11 },
       { instance: 'bypass', graceMs: 29 },
     ])
+    expect(spawnSpecs.every(spec => spec.env?.OTEL_SDK_DISABLED === 'true'
+      && spec.env.DO_NOT_TRACK === '1')).toBe(true)
 
     await Promise.all([safeRun.dispose(), bypassRun.dispose()])
     expect([...started].sort()).toEqual(['codex-bypass', 'codex-safe'])
@@ -1557,7 +1564,7 @@ describe('run lifecycle and quiescence', () => {
       cwd: process.cwd(),
       stdio: { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' },
       graceMs: DEFAULT_DISPOSE_GRACE_MS,
-      env: { OPENAI_API_KEY: 'fake' },
+      env: { OPENAI_API_KEY: 'fake', OTEL_SDK_DISABLED: 'true', DO_NOT_TRACK: '1' },
     })
 
     const turnStart = await child.peer.nextMethod('turn/start')
@@ -2234,7 +2241,7 @@ describe('run lifecycle and quiescence', () => {
       stopReason: 'error',
     })
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({
-      env: { OPENAI_API_KEY: 'fake' },
+      env: { OPENAI_API_KEY: 'fake', OTEL_SDK_DISABLED: 'true', DO_NOT_TRACK: '1' },
       graceMs: 25,
       cwd: process.cwd(),
     }))

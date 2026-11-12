@@ -16,5 +16,13 @@ export function oarEnvironment(extra: Readonly<Record<string, string | null>>): 
   for (const [key, value] of Object.entries(scrubbed)) {
     if (process.env[key] !== value) overlay[key] = value
   }
-  return { ...overlay, ...extra }
+  return {
+    ...overlay, ...extra,
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    DISABLE_TELEMETRY: '1',
+    DISABLE_ERROR_REPORTING: '1',
+    CLAUDE_CODE_ENABLE_TELEMETRY: '0',
+    OTEL_SDK_DISABLED: 'true',
+    DO_NOT_TRACK: '1',
+  }
 }

@@ -25,6 +25,8 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
+原生子进程禁用分析、反馈提交和 OpenTelemetry 导出，不修改用户的 Codex 配置。
+
 当任务需要在父工作区中运行全新的原生 Codex 会话时，在 Web 或 Desktop 插件页启用 **Codex 子智能体**。
 
 ### 安装 Bundle
