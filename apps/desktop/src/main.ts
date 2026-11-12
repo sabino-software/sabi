@@ -74,9 +74,11 @@ import { DesktopQuitConfirmation } from './quit-confirmation.ts'
 import { DesktopTray } from './tray.ts'
 import { DesktopBackgroundNotice } from './background-notice.ts'
 
-const productName = configureLocalFork(
+const localFork = configureLocalFork(
   JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8')), app, process.env,
-) ?? 'DeepSeek Harness'
+)
+const productName = localFork?.productName ?? 'DeepSeek Harness'
+const externalScheme = localFork?.scheme ?? 'dsh'
 const resolveDesktopLocale = (locale: string): ReturnType<typeof resolveLocale> =>
   brandDesktopLocale(resolveLocale(locale), productName)
 const resolveDesktopStartupLocale = (preference: string | null, languages: readonly string[]): ReturnType<typeof resolveLocale> =>
@@ -1495,10 +1497,10 @@ async function main(): Promise<void> {
     window.focus()
   }
 
-  if (app.isPackaged || process.env.DSH_DESKTOP_DEV_APP === '1') app.setAsDefaultProtocolClient('dsh')
+  if (app.isPackaged || process.env.DSH_DESKTOP_DEV_APP === '1') app.setAsDefaultProtocolClient(externalScheme)
   app.on('open-url', (event, url) => {
     event.preventDefault()
-    if (url === 'dsh://open' || url === 'dsh://open/') focusPrimaryWindow()
+    if (url === `${externalScheme}://open` || url === `${externalScheme}://open/`) focusPrimaryWindow()
   })
 
   app.on('activate', (_event, hasVisibleWindows) => {

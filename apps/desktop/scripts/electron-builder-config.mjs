@@ -117,7 +117,7 @@ export function createElectronBuilderConfig(
     protocols: [{ name: productName, schemes: [localFork ? LOCAL_FORK.scheme : 'dsh'] }],
     extraMetadata: {
       dshDesktopAppId: appId,
-      ...(localFork ? { dshLocalFork: { productName, profileDirectory: LOCAL_FORK.profileDirectory } } : {}),
+      ...(localFork ? { dshLocalFork: { productName, scheme: LOCAL_FORK.scheme, profileDirectory: LOCAL_FORK.profileDirectory } } : {}),
       dshDesktopUpdateChannel: update?.channel ?? 'nightly',
       ...(policy === undefined ? {} : { dshMandatoryUpdatePolicy: policy }),
       ...buildVersion === productVersion ? {} : { version: buildVersion },
