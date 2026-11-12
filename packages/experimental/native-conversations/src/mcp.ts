@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-attachment'
-import { HarnessError, ToolCallId, type ContentBlock, type ToolSchema } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, HarnessError, ToolCallId, type ContentBlock, type ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { ToolBatchResult } from '@deepseek-ai/dsh-tools'
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
@@ -98,8 +98,21 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
       // Each serialized native program is a complete tool batch; activation can change after its predecessor.
       const toolSet = await ctx.tools.resolve({ agent, modelSelection: options.modelSelection, signal: active })
       try {
+        active.throwIfAborted()
+        const call = { type: 'tool-call' as const, id: ToolCallId(`native_mcp_${randomUUID()}`), name, arguments: JSON.stringify(args) }
+        const observedAt = Date.now()
+        // MCP delivers a complete model-requested call, rather than token fragments. Advertise it before dispatch.
+        // This goes directly to the audit log, never back through the model stream that would execute it again.
+        agent.session.append('assistant/message', {
+          ...options.log,
+          message: createAssistantMessage({ content: [call], source: options.modelSelection }),
+          stream: [
+            { type: 'tool-call-chunks', time0: observedAt, index: 0, id: call.id, name, dt: [], args: [call.arguments] },
+            { type: 'chunk', time: observedAt, chunk: { type: 'finish', reason: { kind: 'tool-calls' } } },
+          ],
+        }, { surfaceOp: 'append' })
         return await ctx.tools.execute({
-          calls: [{ type: 'tool-call', id: ToolCallId(`native_mcp_${randomUUID()}`), name, arguments: JSON.stringify(args) }],
+          calls: [call],
           agent, log: options.log, signal: active, toolSet,
         })
       } finally { toolSet.dispose() }
@@ -109,13 +122,14 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
     else if (batch.additionalContexts.length > 0 || batch.concluded) {
       throw new HarnessError('Native tool context requires an owning continuation handler.', 'NATIVE_MCP_CONTEXT_UNHANDLED')
     }
-    const result = batch.results[0]?.result
-    if (result === undefined) throw new HarnessError('The tool executor omitted its result.', 'NATIVE_MCP_RESULT_MISSING')
+    const completed = batch.results[0]
+    if (completed === undefined) throw new HarnessError('The tool executor omitted its result.', 'NATIVE_MCP_RESULT_MISSING')
+    const result = completed.result
     const projected = await Promise.all(result.content.map(block => content(block, ctx, active)))
     for (const message of batch.additionalContexts) {
       projected.push({ type: 'text', text: JSON.stringify({ kind: 'harness-deferred-context', message }) })
     }
-    return { batch, result: { isError: result.isError, content: projected } }
+    return { batch, result: { isError: result.isError, content: projected, _meta: { 'skeinlet/receipt': completed.callId } } }
   }
 
   const handler = createMcpHandler(() => {

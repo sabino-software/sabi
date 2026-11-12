@@ -61,7 +61,8 @@ describe('native Codex activity records', () => {
     recorder.append(session, started)
     const malformed = session.snapshotEvents().map(event => ({ ...event, data: { id: started.id } })) as SessionEvent[]
     const restored = Session.create(session.id, malformed, session.header)
-    expect(recorder.append(restored, completed)).toBe(1)
+    expect(recorder.append(restored, completed)).toBeDefined()
+    expect(restored.snapshotEvents().at(-1)).toMatchObject({ type: CODEX_ACTIVITY_RECORD, ignorable: true, data: completed })
     expect(recorder.append(restored, completed)).toBeUndefined()
   })
 })

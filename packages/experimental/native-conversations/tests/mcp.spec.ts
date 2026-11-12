@@ -43,6 +43,7 @@ async function fixture(tools: readonly ToolDefinition[] = [], onBatch?: (batch: 
   const loop = await mountAgentLoopTestHarness(ctx)
   const agent = await loop.create(SessionId(`native-mcp-${randomUUID()}`), { provider: 'fixture', model: 'fixture' })
   agent.session.append('turn/start', { turn: 1 })
+  agent.session.append('step/start', { turn: 1, step: 3 })
   for (const tool of tools) ctx.tools.register(tool)
   const controller = new AbortController()
   const admission = await ctx.tools.resolve({ agent, modelSelection: { provider: 'fixture', model: 'fixture' }, signal: controller.signal })
@@ -79,6 +80,7 @@ describe('native Harness MCP tools', () => {
     const modelSelection = { provider: 'fixture', model: 'fixture' }
     const agent = await loop.create(SessionId(`native-conditional-${randomUUID()}`), modelSelection)
     agent.session.append('turn/start', { turn: 1 })
+    agent.session.append('step/start', { turn: 1, step: 1 })
     let enabled = false
     let conditionalCalls = 0
     ctx.tools.register(defineContentToolFixture({ name: 'activate', description: 'Load a conditional capability.', parameters: {},
@@ -142,9 +144,20 @@ describe('native Harness MCP tools', () => {
     const listed = await client.listTools()
     expect(listed.tools).toEqual(h.schemas.map(schema => ({ name: schema.name, description: schema.description, inputSchema: schema.parameters })))
     expect(client.getInstructions()).toBe('Follow the committed Harness system guidance.')
-    expect(await client.callTool({ name: 'echo', arguments: { text: 'saved output' } })).toMatchObject({ isError: false, content: [{ type: 'text', text: 'saved output' }] })
+    const result = await client.callTool({ name: 'echo', arguments: { text: 'saved output' } })
+    expect(result).toMatchObject({ isError: false, content: [{ type: 'text', text: 'saved output' }] })
     expect(body).toHaveBeenCalledExactlyOnceWith('saved output')
     const events = h.agent.session.snapshotEvents()
+    const advertised = events.find(event => event.type === 'assistant/message')
+    const called = events.find(event => event.type === 'tool/call')
+    expect(advertised).toMatchObject({ surfaceOp: 'append', data: { turn: 1, step: 3, message: {
+      source: { kind: 'model', provider: 'fixture', model: 'fixture' },
+      content: [{ type: 'tool-call', name: 'echo', arguments: '{"text":"saved output"}' }],
+    } } })
+    if (advertised?.type !== 'assistant/message' || called?.type !== 'tool/call') throw new Error('The audited tool lifecycle is missing')
+    expect(advertised.seq).toBeLessThan(called.seq)
+    expect(advertised.data.message.content[0]).toMatchObject({ id: called.data.callId })
+    expect(result._meta).toEqual({ 'skeinlet/receipt': called.data.callId })
     expect(events.find(event => event.type === 'tool/call')).toMatchObject({ type: 'tool/call', data: { turn: 1, step: 3, name: 'echo', arguments: '{"text":"saved output"}' } })
     expect(events.find(event => event.type === 'tool/result')).toMatchObject({ type: 'tool/result', data: { turn: 1, step: 3, message: { isError: false } } })
   })
