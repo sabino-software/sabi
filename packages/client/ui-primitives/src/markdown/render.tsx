@@ -235,6 +235,8 @@ export interface MarkdownRenderContext {
   readonly pathImages: MarkdownPathImages | undefined
   /** Raw HTML renders nothing instead of literal text. */
   readonly omitHtml: boolean
+  /** Images render as inert alt text without mounting or resolving their sources. */
+  readonly omitImages?: boolean
   /** Inside an anchor's children: interactive mentions must not nest there. */
   readonly inLink?: boolean
   /** Reference targets visible to this pass. */
@@ -682,6 +684,7 @@ function inlineCodeHttpUrl(value: string): string | undefined {
 }
 
 function renderImage(url: string, alt: string, key: Key, context: MarkdownRenderContext): ReactNode {
+  if (context.omitImages) return <span key={key} className={css.imageAlt}>{alt}</span>
   return <MarkdownImage key={`${key}:${url}`} destination={url} alt={alt}
     pathImages={context.pathImages} streaming={context.streaming} inLink={context.inLink === true} />
 }

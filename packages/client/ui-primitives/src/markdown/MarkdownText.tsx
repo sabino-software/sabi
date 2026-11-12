@@ -34,6 +34,7 @@ function renderSettled(
   fileMentions: MarkdownFileMentions | undefined,
   pathImages: MarkdownPathImages | undefined,
   omitHtml: boolean,
+  omitImages: boolean,
 ): ReactNode[] {
   const root = parseGfmWithMath(text)
   const targets = createReferenceTargets()
@@ -44,6 +45,7 @@ function renderSettled(
     fileMentions,
     pathImages,
     omitHtml,
+    omitImages,
     targets,
     footnoteOrder: [],
     footnoteCounts: new Map(),
@@ -80,8 +82,9 @@ class StreamingRenderer {
   /**
    * @param labels - Localized Markdown chrome baked into cached elements; the owner replaces the renderer when it changes.
    * @param omitHtml - Whether raw HTML renders nothing; the owner replaces the renderer when it changes.
+   * @param omitImages - Whether images render only their alt text; the owner replaces the renderer when it changes.
    */
-  constructor(private readonly labels: MarkdownLabels, readonly omitHtml: boolean) {}
+  constructor(private readonly labels: MarkdownLabels, readonly omitHtml: boolean, readonly omitImages: boolean) {}
 
   /**
    * Render the current accumulated text. Idempotent per text value, so React
@@ -117,6 +120,7 @@ class StreamingRenderer {
         fileMentions: undefined,
         pathImages: undefined,
         omitHtml: this.omitHtml,
+        omitImages: this.omitImages,
         targets: frameTargets,
         footnoteOrder: this.frozenFootnoteOrder,
         footnoteCounts: this.frozenFootnoteCounts,
@@ -137,6 +141,7 @@ class StreamingRenderer {
       fileMentions: undefined,
       pathImages: undefined,
       omitHtml: this.omitHtml,
+      omitImages: this.omitImages,
       targets: frameTargets,
       footnoteOrder: [...this.frozenFootnoteOrder],
       footnoteCounts: new Map(this.frozenFootnoteCounts),
@@ -174,8 +179,9 @@ class StreamingRenderer {
  * text sizing, uniform bold headings, and tight block spacing; the default
  * `body` variant uses the full document typography. `omitHtml` renders raw
  * HTML as nothing instead of literal text, for documents written for HTML
- * renderers, such as package READMEs. `textInteractionSource` marks the
- * existing root as a source for text selection interactions.
+ * renderers, such as package READMEs. `omitImages` renders image alt text
+ * without mounting images or resolving their sources. `textInteractionSource`
+ * marks the existing root as a source for text selection interactions.
  * The provider's `openFile` enables local Markdown links in settled messages,
  * including `#L24` / `#L24-L30` fragments and `:24` / `:24-30` / `:24:5` suffixes
  * (ranges open at their first line, columns are ignored, and invalid locations
@@ -187,7 +193,7 @@ class StreamingRenderer {
  * absolute HTTP(S) images render directly.
  */
 export const MarkdownText = memo(function MarkdownText({
-  text, streaming = false, labels, fileMentions, pathImages, variant = 'body', omitHtml = false, textInteractionSource = false,
+  text, streaming = false, labels, fileMentions, pathImages, variant = 'body', omitHtml = false, omitImages = false, textInteractionSource = false,
 }: {
   text: string
   streaming?: boolean
@@ -196,6 +202,7 @@ export const MarkdownText = memo(function MarkdownText({
   pathImages?: MarkdownPathImages | undefined
   variant?: 'body' | 'compact'
   omitHtml?: boolean
+  omitImages?: boolean
   textInteractionSource?: boolean
 }) {
   const streamRef = useRef<StreamingRenderer | null>(null)
@@ -203,14 +210,15 @@ export const MarkdownText = memo(function MarkdownText({
   const children = useMemo(() => {
     if (!streaming) {
       streamRef.current = null
-      return renderSettled(text, labels, fileMentions, pathImages, omitHtml)
+      return renderSettled(text, labels, fileMentions, pathImages, omitHtml, omitImages)
     }
-    if (streamRef.current === null || streamLabelsRef.current !== labels || streamRef.current.omitHtml !== omitHtml) {
-      streamRef.current = new StreamingRenderer(labels, omitHtml)
+    if (streamRef.current === null || streamLabelsRef.current !== labels || streamRef.current.omitHtml !== omitHtml
+      || streamRef.current.omitImages !== omitImages) {
+      streamRef.current = new StreamingRenderer(labels, omitHtml, omitImages)
       streamLabelsRef.current = labels
     }
     return streamRef.current.render(text)
-  }, [text, streaming, labels, fileMentions, pathImages, omitHtml])
+  }, [text, streaming, labels, fileMentions, pathImages, omitHtml, omitImages])
   return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
     data-text-interaction-source={textInteractionSource ? '' : undefined}
     data-markdown-variant={variant === 'compact' ? variant : undefined}
