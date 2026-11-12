@@ -147,6 +147,18 @@ vi.mock('../src/welcome-backend.ts', () => ({
     },
   }),
 }))
+vi.mock('node:fs', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>): ReturnType<typeof actual.readFileSync> => {
+      if (args[0] === '/development-app/package.json' && args[1] === 'utf8') {
+        return JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '1.0.0' })
+      }
+      return actual.readFileSync(...args)
+    },
+  }
+})
 vi.mock('node:fs/promises', async importOriginal => ({
   ...await importOriginal<typeof import('node:fs/promises')>(),
   readFile: vi.fn(async () => '{}'),
