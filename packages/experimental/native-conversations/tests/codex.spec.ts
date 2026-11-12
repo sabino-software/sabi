@@ -170,12 +170,14 @@ describe('original Codex adapter continuations', () => {
   it('persists each deferred context once and delivers its exact role/source to the native MCP caller', async () => {
     const guidance = createUserMessage({ source: { kind: 'tool-registry' }, content: [{ type: 'text', text: 'New SDK guidance from the Harness tool.' }] })
     let executions = 0
-    const h = await fixture([defineTool({ name: 'activate', description: 'Activate a capability.', parameters: {}, output: { schema: { type: 'string' } },
+    const h = await fixture([defineTool({ name: 'activate', description: 'Activate a capability.', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
       async execute(_args, exec) { executions++; exec.deferContext(guidance); return 'activated' },
     })])
     const pending = h.start()
     await h.started
     const result = await (await h.client()).callTool({ name: 'activate', arguments: {} })
+    expect(result.isError).toBe(false)
     const contexts = result.content.flatMap(block => {
       if (block.type !== 'text' || !block.text.includes('harness-deferred-context')) return []
       return [JSON.parse(block.text)]
@@ -192,12 +194,14 @@ describe('original Codex adapter continuations', () => {
   })
 
   it('waits for the exact owned source receipt after HTTP finish before interrupting a Harness-concluded turn', async () => {
-    const h = await fixture([defineTool({ name: 'finish', description: 'Finish this Harness turn.', parameters: {}, output: { schema: { type: 'string' } },
+    const h = await fixture([defineTool({ name: 'finish', description: 'Finish this Harness turn.', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
       async execute(_args, exec) { exec.concludeTurn(); return 'finished' },
     })])
     const pending = h.start()
     await h.started
     const result = await (await h.client()).callTool({ name: 'finish', arguments: {} })
+    expect(result.isError).toBe(false)
     const receipt = result._meta?.['skeinlet/receipt']
     if (typeof receipt !== 'string') throw new Error('The native result omitted its receipt')
     await h.barrier()
@@ -257,7 +261,8 @@ describe('original Codex adapter continuations', () => {
     h.acknowledge()
     expect(await approval).toEqual({ decision: 'accept' })
     expect(asked).toHaveBeenCalledTimes(1)
-    expect(asked.mock.calls[0]?.[0]).toMatchObject({ agent: h.agent, toolName: 'Codex command' })
+    expect(asked.mock.calls[0]?.[0].agent).toBe(h.agent)
+    expect(asked.mock.calls[0]?.[0].toolName).toBe('Codex command')
     expect(await h.sourceApproval(THREAD, 'another-turn')).toEqual({ decision: 'cancel' })
     h.finish()
     await pending
