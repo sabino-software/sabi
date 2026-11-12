@@ -1,3 +1,4 @@
+import { createDesktopAxiomBridge } from './preload-axiom.ts'
 import type { FileSaveResult } from '@deepseek-ai/dsh-client-ui-file-actions/types'
 /** Origin-scoped boot, native directory selection, host paths of picked files, and update presentation with native confirmation actions. */
 
@@ -22,6 +23,7 @@ function createProductApi(): DshDesktopProductApi {
         Promise<{ bytes: Uint8Array; mediaType: string }>,
     },
     browser: createDesktopBrowserBridge(),
+    axiom: createDesktopAxiomBridge(),
     fileDrag: {
       prepare: (source, requestId) => ipcRenderer.invoke(DESKTOP_IPC.fileDragPrepare, source, requestId) as
         Promise<FileDragHandle | undefined>,

@@ -1,3 +1,4 @@
+import { DesktopAxiomPage } from './axiom-bridge.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
 import { installFileActions } from './file-actions.ts'
@@ -502,6 +503,10 @@ async function main(): Promise<void> {
   let hostUrl: string | undefined
   let hostCookie: string | undefined
   const browserGuests = new DesktopBrowserGuests(() => hostUrl)
+  const axiomPage = new DesktopAxiomPage(snapshot => {
+    if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.webContents.send(DESKTOP_IPC.axiomChanged, snapshot)
+  })
+  app.on('will-quit', () => { axiomPage.disconnect() })
   let injections: readonly unknown[] = []
   let welcomeBackend: DesktopWelcomeBackend | undefined
   let reportedLaunch = false
@@ -874,6 +879,11 @@ async function main(): Promise<void> {
       || !event.senderFrame.url.startsWith('dsh-app://app/')) throw new Error('Rejected Platform command')
     return owner
   }
+  ipcMain.handle(DESKTOP_IPC.axiomConnect, (event, url: unknown) => { assertMainApplication(event); return axiomPage.connect(url) })
+  ipcMain.handle(DESKTOP_IPC.axiomSnapshot, event => { assertMainApplication(event); return axiomPage.snapshot() })
+  ipcMain.handle(DESKTOP_IPC.axiomSend, (event, request: unknown) => { assertMainApplication(event); return axiomPage.send(request) })
+  ipcMain.handle(DESKTOP_IPC.axiomShowLogin, event => { assertMainApplication(event); axiomPage.showLogin() })
+  ipcMain.handle(DESKTOP_IPC.axiomDisconnect, event => { assertMainApplication(event); axiomPage.disconnect() })
   installFileActions(assertMainApplication, () => hostUrl)
   ipcMain.on(PLATFORM_IPC.bootstrap, (event) => {
     try { event.returnValue = platformView.bootstrap(event) }
@@ -1529,6 +1539,7 @@ async function main(): Promise<void> {
         throw error
       }),
       platformView.dispose(),
+      Promise.resolve(axiomPage.disconnect()),
       disposeFileDrag(),
     ].map(cleanup => cleanup.catch((error: unknown) => { console.error(error) })))
       .then(() => { app.quit() })

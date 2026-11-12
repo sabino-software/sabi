@@ -1,3 +1,4 @@
+import type { DesktopAxiomBridge } from './axiom-protocol.ts'
 import type { DesktopFileActions } from '@deepseek-ai/dsh-client-ui-file-actions/types'
 /** Typed preload operations exposed only by the Electron shell. */
 
@@ -23,6 +24,12 @@ export const DESKTOP_IPC = {
   onboardingActive: 'dsh-desktop:onboarding-active',
   onboardingApiKey: 'dsh-desktop:onboarding-api-key',
   bootFailed: 'dsh-desktop:boot-failed',
+  axiomConnect: 'dsh-desktop:axiom-connect',
+  axiomSnapshot: 'dsh-desktop:axiom-snapshot',
+  axiomSend: 'dsh-desktop:axiom-send',
+  axiomShowLogin: 'dsh-desktop:axiom-show-login',
+  axiomDisconnect: 'dsh-desktop:axiom-disconnect',
+  axiomChanged: 'dsh-desktop:axiom-changed',
   browserAcquire: 'dsh-desktop:browser-acquire',
   browserRelease: 'dsh-desktop:browser-release',
   browserOpenRequested: 'dsh-desktop:browser-open-requested',
@@ -94,6 +101,7 @@ export interface DshDesktopProductApi {
   readonly fileActions: DesktopFileActions
   readonly protocolVersion: 1
   readonly browser: DesktopBrowserBridge
+  readonly axiom: DesktopAxiomBridge
   readonly fileDrag: DesktopFileDrag
   readonly keyboard: DesktopKeyboardApi
   readonly shortcuts: DesktopShortcutsApi
