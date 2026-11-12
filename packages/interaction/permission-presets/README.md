@@ -115,6 +115,8 @@ Read these pages when the package-level contract is not enough. They move from t
 -----
 
 <a id="model-experience"></a>
+Explicit preset switches dispatch synchronous `permission-presets/selecting` admission before writing the preset or either knob. A throwing listener refuses the complete switch without partial events. Initial permission pinning does not dispatch this hook.
+
 ## Model Experience
 
 Indirectly, through `dsh-user-approval` and `dsh-tool-bash`, which render the approval-policy prompt, switch notice, and sandboxed tool outcomes selected by this service's knob events; `permission/preset` itself is log-only.

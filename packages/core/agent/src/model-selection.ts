@@ -94,12 +94,14 @@ export const modelSelectionProjectionDefinition: Required<ProjectionDefinition<'
  * @param readState - driver-owned reader for this Session's selection projection.
  * @param session - Session receiving durable model selections.
  * @param options - live route fallback until a selection or request is recorded.
+ * @param admit - optional synchronous driver admission before a changed selection is recorded; throws leave the log unchanged.
  */
 export class AgentModel implements Model {
   constructor(
     private readonly readState: () => ModelSelectionProjectionState,
     private readonly session: Session,
     private readonly options: AgentOptions,
+    private readonly admit?: (selection: Readonly<ModelSelection>) => void,
   ) {}
 
   current(): Readonly<ModelSelection> | undefined {
@@ -111,6 +113,7 @@ export class AgentModel implements Model {
 
   select(selection: Readonly<ModelSelection>): void {
     if (sameModelSelection(this.recordedSelection(), selection)) return
+    this.admit?.(selection)
     this.session.append('model/selection', toSelection(selection.provider, selection.model, selection.reasoningEffort))
   }
 

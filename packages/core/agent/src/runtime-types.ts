@@ -65,6 +65,7 @@ export interface Model {
    * defaults without inheriting a previous effort or resolving defaults here.
    * An equal recorded choice is a no-op; an options-only fallback is
    * always recorded. Callers own model availability and capability validation.
+   * Driver admission runs synchronously before the append and may reject the switch.
    * The append uses the Session's existing persistence and failure guarantees.
    * @param selection - complete provider, model, and optional explicit effort.
    */
@@ -274,6 +275,16 @@ declare module './types.ts' {
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
+    /**
+     * Synchronous admission before a changed model selection is recorded.
+     * A throw rejects the switch before the Session log changes; listeners must not return promises.
+     * Unchanged recorded selections do not dispatch. The standard AgentLoop supplies this admission
+     * to AgentModel; custom drivers own equivalent wiring when they use AgentModel directly.
+     * @param payload.agent - the Agent whose next-step model is being selected.
+     * @param payload.selection - requested complete provider, model and explicit effort.
+     * @mode emit
+     */
+    'agent/model-selecting'(this: Scoped<Agent>, payload: { agent: Agent; selection: Readonly<ModelSelection> }): undefined
     // ---- lifecycle ----
     /**
      * An entered agent is ready for per-agent initialization after factory setup.

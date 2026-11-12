@@ -7,6 +7,8 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
+显式切换预设时，在写入预设或任一权限设置前同步派发 `permission-presets/selecting` 准入事件。监听器抛出异常会拒绝整个切换，不产生部分事件。初始权限固定不派发此钩子。
+
 ## 概述
 
 提供具名权限模式，同时设置沙箱与审批，但各执行服务仍保留自己的值。配置预设提供未来会话默认值；显式加载的 Auto review integration 可以增加一个仅限当前会话的选项。客户端从进程目录读取可选项，从 Session 投影读取当前选择。不匹配任何预设的旋钮组合显示为 `custom`，用户可以离开该状态，但不能选择它。本包拥有选择与默认值；沙箱、审批和 Auto integration 拥有执行行为。

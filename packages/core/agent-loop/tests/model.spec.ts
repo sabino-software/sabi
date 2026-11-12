@@ -25,6 +25,20 @@ const INITIAL = { provider: 'mock', model: 'initial' }
 const SELECTED = { provider: 'mock', model: 'selected' }
 
 describe('Agent model ownership', () => {
+  it('propagates model admission refusal from the canonical live Agent before any append', async () => {
+    const ctx = await dependencies()
+    await ctx.plugin(AgentLoop, { agents: [] })
+    const { agent } = await ctx.agents.create({ sessionId: SessionId('admitted-model'), agentOptions: INITIAL })
+    ctx.on('agent/model-selecting', ({ agent: target, selection }) => {
+      expect(target).toBe(agent)
+      expect(selection).toEqual(SELECTED)
+      throw new Error('model selection refused')
+    })
+    expect(() => agent.model.select(SELECTED)).toThrow('model selection refused')
+    expect(agent.session.snapshotEvents()).toEqual([])
+    expect(agent.model.current()).toEqual(INITIAL)
+  })
+
   it('waits for model projection registration before publishing the factory', async () => {
     const ctx = await dependencies()
     const ready = Promise.withResolvers<undefined>()

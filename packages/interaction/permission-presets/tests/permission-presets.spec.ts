@@ -68,6 +68,25 @@ async function mountedStore(options: { approvalDefault?: ApprovalPolicy | undefi
 }
 
 describe('permission preset fold', () => {
+  it('refuses an explicit preset switch before any preset or knob write and removes admission on disposal', async () => {
+    const ctx = await mounted()
+    const session = freshSession('preset-admission')
+    ctx.permissionPresets.set(session, 'workspace-write')
+    const before = session.snapshotEvents()
+    const stop = ctx.on('permission-presets/selecting', (target, name) => {
+      expect(target).toBe(session)
+      if (name === 'danger-full-access') throw new Error('permission selection refused')
+    })
+    expect(() => ctx.permissionPresets.set(session, 'danger-full-access')).toThrow('permission selection refused')
+    expect(session.snapshotEvents()).toEqual(before)
+    expect(ctx.permissionPresets.current(session)).toBe('workspace-write')
+    stop()
+    ctx.permissionPresets.set(session, 'danger-full-access')
+    expect(session.snapshotEvents().slice(before.length).map(event => event.type)).toEqual([
+      'permission/preset', 'sandbox/mode', 'approval/policy',
+    ])
+  })
+
   it('folds the latest preset selection and steps over unrelated events', async () => {
     const ctx = await mounted()
     const session = freshSession('sess-fold')

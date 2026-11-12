@@ -151,6 +151,8 @@ The package-level contract is enough for most consumers; read these when you nee
 -----
 
 <a id="model-experience"></a>
+The standard driver dispatches synchronous `agent/model-selecting` admission before recording a changed selection; a throwing listener refuses it without changing the Session. Custom drivers using `AgentModel` supply equivalent admission through its optional constructor callback.
+
 ## Model Experience
 
 ### User, steering, and injected messages

@@ -40,6 +40,16 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     permissionPresets: PermissionPresetService
   }
+  interface Events {
+    /**
+     * Synchronous admission before an explicit preset switch writes its preset or knobs.
+     * A throw rejects the complete switch with no durable writes. Initialization pinning does not dispatch.
+     * @param session - Session whose explicit permission selection is being changed.
+     * @param name - validated configured or live Auto preset name.
+     * @mode emit
+     */
+    'permission-presets/selecting'(session: Session, name: string): undefined
+  }
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -391,7 +401,8 @@ export class PermissionPresetService extends TypertRemoteService {
 
   /**
    * Record a changed preset, then update each changed knob through its own
-   * setter. Selecting the effective preset again appends nothing.
+   * setter. Synchronous admission runs before any preset or knob write; rejection leaves all unchanged.
+   * Selecting the effective preset again appends nothing.
    * @param session - the session the switch belongs to.
    * @param name - the preset to switch to; unknown names throw.
    */
@@ -402,6 +413,7 @@ export class PermissionPresetService extends TypertRemoteService {
   /** Apply one preset through its durable identity and canonical knob setters. */
   private apply(session: Session, name: string, setApproval: (policy: ApprovalPolicy) => void): void {
     const spec = this.resolve(name)
+    this.ctx.emit('permission-presets/selecting', session, name)
     if (name === AUTO_PRESET) this.autoAdmit?.()
     const current = this.current(session)
     const knobs = this.permissionState(session)

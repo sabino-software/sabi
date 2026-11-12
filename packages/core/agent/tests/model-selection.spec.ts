@@ -2,6 +2,7 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
   agentEvents,
+  agentCarrier,
   installModelSelection,
   type Agent,
   type AgentOptions,
@@ -26,7 +27,9 @@ async function harness(options: AgentOptions = INITIAL) {
   await ctx.plugin(SessionProjectionRegistry)
   const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
   const session = ctx.sessions.create(SessionId('model-selection'))
-  const model = new AgentModel(() => projection.stateOf(session), session, options)
+  const model = new AgentModel(() => projection.stateOf(session), session, options, selection => {
+    ctx.emit(agentCarrier(agent), 'agent/model-selecting', { agent, selection })
+  })
   const unused = (): never => { throw new Error('model-selection fixture does not drive the Agent') }
   const agent: Agent = {
     id: session.id, session, ctx, options, model, status: 'idle',
@@ -67,6 +70,22 @@ async function preStep(
 }
 
 describe('Session model selection', () => {
+  it('rejects a changed selection synchronously before recording and removes scoped admission on disposal', async () => {
+    const h = await harness()
+    h.record(INITIAL)
+    const before = h.session.snapshotEvents()
+    const stop = h.ctx.on('agent/model-selecting', ({ agent, selection }) => {
+      expect(agent).toBe(h.agent)
+      if (selection.provider !== INITIAL.provider) throw new Error('selection refused')
+    })
+    expect(() => h.record({ provider: 'different', model: 'other' })).toThrow('selection refused')
+    expect(h.session.snapshotEvents()).toEqual(before)
+    expect(h.current()).toEqual(INITIAL)
+    stop()
+    h.record({ provider: 'different', model: 'other' })
+    expect(h.current()).toEqual({ provider: 'different', model: 'other' })
+  })
+
   it('uses initial options only until a selection or request is recorded and returns detached values', async () => {
     const h = await harness({})
     expect(h.current()).toBeUndefined()
