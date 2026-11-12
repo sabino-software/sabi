@@ -64,7 +64,7 @@ async function fixture() {
       if (frame.method === 'initialize') result = { codexHome: home, userAgent: 'native-service-fixture', platformFamily: 'unix', platformOs: process.platform }
       else if (frame.method === 'thread/list') result = { data: listed ? [thread('created-original', 'Created through Harness', true)] : [], nextCursor: null }
       else if (frame.method === 'model/list') result = { data: [{ model: 'fixture-model', displayName: 'Fixture', description: '', hidden: false, inputModalities: ['text'],
-        supportedReasoningEfforts: [], defaultReasoningEffort: 'medium' }] }
+        supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Fixture medium effort' }], defaultReasoningEffort: 'medium' }] }
       else if (frame.method === 'thread/start') {
         const config = params.config as { mcp_servers: { skeinlet: { url: string } } }
         mcpUrl = config.mcp_servers.skeinlet.url
