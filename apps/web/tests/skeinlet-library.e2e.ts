@@ -62,10 +62,10 @@ async function codexFixture(root: string) {
   let mcpOrigin = ''
   const thread = { id: 'existing-codex-thread', name: 'Existing work coding chat', preview: 'An original work conversation',
     cwd: workspace, model: 'fixture-model', createdAt: 1700000000, canAcceptDirectInput: true, status: { type: 'idle' } }
-  server.on('connection', socket => {
+  server.on('connection', (socket) => {
     clients.add(socket)
     socket.on('close', () => { clients.delete(socket) })
-    socket.on('message', bytes => {
+    socket.on('message', (bytes) => {
       const frame = object(JSON.parse(String(bytes)))
       frames.push(frame)
       if (frame.id === undefined) return
@@ -115,7 +115,7 @@ async function codexFixture(root: string) {
   return { home, workspace, socketPath, frames, failures, catalog: () => tools,
     async close() {
       for (const client of clients) client.terminate()
-      await new Promise<void>(resolve => { server.close(() => { http.close(() => { resolve() }) }) })
+      await new Promise<void>((resolve) => { server.close(() => { http.close(() => { resolve() }) }) })
     },
   }
 }
@@ -130,10 +130,10 @@ class OriginalAxiomFixture {
       { id: 'axiom-old-assistant', role: 'assistant', text: 'Original **Axiom answer**.', timestamp: null, truncated: false }] }
   async acquire(): Promise<() => void> {
     const previous = this.queue
-    const slot = Promise.withResolvers<void>()
+    const slot = Promise.withResolvers<undefined>()
     this.queue = previous.then(() => slot.promise)
     await previous
-    return () => { slot.resolve() }
+    return () => { slot.resolve(undefined) }
   }
   async connect(url: string): Promise<AxiomSnapshot> {
     if (url !== this.state.url) throw new Error('Unexpected fixture Dot selection')
@@ -165,23 +165,26 @@ it.skipIf(process.platform === 'win32')('continues original Codex and Axiom chat
   const root = await realpath(await mkdtemp(join(tmpdir(), 'native-web-')))
   const previousFlag = process.env.DSH_NATIVE_CONVERSATIONS
   process.env.DSH_NATIVE_CONVERSATIONS = '1'
-  let ownedDaemon: Awaited<ReturnType<typeof codexFixture>> | undefined
-  let scaffold: WebScaffold | undefined
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  const owned: {
+    daemon?: Awaited<ReturnType<typeof codexFixture>>
+    scaffold?: WebScaffold
+    browser?: Awaited<ReturnType<typeof chromium.launch>>
+  } = {}
   onTestFinished(async () => {
-    try { await browser?.close(); await scaffold?.close() }
+    try { await owned.browser?.close(); await owned.scaffold?.close() }
     finally {
-      await ownedDaemon?.close()
+      await owned.daemon?.close()
       await rm(root, { recursive: true, force: true })
       if (previousFlag === undefined) Reflect.deleteProperty(process.env, 'DSH_NATIVE_CONVERSATIONS')
       else process.env.DSH_NATIVE_CONVERSATIONS = previousFlag
     }
   })
   const daemon = await codexFixture(root)
-  ownedDaemon = daemon
+  owned.daemon = daemon
   const overlay = join(root, 'native.overlay.yml')
   await writeFile(overlay, `- id: codex-app-server\n  config:\n    sourceHome: ${JSON.stringify(daemon.home)}\n    socketPath: ${JSON.stringify(daemon.socketPath)}\n- id: native-conversations\n  config:\n    fallbackCwd: ${JSON.stringify(daemon.workspace)}\n    axiomPollIntervalMs: 250\n    axiomSettleMs: 500\n`)
-  scaffold = await launchWebScaffold({ extraOverlayPath: overlay })
+  const scaffold = await launchWebScaffold({ extraOverlayPath: overlay })
+  owned.scaffold = scaffold
   const source = new OriginalAxiomFixture()
   const native = scaffold.ctx.get('nativeConversations') as { attachAxiomTransport(transport: OriginalAxiomFixture): () => void }
   native.attachAxiomTransport(source)
@@ -190,7 +193,8 @@ it.skipIf(process.platform === 'win32')('continues original Codex and Axiom chat
   expect(daemon.frames.some(frame => frame.method === 'thread/items/list' || frame.method === 'turn/start')).toBe(false)
   expect(scaffold.ctx.sessions.list()).toEqual([])
 
-  browser = await chromium.launch({ headless: true })
+  const browser = await chromium.launch({ headless: true })
+  owned.browser = browser
   const page = await newEnglishPage(browser)
   const console = watchConsole(page)
   const captureFailure = async (): Promise<void> => {
@@ -200,7 +204,7 @@ it.skipIf(process.platform === 'win32')('continues original Codex and Axiom chat
     await writeFile(join(artifacts, 'native-chat-failure.json'), JSON.stringify({
       text: await page.locator('body').innerText(),
       rows: await page.locator('[data-row-key]').evaluateAll(rows => rows.map(row => row.outerHTML)),
-      sessions: await rpc(scaffold!, 'session/list', { _request: {} }),
+      sessions: await rpc(scaffold, 'session/list', { _request: {} }),
       console,
     }, null, 2))
   }
