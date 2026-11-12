@@ -39,9 +39,9 @@ describe('completed-history maintenance', () => {
     const { agent } = await ctx.agents.create({ sessionId: SessionId(`import-maintenance-${phase}`), agentOptions: { provider: 'mock', model: 'mock' } })
     if (phase === 'idle') {
       await followup(agent, 'Initial live message')
-      await agent.runMaintenance(async () => { appendCompletedHistory(agent, 1) })
+      await agent.runMaintenance(async () => { appendCompletedHistory(agent, 2) })
     }
-    const importedMax = phase === 'created' ? 1 : 2
+    const importedMax = phase === 'created' ? 1 : 3
     await followup(agent, 'Continue the original conversation')
     const turns = agent.session.snapshotEvents().flatMap(event => event.type === 'turn/start' ? [event.data.turn] : [])
     expect(turns.at(-1)).toBe(importedMax + 1)
