@@ -8,6 +8,8 @@ import { isDesktopUpdateChannel } from './settings-file.ts'
 import type { ProductEventMap, ProductEvent } from '@deepseek-ai/dsh-client-product-analytics/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 import { access, readFile, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { configureLocalFork, brandDesktopLocale } from './local-fork.ts'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -36,7 +38,7 @@ import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
 import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
 import { readDeviceInfo } from './device-info.ts'
-import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
+import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale as resolveLocale, resolveDesktopStartupLocale as resolveStartupLocale } from './locale.ts'
 import type { DesktopMessages } from './locale.ts'
 import { claimDesktopSingleInstance } from './single-instance.ts'
 import { desktopUpdateChannel } from './update-channel.ts'
@@ -71,6 +73,14 @@ import { DesktopUpdateOverlays } from './update-overlay.ts'
 import { DesktopQuitConfirmation } from './quit-confirmation.ts'
 import { DesktopTray } from './tray.ts'
 import { DesktopBackgroundNotice } from './background-notice.ts'
+
+const productName = configureLocalFork(
+  JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8')), app, process.env,
+) ?? 'DeepSeek Harness'
+const resolveDesktopLocale = (locale: string): ReturnType<typeof resolveLocale> =>
+  brandDesktopLocale(resolveLocale(locale), productName)
+const resolveDesktopStartupLocale = (preference: string | null, languages: readonly string[]): ReturnType<typeof resolveLocale> =>
+  brandDesktopLocale(resolveStartupLocale(preference, languages), productName)
 
 let focusPrimaryWindow = (): void => {}
 let stopForRecovery = async (): Promise<void> => { await stopOperationReports() }
@@ -1158,7 +1168,7 @@ async function main(): Promise<void> {
   const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
     : join(process.resourcesPath, 'icon.png')
   app.setAboutPanelOptions({
-    applicationName: 'DeepSeek Harness',
+    applicationName: productName,
     applicationVersion: app.getVersion(),
     // The release has no separate build number; omit Electron's bundle version.
     version: '',

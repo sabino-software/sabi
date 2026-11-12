@@ -1,3 +1,4 @@
+import { LOCAL_FORK } from './local-fork.mjs'
 /** Validate the assembled application, including native Office conversion outside ASAR. */
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -11,11 +12,12 @@ const paths = resolveDesktopTargetBuildPaths()
 const { values } = parseArgs({ options: { unsigned: { type: 'boolean', default: false }, 'skip-notarization': { type: 'boolean', default: false } }, allowPositionals: false })
 const target = resolveDesktopBuildTarget()
 const windows = target === 'win-x64'
+const productName = process.env.DSH_DESKTOP_LOCAL_FORK === '1' ? LOCAL_FORK.productName : 'DeepSeek Harness'
 const artifacts = desktopArtifactOutput(paths, { unsigned: values.unsigned, skipNotarization: values['skip-notarization'] }).directory
 const application = windows ? join(artifacts, 'win-unpacked')
-  : join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app', 'Contents')
+  : join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', `${productName}.app`, 'Contents')
 const resources = join(application, windows ? 'resources' : 'Resources')
-const executable = windows ? join(application, 'DeepSeek Harness.exe') : join(application, 'MacOS', 'DeepSeek Harness')
+const executable = windows ? join(application, `${productName}.exe`) : join(application, 'MacOS', productName)
 const descriptor = await verifyDesktopRuntime(paths.dsh, readDesktopRuntime(paths.dsh).release.version,
   resolveDesktopPackageTarget(target))
 if (windows && !values.unsigned) await verifyWindowsCode(application)

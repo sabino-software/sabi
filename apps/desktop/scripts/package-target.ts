@@ -1,6 +1,7 @@
 /** Build one release target with matching Electron and dsh architecture. */
 
 import { spawn } from 'node:child_process'
+import { LOCAL_FORK } from './local-fork.mjs'
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { join, resolve } from 'node:path'
@@ -196,6 +197,7 @@ export function resolveDesktopPackageTarget(
 interface DesktopPackageInvocation {
   readonly target: DesktopPackageTarget
   readonly directory: boolean
+  readonly localFork?: boolean
   readonly prepareOnly: boolean
   readonly unsigned: boolean
   readonly skipNotarization: boolean
@@ -229,6 +231,7 @@ export function parseDesktopPackageInvocation(
     allowPositionals: true,
     options: {
       dir: { type: 'boolean', default: false },
+      'local-fork': { type: 'boolean', default: false },
       'prepare-only': { type: 'boolean', default: false },
       unsigned: { type: 'boolean', default: false },
       'skip-notarization': { type: 'boolean', default: false },
@@ -236,6 +239,9 @@ export function parseDesktopPackageInvocation(
       'build-version': { type: 'string' },
     },
   })
+  if (values['local-fork'] && (!values.unsigned || (positionals[0] ?? hostTargetName(hostPlatform, hostArch)) !== 'mac-arm64')) {
+    throw new Error('desktop package: --local-fork requires mac-arm64 --unsigned')
+  }
   if (positionals.length > 1) throw new Error('desktop package: expected at most one target')
   const name = positionals[0] ?? hostTargetName(hostPlatform, hostArch)
   if (values.unsigned && values['prepare-only']) throw new Error('desktop package: --unsigned cannot use --prepare-only')
@@ -249,6 +255,7 @@ export function parseDesktopPackageInvocation(
   return {
     target: resolveDesktopPackageTarget(name, hostPlatform, hostArch),
     directory: values.dir,
+    localFork: values['local-fork'],
     prepareOnly: values['prepare-only'],
     unsigned: values.unsigned,
     skipNotarization: values['skip-notarization'],
@@ -349,6 +356,10 @@ async function main(): Promise<void> {
     : loadDesktopPackageEnvironment(target.platform, process.env, APP_ROOT, {
       unsigned: invocation.unsigned, prepareOnly: invocation.prepareOnly,
     })
+  if (invocation.localFork) {
+    environment.DSH_DESKTOP_LOCAL_FORK = '1'
+    environment.DSH_DESKTOP_APP_ID = LOCAL_FORK.appId
+  }
   const productVersion = packageVersion(join(APP_ROOT, 'package.json'), 'desktop package')
   // Release settings come from the selected configuration files, so the version this run publishes is an
   // argument; the environment variable below only carries it to the child processes that build.
@@ -402,7 +413,7 @@ async function main(): Promise<void> {
   if (success && target.platform === 'darwin' && !invocation.directory && !invocation.prepareOnly) {
     const paths = desktopTargetBuildPaths(target.name, environment)
     const output = desktopArtifactOutput(paths, invocation)
-    const filename = `deepseek-harness-${buildVersion}-mac-${target.arch}${output.suffix}.dmg`
+    const filename = `${invocation.localFork ? LOCAL_FORK.artifactName : 'deepseek-harness'}-${buildVersion}-mac-${target.arch}${output.suffix}.dmg`
     console.log(`DMG: ${join(output.directory, filename)}`)
   }
 }
