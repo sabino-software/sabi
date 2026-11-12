@@ -189,7 +189,6 @@ it.skipIf(process.platform === 'win32')('continues original Codex and Axiom chat
   const native = scaffold.ctx.get('nativeConversations') as { attachAxiomTransport(transport: OriginalAxiomFixture): () => void }
   native.attachAxiomTransport(source)
   await rpc(scaffold, 'nativeConversations/syncCodex', {})
-  await rpc(scaffold, 'nativeConversations/connectAxiom', { url: 'https://chatgpt.com/dots/keyless~fixture' })
   expect(daemon.frames.some(frame => frame.method === 'thread/items/list' || frame.method === 'turn/start')).toBe(false)
   expect(scaffold.ctx.sessions.list()).toEqual([])
 
@@ -218,14 +217,10 @@ it.skipIf(process.platform === 'win32')('continues original Codex and Axiom chat
       return workspace.getAttribute('aria-expanded')
     }, { timeout: 10000 }).toBe('true')
     const codexRow = page.locator('[data-row-key^="session:"]').filter({ hasText: 'Existing work coding chat' })
-    const axiomRow = page.locator('[data-row-key^="session:"]').filter({ hasText: 'Existing Axiom conversation' })
     await codexRow.getByLabel('Codex', { exact: true }).waitFor()
-    await axiomRow.getByLabel('Axiom', { exact: true }).waitFor()
     expect(daemon.frames.some(frame => frame.method === 'thread/items/list' || frame.method === 'turn/start')).toBe(false)
-    for (const row of [codexRow, axiomRow]) {
-      const key = await row.getAttribute('data-row-key')
-      expect(scaffold.ctx.sessions.list().some(session => `session:${session.id}` === key)).toBe(false)
-    }
+    const coldCodexKey = await codexRow.getAttribute('data-row-key')
+    expect(scaffold.ctx.sessions.list().some(session => `session:${session.id}` === coldCodexKey)).toBe(false)
 
     await codexRow.click()
     await page.getByText('Original work question from the source.', { exact: true }).waitFor()
@@ -242,9 +237,21 @@ it.skipIf(process.platform === 'win32')('continues original Codex and Axiom chat
     expect(daemon.frames.some(frame => frame.method === 'thread/start')).toBe(false)
     expect(daemon.catalog().length).toBeGreaterThan(0)
 
-    await axiomRow.click()
+    const connections = page.getByRole('button', { name: 'Native conversations', exact: true })
+    if (await connections.count() > 0) await connections.click()
+    else {
+      await page.getByRole('button', { name: 'More', exact: true }).first().click()
+      await page.getByRole('menuitem', { name: 'Native conversations', exact: true }).click()
+    }
+    await page.getByRole('heading', { name: 'Native conversations', exact: true }).waitFor()
+    const axiomRow = page.locator('[data-row-key^="session:"]').filter({ hasText: 'Existing Axiom conversation' })
+    expect(await axiomRow.count()).toBe(0)
+    await page.getByRole('textbox', { name: 'Existing ChatGPT Dot URL', exact: true }).fill('https://chatgpt.com/dots/keyless~fixture')
+    await page.getByRole('button', { name: 'Connect Axiom', exact: true }).click()
     await page.getByText('Original Axiom question.', { exact: true }).waitFor()
     await page.getByText('Axiom answer', { exact: true }).waitFor()
+    await axiomRow.getByLabel('Axiom', { exact: true }).waitFor()
+    expect(source.sent).toEqual([])
     await composer.fill('Continue Axiom exactly.\nKeep this second line.')
     const axiomSettled = scaffold.whenTurnSettled(30000)
     await page.getByRole('button', { name: 'Send message', exact: true }).click()
