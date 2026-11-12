@@ -86,6 +86,7 @@
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-api-remote-access": "workspace:*",
-    "@deepseek-ai/dsh-remote-mock": "workspace:*"
+    "@deepseek-ai/dsh-remote-mock": "workspace:*",
+    "@types/ws": "^8.18.1"
   }
 }
