@@ -108,7 +108,12 @@ async function elicitation(ctx: Context, agent: Agent, params: CodexJsonObject, 
   if (!parsed.success) return fallback
   const properties = Object.entries(parsed.data.properties)
   const required = new Set(parsed.data.required ?? [])
-  if (properties.length === 0 || properties.length > 3 || [...required].some(name => !(name in parsed.data.properties))) return fallback
+  if (properties.length > 3 || [...required].some(name => !(name in parsed.data.properties))) return fallback
+  if (properties.length === 0) {
+    const outcome = await ctx.approval.request({ agent, toolName: 'Codex MCP action', reason: params.message, signal })
+    signal.throwIfAborted()
+    return outcome === 'allowed-once' ? { action: 'accept', content: {}, _meta: null } : fallback
+  }
   if (properties.some(([name, field]) => /password|secret|token|credential|api.?key|challenge/i.test(`${name} ${field.title ?? ''}`)
     || field.type === 'boolean' && field.enum !== undefined || field.enum?.includes('Omit this optional field'))) return fallback
   const questions: AskUserQuestionItem[] = properties.map(([name, field]) => ({
