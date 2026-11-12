@@ -264,7 +264,7 @@ describe('DeepSeek plugin package inventory', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
-    await ctx.plugin(PluginInventory)
+    await ctx.plugin(PluginInventory, { enabled: true })
     ctx.loader.builtins.noop = () => {}
     await ctx.loader.create({ name: 'cordis:noop' })
     const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })
