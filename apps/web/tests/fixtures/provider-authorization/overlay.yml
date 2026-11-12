@@ -1,0 +1,3 @@
+- insert:
+    - id: fixture-provider-authorization
+      name: ./flow.js
