@@ -1,0 +1,3 @@
+.card { min-width: 0; padding: 8px 10px; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-card-fill); }
+.status { flex: none; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 20px; white-space: nowrap; }
+.detail { min-width: 0; padding: 8px 4px 4px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
