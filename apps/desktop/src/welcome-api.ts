@@ -7,6 +7,8 @@ import type { DesktopLocale } from './locale.ts'
 /** Private native welcome channels, installed only while its window exists. */
 export const WELCOME_IPC = {
   saveApiKey: 'dsh-welcome:save-api-key',
+  nativeProvider: 'dsh-welcome:native-provider',
+  useWorkCodex: 'dsh-welcome:use-work-codex',
   analytics: 'dsh-welcome:analytics',
   analyticsEnabled: 'dsh-welcome:analytics-enabled',
   skip: 'dsh-welcome:skip',
@@ -25,8 +27,18 @@ export type WelcomeNotice = 'session-expired'
 
 type WelcomeEventName = 'auth_page_view' | 'auth_page_click' | 'api_key_save_click'
 
+/** Redacted availability of the independently authenticated work Codex connection. */
+export interface WelcomeNativeProvider {
+  readonly available: boolean
+  readonly ready: boolean
+}
+
 /** Host-owned operations used by the welcome window. */
 export interface WelcomeOperations {
+  /** @returns Work Codex availability, or null when native integration is not composed. */
+  nativeProvider?(): Promise<WelcomeNativeProvider | null>
+  /** @returns Successful default-model selection and actual native readiness, without credential changes. */
+  useWorkCodex?(): Promise<WelcomeSaveResult>
   /** @param eventName - allowed welcome event. @param attributes - approved fields without credentials. */
   analytics?<K extends WelcomeEventName>(eventName: K, attributes: ProductEventMap[K]): Promise<void>
   /** @returns the Host's current effective collection policy. */
@@ -65,13 +77,14 @@ export type WelcomeApi = DesktopLocale & WelcomeOperations & {
 export interface WelcomeAuthentication {
   readonly loggedIn: boolean
   readonly hasApiKey: boolean
+  readonly nativeReady?: boolean
 }
 
 /**
  * Decide whether a startup or sign-out requires the welcome entry.
- * @param authentication - current account and independently stored API-key facts.
- * @returns true only when neither authentication route is configured.
+ * @param authentication - current account, stored provider credential, and native provider readiness facts.
+ * @returns true only when no independent provider route is ready.
  */
 export function needsWelcome(authentication: WelcomeAuthentication): boolean {
-  return !authentication.loggedIn && !authentication.hasApiKey
+  return !authentication.loggedIn && !authentication.hasApiKey && authentication.nativeReady !== true
 }

@@ -4,6 +4,8 @@ import { connectDesktopWelcome } from '../src/welcome-backend.ts'
 
 function transport(preference?: string) {
   const keys = new Map<string, string>()
+  const native = { connected: false, authenticated: false, selected: false }
+  let acceptNativeSelection = true
   const authorizations: { key: string; configured: boolean; methods: { id: string; label: string }[] }[] = []
   const namespaces = [
     { ns: 'llm-deepseek', value: { apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY' } },
@@ -21,19 +23,54 @@ function transport(preference?: string) {
     else if (method === 'settings/describe') value = { namespaces }
     else if (method === 'llm/listConfigurableProviders') value = [{ settingsNs: 'llm-pi-ai', settingsPath: ['profiles', 'example'] }]
     else if (method === 'authorization/list') value = authorizations
+    else if (method === 'nativeConversations/status') value = { codex: native }
+    else if (method === 'nativeConversations/useCodex') { if (acceptNativeSelection) native.selected = true; value = undefined }
     else if (method === 'productAnalytics/enabled') value = true
     else if (method === 'productAnalytics/report') value = undefined
     else if (method === 'credentials/set') keys.set(payload.args.ref, payload.args.value)
     else value = Object.fromEntries(payload.args.refs.map(ref => [ref, { configured: keys.has(ref), writable: true }]))
     return Response.json({ type: 'server-response', rpcId, result: { ok: true, value } })
   })
-  return { send, keys, namespaces, authorizations }
+  return { send, keys, namespaces, authorizations, native, rejectNativeSelection: () => { acceptNativeSelection = false } }
 }
 
 const url = 'http://127.0.0.1:19387/'
 const cookie = 'dsh-auth-fixture=signed'
 
 describe('desktop welcome Web operations', () => {
+  it('keeps authenticated work Codex availability separate from stored keys and selects it only on explicit request', async () => {
+    const host = transport()
+    host.native.connected = true
+    host.native.authenticated = true
+    const backend = connectDesktopWelcome(url, cookie, host.send, { nativeConversations: true })
+    expect(await backend.nativeProvider()).toEqual({ available: true, ready: false })
+    expect(await backend.read()).toMatchObject({ hasApiKey: false, nativeReady: false })
+    expect(host.send.mock.calls.some(([, init]) => (init?.body as string).includes('nativeConversations/useCodex'))).toBe(false)
+    expect(await backend.useCodex()).toEqual({ ok: true })
+    expect(await backend.read()).toMatchObject({ hasApiKey: false, loggedIn: false, nativeReady: true })
+    expect(host.keys.size).toBe(0)
+    expect(host.send.mock.calls.some(([, init]) => (init?.body as string).includes('credentials/set'))).toBe(false)
+    expect(host.send.mock.calls.some(([, init]) => (init?.body as string).includes('credentials/get'))).toBe(false)
+  })
+
+  it.each(['disconnected', 'signed-out', 'unselected'] as const)('refuses the %s native route without inventing credential readiness', async (condition) => {
+    const host = transport()
+    host.native.connected = condition !== 'disconnected'
+    host.native.authenticated = condition !== 'signed-out'
+    host.rejectNativeSelection()
+    const backend = connectDesktopWelcome(url, cookie, host.send, { nativeConversations: true })
+    expect(await backend.useCodex()).toEqual({ ok: false })
+    expect(await backend.read()).toMatchObject({ hasApiKey: false, nativeReady: false })
+  })
+
+  it('does not query an uncomposed native service in ordinary profiles', async () => {
+    const host = transport()
+    const backend = connectDesktopWelcome(url, cookie, host.send)
+    expect(await backend.nativeProvider()).toBeNull()
+    expect(await backend.useCodex()).toEqual({ ok: false })
+    expect(host.send).not.toHaveBeenCalled()
+  })
+
   it.each(['light', 'dark', 'system'] as const)('reads the live %s theme in the existing settings request', async (preference) => {
     const host = transport()
     host.namespaces.push({ ns: 'ui-theme', value: { preference } })
@@ -60,7 +97,7 @@ describe('desktop welcome Web operations', () => {
     expect(await backend.analyticsEnabled()).toBe(true)
     expect(await backend.save('sk-example')).toEqual({ ok: true })
     expect(host.keys.get('CUSTOM_DEEPSEEK_KEY')).toBe('sk-example')
-    expect(await backend.read()).toEqual({ loggedIn: false, hasApiKey: true, writable: true, localePreference: null, themePreference: 'system' })
+    expect(await backend.read()).toEqual({ loggedIn: false, hasApiKey: true, nativeReady: false, writable: true, localePreference: null, themePreference: 'system' })
     for (const [input, init] of host.send.mock.calls) {
       expect(input).toMatch(/^http:\/\/127\.0\.0\.1:19387\/api\//u)
       expect(init).toMatchObject({ redirect: 'error', headers: { cookie } })

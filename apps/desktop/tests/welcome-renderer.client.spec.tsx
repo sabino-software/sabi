@@ -7,16 +7,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveDesktopLocale } from '../src/locale.ts'
 import { brandDesktopLocale } from '../src/desktop-branding.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
-import type { WelcomeSaveResult, WelcomeNotice } from '../src/welcome-api.ts'
+import type { WelcomeSaveResult, WelcomeNotice, WelcomeNativeProvider } from '../src/welcome-api.ts'
 
 const html = readFileSync(join(import.meta.dirname, '../renderer/welcome.html'), 'utf8')
 afterEach(cleanup)
 
-function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined), productName?: string) {
+function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined), productName?: string, native: WelcomeNativeProvider | null = null) {
   cleanup()
   const stopAccount = vi.fn()
   const api = {
     takeNotice,
+    nativeProvider: vi.fn<() => Promise<WelcomeNativeProvider | null>>().mockResolvedValue(native),
+    useWorkCodex: vi.fn<() => Promise<WelcomeSaveResult>>().mockResolvedValue({ ok: true }),
     analytics: vi.fn(async (_event: string, _attributes: object) => {}),
     analyticsEnabled: async () => true,
     onAccountState: vi.fn((_listener: (state: AccountView) => void) => stopAccount),
@@ -48,6 +50,27 @@ function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotic
   }
   return { document, api, input, button, enterKey, submit, copy, unmount: mounted.unmount, stopAccount }
 }
+
+it('offers authenticated work Codex explicitly without starting sign-in or skipping onboarding', async () => {
+  const view = mount('en', undefined, 'Skeinlet', { available: true, ready: false })
+  const button = await screen.findByRole('button', { name: 'Use work Codex' })
+  expect(view.api.useWorkCodex).not.toHaveBeenCalled()
+  fireEvent.click(button)
+  await act(async () => {})
+  expect(view.api.useWorkCodex).toHaveBeenCalledOnce()
+  expect(view.api.skip).not.toHaveBeenCalled()
+  expect(view.api.startSignIn).not.toHaveBeenCalled()
+  expect(view.api.saveApiKey).not.toHaveBeenCalled()
+})
+
+it('keeps a failed native selection visible and retryable without falling back to a fake key', async () => {
+  const view = mount('en', undefined, 'Skeinlet', { available: true, ready: false })
+  view.api.useWorkCodex.mockResolvedValue({ ok: false })
+  fireEvent.click(await screen.findByRole('button', { name: 'Use work Codex' }))
+  expect(await screen.findByRole('alert')).toHaveProperty('textContent', view.api.messages.welcomeContinueFailed)
+  expect(view.api.skip).not.toHaveBeenCalled()
+  expect(view.api.saveApiKey).not.toHaveBeenCalled()
+})
 
 describe('desktop welcome presentation', () => {
   it('opens the branded provider workspace without starting a DeepSeek account login', async () => {

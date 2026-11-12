@@ -29,6 +29,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [nativeAvailable, setNativeAvailable] = useState(false)
   const busyRef = useRef(false)
   const mounted = useRef(true)
   const revision = useRef(0)
@@ -80,6 +81,26 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   }, [page, api])
 
   useEffect(() => {
+    if (page !== 'entry' || api.nativeProvider === undefined) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const refresh = async (): Promise<void> => {
+      try {
+        const state = await api.nativeProvider?.()
+        if (cancelled) return
+        setNativeAvailable(state?.available === true)
+        if (state === null || state === undefined) return
+      } catch (_unavailableNativeProvider) {
+        if (cancelled) return
+        setNativeAvailable(false)
+      }
+      timer = setTimeout(() => { void refresh() }, 2000)
+    }
+    void refresh()
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [api, page])
+
+  useEffect(() => {
     if (copyState !== 'copied' && copyState !== 'failed') return
     const timer = setTimeout(() => { setCopyFeedback({ status: 'idle' }) }, 2000)
     return () => { clearTimeout(timer) }
@@ -106,6 +127,21 @@ export function Welcome({ api }: { api: WelcomeApi }) {
       else setError(m.welcomeKeyFailed)
     } catch {
       if (mounted.current) setError(m.welcomeKeyFailed)
+    } finally {
+      busyRef.current = false
+      if (mounted.current) setBusy(false)
+    }
+  }
+  async function useWorkCodex() {
+    if (busyRef.current || api.useWorkCodex === undefined) return
+    busyRef.current = true
+    setBusy(true)
+    setError('')
+    try {
+      const result = await api.useWorkCodex()
+      if (mounted.current && !result.ok) setError(m.welcomeContinueFailed)
+    } catch (_nativeSelectionFailed) {
+      if (mounted.current) setError(m.welcomeContinueFailed)
     } finally {
       busyRef.current = false
       if (mounted.current) setBusy(false)
@@ -209,8 +245,14 @@ export function Welcome({ api }: { api: WelcomeApi }) {
           onClick={() => { void cancel() }}>{m.welcomeAuthCancel}</button>
       </div>
       <div id="entry-actions" className="actions" hidden={page !== 'entry'}>
-        <button id="sign-in" className="primary" type="button" onClick={() => { if (api.productName === 'Skeinlet') void skip(); else { void api.analytics?.('auth_page_click', { button_name: 'sign_in' }); void start() } }}>{m.welcomeSignIn}</button>
-        <button ref={keyButton} id="api-key" className="secondary" type="button" hidden={api.productName === 'Skeinlet'} onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'api-key' }); navigate('key') }}>{m.welcomeApiKey}</button>
+        {nativeAvailable && <>
+          <p id="work-codex-description">{m.welcomeWorkCodexDescription}</p>
+          <button id="use-work-codex" className="primary" type="button" disabled={busy}
+            aria-describedby="work-codex-description" onClick={() => { void useWorkCodex() }}>{m.welcomeUseWorkCodex}</button>
+        </>}
+        <p id="entry-error" className="key-error" role="alert" hidden={error === ''}>{error}</p>
+        <button id="sign-in" className={nativeAvailable ? 'secondary' : 'primary'} type="button" disabled={busy} onClick={() => { if (api.productName === 'Skeinlet') void skip(); else { void api.analytics?.('auth_page_click', { button_name: 'sign_in' }); void start() } }}>{m.welcomeSignIn}</button>
+        <button ref={keyButton} id="api-key" className="secondary" type="button" disabled={busy} hidden={api.productName === 'Skeinlet'} onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'api-key' }); navigate('key') }}>{m.welcomeApiKey}</button>
       </div>
       <div id="key-actions" className="actions" hidden={page !== 'key'}>
         <button id="save-key" className="primary" type="submit" form="key-form" disabled={busy || draft.trim() === ''}>{m.welcomeKeySave}</button>

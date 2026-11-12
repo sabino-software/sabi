@@ -50,6 +50,22 @@ const operations = {
 }
 
 describe('desktop welcome window', () => {
+  it('binds native readiness and explicit work Codex selection to the owning welcome frame', async () => {
+    const window = createWindow()
+    electron.create.mockReturnValue(window)
+    const nativeProvider = vi.fn(async () => ({ available: true, ready: false }))
+    const useWorkCodex = vi.fn(async () => ({ ok: true as const }))
+    await openWelcomeWindow(resolveDesktopLocale('en'), { ...operations, nativeProvider, useWorkCodex })
+    const event = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
+    expect(await electron.handlers.get(WELCOME_IPC.nativeProvider)!(event)).toEqual({ available: true, ready: false })
+    const select = electron.handlers.get(WELCOME_IPC.useWorkCodex)!
+    await expect(select({ ...event, senderFrame: {} })).rejects.toThrow('unowned frame')
+    expect(useWorkCodex).not.toHaveBeenCalled()
+    expect(await select(event)).toEqual({ ok: true })
+    expect(useWorkCodex).toHaveBeenCalledOnce()
+    expect(nativeProvider).toHaveBeenCalledOnce()
+  })
+
   it.each(['darwin', 'win32', 'linux'] as const)('keeps the %s preview fixed-size and sandboxed', (platform) => {
     const options = welcomeWindowOptions(platform, resolveDesktopLocale('zh-CN'))
     expect(options).toMatchObject({
@@ -184,6 +200,8 @@ describe('desktop welcome window', () => {
     expect(needsWelcome({ loggedIn: true, hasApiKey: false })).toBe(false)
     expect(needsWelcome({ loggedIn: false, hasApiKey: false })).toBe(true)
     expect(needsWelcome({ loggedIn: false, hasApiKey: true })).toBe(false)
+    expect(needsWelcome({ loggedIn: false, hasApiKey: false, nativeReady: true })).toBe(false)
+    expect(needsWelcome({ loggedIn: false, hasApiKey: false, nativeReady: false })).toBe(true)
     expect(needsWelcome({ loggedIn: true, hasApiKey: true })).toBe(false)
   })
 })

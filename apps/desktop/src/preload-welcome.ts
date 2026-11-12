@@ -4,7 +4,7 @@ import type { AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-acc
 import { contextBridge, ipcRenderer } from 'electron'
 import { resolveDesktopLocale } from './locale.ts'
 import { brandDesktopLocale } from './desktop-branding.ts'
-import { WELCOME_IPC, type WelcomeApi, type WelcomeNotice, type WelcomeSaveResult } from './welcome-api.ts'
+import { WELCOME_IPC, type WelcomeApi, type WelcomeNotice, type WelcomeSaveResult, type WelcomeNativeProvider } from './welcome-api.ts'
 
 const prefix = '--dsh-welcome-locale='
 const locale = process.argv.find(argument => argument.startsWith(prefix))?.slice(prefix.length)
@@ -16,6 +16,8 @@ const api: WelcomeApi = {
   analytics: async (eventName, attributes) => {
     if (await api.analyticsEnabled()) await ipcRenderer.invoke(WELCOME_IPC.analytics, eventName, attributes)
   },
+  nativeProvider: () => ipcRenderer.invoke(WELCOME_IPC.nativeProvider) as Promise<WelcomeNativeProvider | null>,
+  useWorkCodex: () => ipcRenderer.invoke(WELCOME_IPC.useWorkCodex) as Promise<WelcomeSaveResult>,
   analyticsEnabled: () => ipcRenderer.invoke(WELCOME_IPC.analyticsEnabled) as Promise<boolean>,
   takeNotice: () => ipcRenderer.invoke(WELCOME_IPC.takeNotice) as Promise<WelcomeNotice | undefined>,
   startSignIn: () => ipcRenderer.invoke(WELCOME_IPC.start) as Promise<AccountView>,
