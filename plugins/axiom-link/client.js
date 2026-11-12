@@ -72,12 +72,12 @@ window.__ModuleLoader__.load({
       const edit = !url || editing;
       const buttons = url && h('div', { className: 'skeinlet-axiom-actions' },
         h('button', { type: 'button', onClick() { setError(openInside(url) ? '' : 'unavailable'); } }, t('inside')),
-        h('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, t('external')),
+        h('a', { href: url, title: url, target: '_blank', rel: 'noopener noreferrer' }, t('external')),
         h('button', { type: 'button', onClick() { setDraft(url); setError(''); setEditing(true); } }, t('change')));
       return h('section', { className: 'skeinlet-axiom', 'aria-label': t('title') },
         h('style', null, styles),
         buttons,
-        url && h('p', null, url),
+        url && h('p', { title: url }, 'chatgpt.com'),
         edit && h('details', { open: editing || !url },
           h('summary', null, t('setup')),
           h('form', { onSubmit(event) {

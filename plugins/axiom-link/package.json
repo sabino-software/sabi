@@ -1,6 +1,6 @@
 {
   "name": "@local/skeinlet-axiom-link",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Open your existing Axiom Dot conversation in ChatGPT beside a Harness session.",
