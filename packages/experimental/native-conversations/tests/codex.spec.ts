@@ -88,9 +88,9 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
   const notifications = new Set<(notification: CodexNotification) => void>()
   const handlers = new Map<CodexServerRequestMethod, CodexServerRequestHandler>()
   const requests: { method: CodexMethod; params: CodexJsonObject }[] = []
-  const started = Promise.withResolvers<void>()
-  const acknowledge = Promise.withResolvers<void>()
-  const interrupted = Promise.withResolvers<void>()
+  const started = Promise.withResolvers<undefined>()
+  const acknowledge = Promise.withResolvers<undefined>()
+  const interrupted = Promise.withResolvers<undefined>()
   const controller = new AbortController()
   const streams = new Set<Promise<StreamChunk[]>>()
   const clients: Client[] = []
@@ -100,7 +100,7 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
   let endpoint: { url: string; authorization: string } | undefined
   const observed = vi.fn()
   const binding: NativeConversationBinding = { source: 'codex', sourceId: brandString<NativeConversationId>(THREAD), title: 'Existing fixture', model: null, cwd: null }
-  vi.spyOn(ctx.codexAppServer, 'onNotification').mockImplementation(listener => { notifications.add(listener); return () => { notifications.delete(listener) } })
+  vi.spyOn(ctx.codexAppServer, 'onNotification').mockImplementation((listener) => { notifications.add(listener); return () => { notifications.delete(listener) } })
   vi.spyOn(ctx.codexAppServer, 'onStatus').mockImplementation(() => () => {})
   vi.spyOn(ctx.codexAppServer, 'setRequestHandler').mockImplementation((method, handler) => {
     handlers.set(method, handler)
@@ -112,7 +112,9 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
     if (method === 'thread/read') return { thread: { id: THREAD, status: { type: 'idle' } } }
     if (method === 'thread/turns/list') return { data: [] }
     if (method === 'thread/resume') {
-      const config = z.object({ mcp_servers: z.object({ skeinlet: z.object({ url: z.string(), http_headers: z.object({ Authorization: z.string() }) }) }) }).parse(params.config)
+      const config = z.object({
+        mcp_servers: z.object({ skeinlet: z.object({ url: z.string(), http_headers: z.object({ Authorization: z.string() }) }) }),
+      }).parse(params.config)
       endpoint = { url: config.mcp_servers.skeinlet.url, authorization: config.mcp_servers.skeinlet.http_headers.Authorization }
       return {}
     }
@@ -122,11 +124,11 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
         tools: Object.fromEntries(schemas.map(schema => [schema.name, {}])), toolsError: null }] }
     }
     if (method === 'turn/start') {
-      started.resolve()
+      started.resolve(undefined)
       if (holdAcknowledgement) await acknowledge.promise
       return { turn: { id: TURN } }
     }
-    if (method === 'turn/interrupt') { interrupted.resolve(); return {} }
+    if (method === 'turn/interrupt') { interrupted.resolve(undefined); return {} }
     if (method === 'thread/unsubscribe') return {}
     throw new Error(`Unexpected native fixture method ${method}`)
   })
@@ -149,8 +151,8 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
   const finish = (status = 'completed') => { emit('turn/completed', { threadId: THREAD, turn: { id: TURN, status } }) }
   const barrier = async () => {
     const id = `fixture-barrier-${++nextBarrier}`
-    const done = Promise.withResolvers<void>()
-    barriers.set(`${TURN}:${id}`, done.resolve)
+    const done = Promise.withResolvers<undefined>()
+    barriers.set(`${TURN}:${id}`, () => { done.resolve(undefined) })
     item({ type: 'commandExecution', id, command: 'Fixture notification barrier' })
     await done.promise
   }
@@ -176,17 +178,20 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
     if (endpoint === undefined) throw new Error('The native fixture has not started')
     const peer = new Client({ name: 'codex-adapter-fixture', version: '1.0.0' })
     clients.push(peer)
-    await peer.connect(new StreamableHTTPClientTransport(new URL(endpoint.url), { requestInit: { headers: { authorization: endpoint.authorization } } }))
+    await peer.connect(new StreamableHTTPClientTransport(new URL(endpoint.url), {
+      requestInit: { headers: { authorization: endpoint.authorization } },
+    }))
     return peer
   }
   onTestFinished(async () => {
     controller.abort()
-    acknowledge.resolve()
+    acknowledge.resolve(undefined)
     await Promise.allSettled([...streams])
     for (const peer of clients) await peer.close()
     await ctx.fiber.dispose()
   })
-  return { ctx, agent, adapter, signal: controller.signal, requests, started: started.promise, interrupted: interrupted.promise, acknowledge: acknowledge.resolve,
+  return { ctx, agent, adapter, signal: controller.signal, requests,
+    started: started.promise, interrupted: interrupted.promise, acknowledge: () => { acknowledge.resolve(undefined) },
     observed, activities, emit, item, finish, barrier, sourceApproval, start, client }
 }
 
@@ -265,7 +270,7 @@ describe('original Codex adapter continuations', () => {
     await h.started
     const result = await (await h.client()).callTool({ name: 'activate', arguments: {} })
     expect(result.isError).toBe(false)
-    const contexts = result.content.flatMap(block => {
+    const contexts = result.content.flatMap((block) => {
       if (block.type !== 'text' || !block.text.includes('harness-deferred-context')) return []
       return [JSON.parse(block.text)]
     })
@@ -307,7 +312,7 @@ describe('original Codex adapter continuations', () => {
     expect(h.requests.filter(request => request.method === 'turn/interrupt')).toHaveLength(1)
   })
 
-  it.each(['interrupted', 'failed'])('rejects a source %s outcome when Harness did not conclude the turn', async status => {
+  it.each(['interrupted', 'failed'])('rejects a source %s outcome when Harness did not conclude the turn', async (status) => {
     const h = await fixture()
     const pending = h.start()
     await h.started
