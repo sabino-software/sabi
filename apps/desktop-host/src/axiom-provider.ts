@@ -105,15 +105,15 @@ export class AxiomIpcTransport implements AxiomTransport {
   dispose(): void {
     if (this.lifetime.signal.aborted) return
     const error = new Error('The original ChatGPT page bridge is unavailable; check the Desktop connection.')
-    this.lifetime.abort(error)
     for (const remove of this.listeners) remove()
     for (const [id, request] of this.pending) {
+      request.cleanup()
       this.cancel(id)
       request.reject(error)
-      request.cleanup()
       request.finishRemote()
     }
     this.pending.clear()
+    this.lifetime.abort(error)
   }
 
   private request<T>(method: string, args: object, parse: (value: unknown) => T, signal?: AbortSignal): Promise<T> {

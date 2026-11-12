@@ -2,9 +2,15 @@
 import { expect, it, vi } from 'vitest'
 import { createAssistantMessage, createUserMessage, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { AxiomAdapter, readAxiomHistory } from '../src/axiom.ts'
+import { AxiomAdapter, readAxiomHistory, type AxiomAdapterDependencies } from '../src/axiom.ts'
 import type { AxiomMessage, AxiomSendResult, AxiomSnapshot, AxiomTransport } from '../src/axiom-types.ts'
 import type { NativeConversationId } from '../src/types.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'axiom-fixture-context': { kind: 'axiom-fixture-context' }
+  }
+}
 
 const url = 'https://chatgpt.com/dots/original~opaque'
 const sessionId = SessionId('axiom-fixture')
@@ -17,7 +23,7 @@ function snapshot(messages: readonly AxiomMessage[] = old): AxiomSnapshot {
   return { source: 'chatgpt-web', url, title: 'Original Axiom', revision: 1, phase: 'ready', messages,
     canSend: true, draftPresent: false, siteStatus: null, limited: false }
 }
-function fixture(result?: AxiomSendResult) {
+function fixture(result?: AxiomSendResult, overrides: Partial<AxiomAdapterDependencies> = {}) {
   const release = vi.fn()
   const sent: AxiomMessage = { id: 'new-user', role: 'user', text: 'Continue the real conversation.', timestamp: null, truncated: false }
   const assistant: AxiomMessage = { id: 'new-answer', role: 'assistant', text: 'Observed original answer.', timestamp: null, truncated: false }
@@ -30,7 +36,7 @@ function fixture(result?: AxiomSendResult) {
   const committed = vi.fn()
   const adapter = new AxiomAdapter({
     bindingOf: () => ({ sourceId, url }), transport: () => transport,
-    pollIntervalMs: 1, responseTimeoutMs: 1000, settleMs: 0, onCommitted: committed,
+    pollIntervalMs: 1, responseTimeoutMs: 1000, settleMs: 0, onCommitted: committed, ...overrides,
   })
   const options: GenerateOptions = { provider: 'axiom', model: 'original-dot', sessionId,
     messages: [createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: sent.text }] })] }
@@ -79,6 +85,43 @@ it('cannot replay an earlier human prompt after its assistant response', async (
   expect((await chunks(source.adapter, source.options)).at(-1)).toMatchObject({ reason: { kind: 'error', failure: { code: 'AXIOM_TEXT_REQUIRED' } } })
   expect(source.transport.acquire).not.toHaveBeenCalled()
   expect(source.transport.send).not.toHaveBeenCalled()
+})
+
+it('ignores synthetic Harness user context after the fresh human message', async () => {
+  const source = fixture()
+  source.options.messages.push(createUserMessage({ source: { kind: 'axiom-fixture-context' },
+    content: [{ type: 'text', text: 'Synthetic permission and tool activation context.' }] }))
+  expect((await chunks(source.adapter, source.options)).at(-1)).toMatchObject({ reason: { kind: 'stop' } })
+  expect(source.transport.send).toHaveBeenCalledWith(expect.objectContaining({ text: 'Continue the real conversation.' }), expect.any(AbortSignal))
+})
+
+it('refuses synthetic-only turns when the owner supplies an empty fresh-input set', async () => {
+  const source = fixture(undefined, { userInput: () => [] })
+  expect((await chunks(source.adapter, source.options)).at(-1)).toMatchObject({ reason: { kind: 'error', failure: { code: 'AXIOM_TEXT_REQUIRED' } } })
+  expect(source.transport.send).not.toHaveBeenCalled()
+})
+
+it('source-owned rendering publishes real snapshots and closes only the confirmed-send receipt', async () => {
+  const onSnapshot = vi.fn()
+  const source = fixture(undefined, { renderObserved: true, onSnapshot })
+  const output = await chunks(source.adapter, source.options)
+  expect(output).toEqual([{ type: 'finish', reason: { kind: 'stop' } }])
+  expect(onSnapshot).toHaveBeenCalledTimes(2)
+  expect(source.transport.snapshot).not.toHaveBeenCalled()
+  expect(source.committed).toHaveBeenCalledTimes(1)
+  expect(source.committed).toHaveBeenCalledWith(sessionId, expect.any(Object), 'new-user', [])
+})
+
+it('never checkpoints partially emitted assistant ids when later source text fails', async () => {
+  const sent: AxiomMessage = { id: 'new-user', role: 'user', text: 'Continue the real conversation.', timestamp: null, truncated: false }
+  const partial: AxiomMessage = { id: 'new-answer', role: 'assistant', text: 'Partial observed text', timestamp: null, truncated: false }
+  const source = fixture({ status: 'confirmed', messageId: sent.id,
+    snapshot: { ...snapshot([...old, sent, partial]), siteStatus: 'Working' } })
+  vi.mocked(source.transport.snapshot).mockResolvedValue(snapshot([...old, sent, { ...partial, text: 'Rewritten earlier text' }]))
+  const output = await chunks(source.adapter, source.options)
+  expect(output.at(-1)).toMatchObject({ reason: { kind: 'error', failure: { code: 'AXIOM_RESPONSE_REWRITTEN' } } })
+  expect(source.committed).toHaveBeenCalledTimes(1)
+  expect(source.committed).toHaveBeenCalledWith(sessionId, expect.any(Object), sent.id, [])
 })
 
 it('cancellation stops local observation without stopping or closing the source page', async () => {
