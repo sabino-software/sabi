@@ -8,7 +8,8 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { BlockAssembler, createUserMessage, LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { BlockAssembler, createUserMessage, LlmAdapter, type ContentBlock, type GenerateOptions, type StreamChunk, type UserMessage } from '@deepseek-ai/dsh-llm'
+import AttachmentStore, { AttachmentId, type ImageAttachmentRef, type SaveImageAttachment, type StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { SessionId, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
@@ -28,7 +29,36 @@ class UnusedAdapter extends LlmAdapter {
   override async *stream(): AsyncIterable<StreamChunk> { yield { type: 'finish', reason: { kind: 'stop' } } }
 }
 
-async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgement = false) {
+/** Owned bytes without filesystem, decoding, or an untyped service replacement. Uploads are outside this adapter seam. */
+class FixtureImages extends AttachmentStore {
+  readonly imageLimits = { maxImageBytes: 1024, maxImagesPerMessage: 2, maxMessageImageBytes: 2048,
+    maxImagePixels: 1, maxImageDimension: 1, mediaTypes: ['image/png'] as const }
+  readonly images = new Map<AttachmentId, StoredImageAttachment>()
+  readonly readImage = vi.fn(async (ref: ImageAttachmentRef, signal?: AbortSignal): Promise<StoredImageAttachment> => {
+    signal?.throwIfAborted()
+    const image = this.images.get(ref.attachmentId)
+    if (image === undefined) throw new Error('The owned fixture image is unavailable')
+    return image
+  })
+  async validateImage(_input: SaveImageAttachment): Promise<void> { throw new Error('Adapter tests must not upload images') }
+  async saveImage(_input: SaveImageAttachment): Promise<ImageAttachmentRef> { throw new Error('Adapter tests must not upload images') }
+}
+
+interface FixtureInput {
+  readonly content?: ContentBlock[]
+  readonly history?: readonly UserMessage[]
+}
+
+const sourceModels = [
+  { model: 'text-model', inputModalities: ['text', 'audio'] },
+  { model: 'vision-model', inputModalities: ['text', 'image', 'video'] },
+  { model: 'image-model', inputModalities: ['image'] },
+  { model: 'audio-only-model', inputModalities: ['audio'] },
+  { model: 'hidden-model', inputModalities: ['text'], hidden: true },
+].map(model => ({ displayName: model.model, description: 'Source modality fixture', hidden: false,
+  supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Medium' }], defaultReasoningEffort: 'medium', ...model }))
+
+async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgement = false, inputOptions: FixtureInput = {}) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
   ctx.llm.registerAdapter(['fixture'], new UnusedAdapter())
@@ -39,9 +69,18 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
   const loop = await mountAgentLoopTestHarness(ctx)
   const agent = await loop.create(SessionId('native-adapter-fixture'), { provider: 'fixture', model: 'fixture' })
   for (const tool of tools) ctx.tools.register(tool)
-  agent.session.append('turn/start', { turn: 1 })
-  agent.session.append('step/start', { turn: 1, step: 1 })
-  const input = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Continue this original chat.' }] })
+  const history = inputOptions.history ?? []
+  if (history.length > 0) {
+    agent.session.append('turn/start', { turn: 1 })
+    agent.session.append('step/start', { turn: 1, step: 1 })
+    for (const message of history) agent.session.append('user/message', message, { surfaceOp: 'append' })
+    agent.session.append('step/end', { turn: 1, step: 1 })
+    agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  }
+  const turn = history.length > 0 ? 2 : 1
+  agent.session.append('turn/start', { turn })
+  agent.session.append('step/start', { turn, step: 1 })
+  const input = createUserMessage({ source: { kind: 'user' }, content: inputOptions.content ?? [{ type: 'text', text: 'Continue this original chat.' }] })
   agent.session.append('user/message', input, { surfaceOp: 'append' })
   const admission = await ctx.tools.resolve({ agent, modelSelection: { provider: CODEX_PROVIDER, model: 'fixture' }, signal: new AbortController().signal })
   const schemas = ctx.tools.schemas(agent, admission)
@@ -69,6 +108,7 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
   })
   vi.spyOn(ctx.codexAppServer, 'request').mockImplementation(async (method, params) => {
     requests.push({ method, params })
+    if (method === 'model/list') return { data: sourceModels }
     if (method === 'thread/read') return { thread: { id: THREAD, status: { type: 'idle' } } }
     if (method === 'thread/turns/list') return { data: [] }
     if (method === 'thread/resume') {
@@ -92,7 +132,7 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
   })
   const adapter = new CodexConversationAdapter(ctx, { bindingOf: () => binding,
     async bindNew() { throw new Error('Existing-source fixture must not create a thread') },
-    requestLog: () => ({ turn: 1, step: 1 }), observeOwnedMessages: observed,
+    requestLog: () => ({ turn, step: 1 }), observeOwnedMessages: observed,
     activity(owner, activity) {
       expect(owner).toBe(agent)
       activities.push(activity)
@@ -122,7 +162,7 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
       { id: 'approval-fixture', generation: 1, method, signal: controller.signal })
   }
   const start = () => {
-    const options: GenerateOptions = { provider: CODEX_PROVIDER, model: 'fixture', sessionId: agent.id, messages: [input], tools: [...schemas], signal: controller.signal }
+    const options: GenerateOptions = { provider: CODEX_PROVIDER, model: 'fixture', sessionId: agent.id, messages: [...history, input], tools: [...schemas], signal: controller.signal }
     const pending = (async () => {
       const chunks: StreamChunk[] = []
       for await (const chunk of adapter.stream(options)) chunks.push(chunk)
@@ -146,7 +186,7 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
     for (const peer of clients) await peer.close()
     await ctx.fiber.dispose()
   })
-  return { ctx, agent, requests, started: started.promise, interrupted: interrupted.promise, acknowledge: acknowledge.resolve,
+  return { ctx, agent, adapter, signal: controller.signal, requests, started: started.promise, interrupted: interrupted.promise, acknowledge: acknowledge.resolve,
     observed, activities, emit, item, finish, barrier, sourceApproval, start, client }
 }
 
@@ -167,6 +207,53 @@ async function reopenRecordedEvents(session: Session): Promise<readonly SessionE
 }
 
 describe('original Codex adapter continuations', () => {
+  it('reads only fresh owned image bytes and preserves text/image order in the exact source turn input', async () => {
+    const data = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=', 'base64')
+    const fresh: ImageAttachmentRef = { attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png', bytes: data.byteLength, width: 1, height: 1 }
+    const old: ImageAttachmentRef = { ...fresh, attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`) }
+    const history = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Old image already belongs to the original chat.' }, { type: 'image', attachment: old }] })
+    const h = await fixture([], false, { history: [history], content: [
+      { type: 'text', text: 'Before fresh image.' }, { type: 'image', attachment: fresh }, { type: 'text', text: 'After fresh image.' },
+    ] })
+    await h.ctx.plugin(FixtureImages)
+    const images = h.ctx.attachments as FixtureImages
+    images.images.set(fresh.attachmentId, { ref: fresh, data })
+    const pending = h.start()
+    await h.started
+    expect(images.readImage).toHaveBeenCalledExactlyOnceWith(fresh, h.signal)
+    // Generated UserInput permits an omitted detail; detail is not a nullable field.
+    expect(h.requests.find(request => request.method === 'turn/start')?.params.input).toEqual([
+      { type: 'text', text: 'Before fresh image.', text_elements: [] },
+      { type: 'image', url: `data:image/png;base64,${data.toString('base64')}` },
+      { type: 'text', text: 'After fresh image.', text_elements: [] },
+    ])
+    h.finish()
+    await pending
+  })
+
+  it('fails an unreadable fresh attachment before resuming or starting any source thread or turn', async () => {
+    const unavailable: ImageAttachmentRef = { attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`), mediaType: 'image/png', bytes: 68, width: 1, height: 1 }
+    const h = await fixture([], false, { content: [{ type: 'text', text: 'Inspect the image.' }, { type: 'image', attachment: unavailable }] })
+    await h.ctx.plugin(FixtureImages)
+    const images = h.ctx.attachments as FixtureImages
+    await expect(h.start()).rejects.toThrow('The owned fixture image is unavailable')
+    expect(images.readImage).toHaveBeenCalledExactlyOnceWith(unavailable, h.signal)
+    expect(h.requests).toEqual([])
+  })
+
+  it('reports only text/image modalities actually advertised by each source model', async () => {
+    const h = await fixture()
+    const expected = [
+      ['text-model', ['text']], ['vision-model', ['text', 'image']], ['image-model', ['image']], ['audio-only-model', []],
+    ]
+    expect((await h.adapter.listModels(CODEX_PROVIDER)).map(model => [model.id, model.inputModalities])).toEqual(expected)
+    for (const model of sourceModels.filter(model => !model.hidden)) {
+      const resolved = await h.adapter.resolveModel(CODEX_PROVIDER, model.model)
+      expect(resolved.inputModalities).toEqual(model.inputModalities.filter(modality => modality === 'text' || modality === 'image'))
+    }
+    expect(h.requests.every(request => request.method === 'model/list' && request.params.includeHidden === false)).toBe(true)
+  })
+
   it('persists each deferred context once and delivers its exact role/source to the native MCP caller', async () => {
     const guidance = createUserMessage({ source: { kind: 'tool-registry' }, content: [{ type: 'text', text: 'New SDK guidance from the Harness tool.' }] })
     let executions = 0
