@@ -53,7 +53,9 @@ window.__ModuleLoader__.load({
       try {
         const url = new URL(text);
         return url.protocol === 'https:' && url.hostname === 'chatgpt.com'
-          && !url.port && !url.username && !url.password ? url.href : '';
+          && !url.port && !url.username && !url.password
+          && /^\/(?:dots\/[A-Za-z0-9_~-]+|c\/[A-Za-z0-9_~-]+|g\/[A-Za-z0-9_~-]+\/c\/[A-Za-z0-9_~-]+)$/u.test(url.pathname)
+          ? url.href : '';
       } catch (error) {
         // Invalid user input stays in the form and is never opened or saved.
         return '';
@@ -114,7 +116,11 @@ window.__ModuleLoader__.load({
           inject: () => ({ openInside(value) {
             const url = conversationUrl(value);
             if (!url || ctx.sidebarRightTabs.get('browser') === undefined) return false;
-            ctx.sidebarRight.openTab('browser', { params: { url } });
+            try { ctx.sidebarRight.openTab('browser', { params: { url } }); }
+            catch (error) {
+              // A Browser that cannot open is reported through the existing external fallback.
+              return false;
+            }
             return true;
           } }),
         }, AxiomLink)), 'axiom-link: composer');
