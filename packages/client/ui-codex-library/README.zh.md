@@ -1,53 +1,35 @@
 ---
 kind: package-reference
-description: "侧栏的 **Codex 聊天** 入口在独立只读聊天库中显示已有工作会话。"
+description: "管理原生 Codex 与 Axiom 连接，并在常规工作区侧边栏中继续对话。"
 ---
 
 # @deepseek-ai/dsh-client-ui-codex-library
 
 [English](README.md) | 中文
 
-<a id="summary"></a>
 ## 概述
 
-侧栏的 **Codex 聊天** 入口在独立只读聊天库中显示已有工作会话。
+现有 Codex 与 Axiom 对话作为常规 Harness 会话出现在工作区侧边栏。行内及会话标题的来源标记标识原始执行来源。**原生对话** 页面仅管理连接，不再提供独立历史浏览器。
 
-## 目录
+## 使用
 
-- [使用本包](#use-this-package)
-- [模型体验](#model-experience)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
-- [开发备注](#dev-note)
+将此 UI 与[原生对话服务](../../experimental/native-conversations/README.zh.md)、标准会话与工作区服务及资源注册表一起挂载。打开 **原生对话** 可读取连接状态、手动同步 Codex 对话、连接原始 Axiom Dot 网址，或打开桌面桥接的 ChatGPT 登录界面。刷新会重新读取状态；操作会显示失败原因，并在完成前禁用冲突操作。成功连接 Axiom 后会打开对应的常规会话。
 
-<a id="use-this-package"></a>
-## 使用本包
+从工作区分组直接打开对话。标准会话渲染、输入、流式输出、工具卡片和审批展示仍由现有组件负责。Host 服务负责原始对话身份、历史加载、执行和审批路由。来源标记读取 `nativeConversation` 投影，侧边栏标记不会激活所列会话。Codex 保留模型和权限控件；Axiom 的相关设置由原始 ChatGPT 应用负责。
 
-在 Codex 聊天库 API 和标准浏览器服务旁挂载此 UI。搜索标题字面片段，切换当前或归档状态，选择标题，再分页查看更早的可见消息。刷新会重新读取源。源目录始终显示在列表上方。
-
-源聊天没有输入框，绝不会导入 Harness 历史、恢复运行或发送给模型。Markdown 省略原始 HTML 和图片，查看源消息不会自动获取外部图片。窄屏可用“所有聊天”返回目录。
-
-[API 所有者](../../api/codex-library-controller/README.zh.md)说明源选择、私有快照、读取限制和兼容性。
-
-<a id="model-experience"></a>
 ## 模型体验
 
-无，因为本包不添加模型提示词、工具或请求。
+本 UI 不添加提示词、工具或模型请求。操作调用原生对话服务，执行效果由该服务负责。
 
-#### KV 缓存影响
+### KV 缓存影响
 
-不影响模型上下文。
+来源标记和连接状态不进入模型上下文。
 
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
+## 已知限制与后续工作
 
-- 仅支持当前分页 SQLite 格式，旧式 rollout 记录和远端会话不在本版范围内。数据库文件名和字段随 Codex 更新可能不兼容；此时显示不可用，而不重写来源。刷新后显示更新，没有后台轮询。
+- 状态需要显式刷新，不进行轮询。连接状态不能证明某轮对话或审批已完成，实际结果由会话显示。
+- Axiom 连接与登录需要可用的桌面桥接。本 UI 不复制凭据，也不模拟 Dot 人设。
 
-<a id="dev-note"></a>
-### 开发备注
+## 开发说明
 
-<details>
-<summary>维护说明</summary>
-
-来源数据只用于显示。
-
-</details>
+保留已有包名和主面板标识以兼容布局；移除独立只读目录和记录资源提供者。

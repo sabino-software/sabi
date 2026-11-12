@@ -1,4 +1,4 @@
-/** Host loader entry for the browser-only Codex library page. */
+/** Host loader entry for the native conversation connection controls. */
 
-/** Provides no host-side behavior. */
+/** Provides no Host-side behavior; execution belongs to the native conversation service. */
 export function apply(): void {}

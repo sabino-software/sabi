@@ -14,6 +14,8 @@
 import type { ModelSelection } from '@deepseek-ai/dsh-api-session-controller/types'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import { createElement, type ComponentProps } from 'react'
+import type {} from '@deepseek-ai/dsh-experimental-native-conversations/types'
 import type { CommandUiContract, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.model seat).
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -21,7 +23,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconDataOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ModelDirectoryState } from './directory.ts'
 import { ModelDirectoryResolver } from './service.ts'
@@ -102,6 +104,13 @@ function selectionOf(state: ModelDirectoryState, id: string): ModelSelection | u
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'model'
+
+/** Keep the native ChatGPT source's model control with its original application. */
+function SourceModelSelect(props: ComponentProps<typeof ModelSelect>
+  & Pick<PropsRuntime<'conversation.input.model'>, 'useProjection'>) {
+  const native = props.useProjection('nativeConversation')
+  return createElement(ModelSelect, { ...props, available: props.available && native?.source !== 'axiom' })
+}
 
 /** Required services: the contribution registry, the seat's slot registry, locale, and the service's own faces. */
 export const inject = ['commandUi', 'locale', 'sessions', 'slots', 'remote', 'remote.session']
@@ -191,6 +200,6 @@ export function apply(ctx: ClientContext): void {
             : Promise.resolve(undefined),
         }
       },
-    }, ModelSelect))
+    }, SourceModelSelect))
   })
 }

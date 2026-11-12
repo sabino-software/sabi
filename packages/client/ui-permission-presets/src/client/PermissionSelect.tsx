@@ -13,6 +13,7 @@ import type { PresetOption } from '@deepseek-ai/dsh-permission-presets/client'
 // Type-only: pulls the conversation-owned permission slot declaration and
 // the standard session projection hook into this package's Client face.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-experimental-native-conversations/types'
 import type { PermissionCatalogState } from './catalog.ts'
 import { PERMISSION_ACCESS_NS } from './locales.ts'
 import {
@@ -78,6 +79,7 @@ export function PermissionSelect({
   locked, select, usePermissionCatalog, useProjection, t,
 }: PermissionSelectProps) {
   const selection = useProjection('permissions')
+  const native = useProjection('nativeConversation')
   const catalog = usePermissionCatalog(state => state.value)
   const [pick, setPick] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -92,7 +94,7 @@ export function PermissionSelect({
     setConfirmation(null)
   }, [catalog, confirmation, locked, selection])
 
-  if (selection === undefined || catalog === null) return null
+  if (native?.source === 'axiom' || selection === undefined || catalog === null) return null
 
   const currentValue = pick !== null && catalog.options.some(option => option.value === pick)
     ? pick : selection.currentValue

@@ -1,12 +1,12 @@
-/** Unloading the feature removes both navigation entries and lazy source providers. */
+/** Feature teardown removes connection navigation, source badges, and its status reader. */
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply, inject } from '../src/client/index.ts'
 import { en, type CodexLibraryKey } from '../src/client/locales.ts'
 
-describe('Codex library registrations', () => {
-  it('removes its main panel, sidebar entry, resource providers, and copy on unload', async () => {
+describe('Native conversation registrations', () => {
+  it('removes its controls, badges, status resource, and copy on unload', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SlotRegistry)
@@ -23,20 +23,25 @@ describe('Codex library registrations', () => {
         return () => { dictionaries.delete(namespace) }
       },
     } as never)
-    ctx.provide('remote', { codexLibrary: {} } as never)
-    ctx.provide('remote.codexLibrary', {} as never)
+    ctx.provide('remote', { nativeConversations: {} } as never)
+    ctx.provide('remote.nativeConversations', {} as never)
+    ctx.provide('uiWorkspace', { openSession: () => {} } as never)
     ctx.slots.register({ name: 'root', children: {
       main: { kind: 'keyed', scope: 'root' }, 'sidebar.panellist': { kind: 'list', scope: 'root' },
-    } }, ({ renderSlot }: { renderSlot: unknown }) => { void renderSlot; return null })
+      'sidebar.session.row.trailing': { kind: 'list', scope: 'root', inline: true },
+      'conversation.session.header.actions': { kind: 'list', scope: 'session' },
+    } }, () => null)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(ctx.slots.entriesOfSlot('main')).toHaveLength(1)
-    expect(ctx.slots.entriesOfSlot('sidebar.panellist')).toHaveLength(1)
-    expect([...providers.keys()].sort()).toEqual(['codex-chats', 'codex-transcript'])
+    for (const name of ['main', 'sidebar.panellist', 'sidebar.session.row.trailing', 'conversation.session.header.actions'] as const) {
+      expect(ctx.slots.entriesOfSlot(name)).toHaveLength(1)
+    }
+    expect([...providers.keys()]).toEqual(['native-conversation-status'])
     expect(dictionaries.has('codexLibrary')).toBe(true)
     await fiber.dispose()
-    expect(ctx.slots.entriesOfSlot('main')).toHaveLength(0)
-    expect(ctx.slots.entriesOfSlot('sidebar.panellist')).toHaveLength(0)
+    for (const name of ['main', 'sidebar.panellist', 'sidebar.session.row.trailing', 'conversation.session.header.actions'] as const) {
+      expect(ctx.slots.entriesOfSlot(name)).toHaveLength(0)
+    }
     expect(providers.size).toBe(0)
     expect(dictionaries.size).toBe(0)
   })

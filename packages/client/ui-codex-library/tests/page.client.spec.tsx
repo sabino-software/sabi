@@ -1,75 +1,72 @@
 // @vitest-environment jsdom
-/** Search, archive selection, and transcript navigation keep source browsing read-only. */
+/** Connection actions keep original conversations in the ordinary Session UI. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { CodexLibraryPage } from '../src/client/page.tsx'
 import { en } from '../src/client/locales.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props}>{children}</button>,
-  Input: ({ icon: _icon, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { icon?: React.ReactNode }) => <input {...props} />,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
   IconLayersOutlineRegular: () => null,
-  IconSearchOutlineRegular: () => null,
-  MarkdownText: ({ text }: { text: string }) => <div data-markdown>{text}</div>,
 }))
 
 afterEach(cleanup)
-
 type PageProps = Parameters<typeof CodexLibraryPage>[0]
 
-function mount(status: 'live' | 'failed' | 'loading' = 'live') {
+function mount(options: { available?: boolean; failSync?: boolean; loading?: boolean } = {}) {
   const addresses: string[] = []
+  const syncCodex = vi.fn(async () => {
+    if (options.failSync) throw new Error('Codex app-server connection lost')
+    return { imported: 2 }
+  })
+  const connectAxiom = vi.fn(async (_url: string) => {})
+  const showAxiomLogin = vi.fn(async () => {})
   const useResource = ((address: string) => {
     addresses.push(address)
-    if (address === '') return { status: 'none', value: undefined, failure: undefined }
-    const transcript = address.startsWith('dsh-resource://codex-transcript')
-    return { status, failure: undefined, value: status !== 'live' ? undefined : transcript ? {
-      chat: { id: 'chat-one', title: 'Saved coding work' },
-      messages: [{ id: 'm1', role: 'user', text: 'Explain this function', timestamp: 1700000000000 }, { id: 'm2', role: 'assistant', text: '**Saved answer**', timestamp: 1700000000001 }],
-      nextCursor: 'older-page', limited: false,
-    } : {
-      sourceHome: '/fixture/work/.codex', readOnly: true,
-      chats: [{ id: 'chat-one', title: 'Saved coding work', cwd: '/work/project', updatedAt: 1700000000000, archived: false }], nextCursor: 'next-page',
+    return { status: options.loading ? 'loading' : 'live', failure: undefined, value: options.loading ? undefined : {
+      codex: { connected: true, error: null }, axiom: { available: options.available ?? true, phase: 'needs-login' }, syncing: false,
     } }
   }) as PageProps['useResource']
-  render(<CodexLibraryPage {...{ useResource, t: (key: keyof typeof en) => en[key] } as PageProps} />)
-  return addresses
+  render(<CodexLibraryPage {...{ useResource, t: makeTranslate(en), syncCodex, connectAxiom, showAxiomLogin } as PageProps} />)
+  return { addresses, syncCodex, connectAxiom, showAxiomLogin }
 }
 
-describe('Codex chat browser', () => {
-  it('labels the source, opens saved text lazily, and offers no composer', () => {
-    const addresses = mount()
-    expect(screen.getByText('Read-only source')).toBeTruthy()
-    expect(screen.getByText('/fixture/work/.codex')).toBeTruthy()
-    expect(addresses.some(address => address.startsWith('dsh-resource://codex-transcript'))).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: /Saved coding work/ }))
-    expect(screen.getByText('Explain this function')).toBeTruthy()
-    expect(screen.getByText('**Saved answer**')).toBeTruthy()
-    expect(screen.getByText('You')).toBeTruthy()
-    expect(screen.getByText('Assistant')).toBeTruthy()
-    expect(document.querySelector('textarea')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Older messages' }))
-    expect(addresses.at(-1)).toContain('cursor=older-page')
-    fireEvent.click(screen.getByRole('button', { name: 'Latest messages' }))
-    expect(addresses.at(-1)).not.toContain('cursor=')
+describe('Native conversation connections', () => {
+  it('shows real connection state and only imports Codex conversations after explicit sync', async () => {
+    const actions = mount()
+    expect(screen.getByRole('heading', { name: 'Native conversations' })).toBeTruthy()
+    expect(screen.getByText('Connected')).toBeTruthy()
+    expect(screen.queryByText('Read-only source')).toBeNull()
+    expect(actions.syncCodex).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Sync Codex conversations' }))
+    await screen.findByText('Imported 2 conversations.')
+    expect(actions.syncCodex).toHaveBeenCalledTimes(1)
+    expect(actions.addresses.at(-1)).toContain('revision=1')
   })
 
-  it('submits title search and archive selection, with independent bounded paging', () => {
-    const addresses = mount()
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search titles' }), { target: { value: 'function' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
-    expect(addresses.at(-2)).toContain('query=function')
-    fireEvent.click(screen.getByRole('button', { name: 'Archived' }))
-    expect(addresses.at(-2)).toContain('archived=true')
-    fireEvent.click(screen.getByRole('button', { name: 'Next chats' }))
-    expect(addresses.at(-2)).toContain('cursor=next-page')
-    fireEvent.click(screen.getByRole('button', { name: 'First page' }))
-    expect(addresses.at(-2)).not.toContain('cursor=')
+  it('connects the exact entered original Axiom URL and opens login only on request', async () => {
+    const actions = mount()
+    expect(actions.connectAxiom).not.toHaveBeenCalled()
+    expect(actions.showAxiomLogin).not.toHaveBeenCalled()
+    const url = 'https://chatgpt.com/dots/original~opaque'
+    fireEvent.change(screen.getByRole('textbox', { name: 'Existing ChatGPT Dot URL' }), { target: { value: url } })
+    fireEvent.submit(screen.getByRole('textbox', { name: 'Existing ChatGPT Dot URL' }).closest('form')!)
+    await waitFor(() => expect(actions.connectAxiom).toHaveBeenCalledWith(url))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open ChatGPT login' }).hasAttribute('disabled')).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: 'Open ChatGPT login' }))
+    await waitFor(() => expect(actions.showAxiomLogin).toHaveBeenCalledTimes(1))
   })
 
-  it('keeps load failures visible and offers a refresh', () => {
-    mount('failed')
-    expect(screen.getByRole('alert').textContent).toContain('could not be loaded')
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy()
+  it('keeps unavailable bridge operations disabled and reports source failures', async () => {
+    const actions = mount({ available: false, failSync: true })
+    expect(screen.getByText('Desktop bridge unavailable')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Connect Axiom' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Open ChatGPT login' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Sync Codex conversations' }))
+    await screen.findByRole('alert')
+    expect(screen.getByRole('alert').textContent).toBe('Codex app-server connection lost')
+    expect(actions.connectAxiom).not.toHaveBeenCalled()
   })
 })
