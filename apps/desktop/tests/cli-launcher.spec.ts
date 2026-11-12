@@ -7,8 +7,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
 import { prepareDesktopCli } from '../scripts/prepare-cli.ts'
+import { LOCAL_FORK } from '../scripts/local-fork.mjs'
 
-function fixture() {
+function fixture(localFork = false) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-cli-launcher-')))
   const children: ChildProcessWithoutNullStreams[] = []
   const exits: Promise<unknown>[] = []
@@ -23,8 +24,8 @@ function fixture() {
   const platform = process.platform === 'win32' ? 'win32' : 'darwin'
   const resources = join(application, ...platform === 'darwin' ? ['Contents', 'Resources'] : ['resources'])
   const cli = join(resources, 'runtime', 'cli')
-  prepareDesktopCli(cli, platform)
-  const electron = join(application, ...platform === 'darwin' ? ['Contents', 'MacOS', 'DeepSeek Harness'] : ['DeepSeek Harness.exe'])
+  prepareDesktopCli(cli, platform, localFork ? LOCAL_FORK.productName : 'DeepSeek Harness')
+  const electron = join(application, ...platform === 'darwin' ? ['Contents', 'MacOS', localFork ? LOCAL_FORK.productName : 'DeepSeek Harness'] : ['DeepSeek Harness.exe'])
   mkdirSync(dirname(electron), { recursive: true })
   if (platform === 'win32') copyFileSync(process.execPath, electron)
   else symlinkSync(process.execPath, electron)
@@ -84,4 +85,20 @@ it.skipIf(process.platform === 'win32')('resolves chained command symlinks witho
   run.child.stdin.end()
   expect(await run.closed, run.stderr()).toBe(23)
   expect(JSON.parse(run.stdout())).toMatchObject({ args, cwd: f.root, nodeMode: '1' })
+})
+
+it.skipIf(process.platform === 'win32')('runs the isolated local app executable through the installed command', async () => {
+  const f = fixture(true)
+  const args = ['--version', 'space and $literal']
+  const run = f.start(args)
+  run.child.stdin.end()
+  expect(await run.closed, run.stderr()).toBe(23)
+  expect(JSON.parse(run.stdout())).toMatchObject({ args, cwd: f.root, nodeMode: '1' })
+})
+
+it('rejects executable paths and shell expansions before preparing a launcher', () => {
+  for (const name of ['../Skeinlet', '/tmp/Skeinlet', 'Skeinlet$HOME', 'Skeinlet`id`', 'Skeinlet"', 'Skeinlet\n']) {
+    expect(() => prepareDesktopCli('/unused-invalid-name', 'darwin', name)).toThrow('plain basename')
+  }
+  expect(() => prepareDesktopCli('/unused-invalid-name', 'win32', 'Skeinlet')).toThrow('require macOS')
 })
