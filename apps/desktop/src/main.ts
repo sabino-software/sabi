@@ -558,6 +558,15 @@ async function main(): Promise<void> {
           segmentBytes: 256 * 1024, recordBytes: 4096, queuedBytes: 64 * 1024,
         })
         operationJournal.enqueue(JSON.stringify(record))
+      }, async (request, signal) => {
+        signal.throwIfAborted()
+        switch (request.method) {
+          case 'axiom/connect': return axiomPage.connect(request.args.url, signal)
+          case 'axiom/snapshot': return axiomPage.snapshot()
+          case 'axiom/send': return axiomPage.send(request.args.request, signal)
+          case 'axiom/showLogin': axiomPage.showLogin(); return null
+          case 'axiom/disconnect': axiomPage.disconnect(); return null
+        }
       })
     return {
       start: async () => {

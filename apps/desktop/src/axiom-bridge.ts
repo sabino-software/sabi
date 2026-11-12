@@ -54,9 +54,11 @@ export class DesktopAxiomPage {
   /**
    * Open a directly selected conversation in its dedicated persistent original-site session.
    * @param value Exact conversation URL selected by the user.
+   * @param signal Optional owning Host cancellation; an aborted call cannot replace the selected page.
    * @returns Initial bounded DOM projection; authentication remains in the original website.
    */
-  async connect(value: unknown): Promise<AxiomSnapshot> {
+  async connect(value: unknown, signal?: AbortSignal): Promise<AxiomSnapshot> {
+    signal?.throwIfAborted()
     const url = axiomConversationUrl(value)
     if (this.selected === url && this.page !== undefined && !this.page.isDestroyed()) return this.snapshot()
     this.disconnect()
@@ -135,9 +137,10 @@ export class DesktopAxiomPage {
   /**
    * Submit only explicit user-authored text through the real page's enabled Send control.
    * @param value User request with deduplication identity and observed revision.
+   * @param signal Optional owning Host cancellation; prevents further native input after cancellation.
    * @returns Original-page acknowledgement, refusal, or an ambiguous outcome that must not be retried automatically.
    */
-  send(value: unknown): Promise<AxiomSendResult> {
+  send(value: unknown, signal?: AbortSignal): Promise<AxiomSendResult> {
     const parsed = requestSchema.safeParse(value)
     if (!parsed.success) return Promise.resolve({ status: 'refused', snapshot: this.current })
     const request = parsed.data
@@ -150,7 +153,7 @@ export class DesktopAxiomPage {
         ...prior.outcome?.messageId === undefined ? {} : { messageId: prior.outcome.messageId } })
     }
     const entry: { digest: string; pending?: Promise<AxiomSendResult>; outcome?: Pick<AxiomSendResult, 'status' | 'messageId'> } = { digest }
-    const result = this.submit(request)
+    const result = this.submit(request, signal)
     entry.pending = result
     this.submissions.set(request.requestId, entry)
     void result.then(outcome => {
@@ -160,8 +163,8 @@ export class DesktopAxiomPage {
     return result
   }
 
-  private async submit(request: AxiomSendRequest): Promise<AxiomSendResult> {
-    if (this.sending || request.revision !== this.current.revision || request.text.trim() === '') return { status: 'refused', snapshot: this.current }
+  private async submit(request: AxiomSendRequest, signal?: AbortSignal): Promise<AxiomSendResult> {
+    if (signal?.aborted || this.sending || request.revision !== this.current.revision || request.text.trim() === '') return { status: 'refused', snapshot: this.current }
     const page = this.page
     const generation = this.generation
     const selected = this.selected
@@ -172,20 +175,20 @@ export class DesktopAxiomPage {
     let attemptedClick = false
     try {
       const state = await this.snapshot()
-      if (generation !== this.generation || !state.canSend || state.draftPresent || !this.matches(page.webContents.getURL())) return { status: 'refused', snapshot: state }
+      if (signal?.aborted || generation !== this.generation || !state.canSend || state.draftPresent || !this.matches(page.webContents.getURL())) return { status: 'refused', snapshot: state }
       const ids: unknown = await page.webContents.executeJavaScript(
         "Array.from(document.querySelectorAll('article.message-row[data-message-id]'), row => row.getAttribute('data-message-id'))")
       const before = z.array(z.string().max(512)).max(10000).parse(ids)
       const focused: unknown = await page.webContents.executeJavaScript(`(${focusAxiomComposer.toString()})()`, true)
-      if (focused !== true || generation !== this.generation || !this.matches(page.webContents.getURL())) return { status: 'refused', snapshot: this.current }
+      if (signal?.aborted || focused !== true || generation !== this.generation || !this.matches(page.webContents.getURL())) return { status: 'refused', snapshot: this.current }
       await page.webContents.insertText(request.text)
-      if (generation !== this.generation || !this.matches(page.webContents.getURL())) return { status: 'unknown', snapshot: this.current }
+      if (signal?.aborted || generation !== this.generation || !this.matches(page.webContents.getURL())) return { status: 'unknown', snapshot: this.current }
       attemptedClick = true
       const accepted: unknown = await page.webContents.executeJavaScript(
         `location.href.replace(/\\/$/, '') === ${JSON.stringify(selected)} && (${clickAxiomSend.toString()})(${JSON.stringify(request.text)})`, true)
       if (accepted !== true) return { status: 'refused', snapshot: await this.snapshot() }
       const deadline = Date.now() + 12000
-      while (generation === this.generation && !page.isDestroyed() && this.matches(page.webContents.getURL()) && Date.now() < deadline) {
+      while (!signal?.aborted && generation === this.generation && !page.isDestroyed() && this.matches(page.webContents.getURL()) && Date.now() < deadline) {
         const id: unknown = await page.webContents.executeJavaScript(
           `(${findAxiomAcknowledgement.toString()})(${JSON.stringify(request.text)},${JSON.stringify(before)})`)
         if (typeof id === 'string') return { status: 'confirmed', messageId: id, snapshot: await this.snapshot() }

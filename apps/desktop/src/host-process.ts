@@ -1,3 +1,4 @@
+import { axiomHostCancelSchema, axiomHostRequestSchema, type AxiomHostHandler } from './axiom-host-protocol.ts'
 /** Electron Node-mode child lifecycle for the shared Web application. */
 
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -170,6 +171,7 @@ export class DesktopHostProcess {
   private stopping = false
   private shutdownCompleted = false
   private nextControlId = 1
+  private readonly axiomRequests = new Map<number, AbortController>()
   private readonly controlRequests = new Map<number, {
     resolve: (response: DesktopHostControlResponse) => void
     reject: (error: Error) => void
@@ -186,6 +188,7 @@ export class DesktopHostProcess {
    * @param packageManager - Bundled pnpm entry and Node launcher directory, scoped to package operations.
    * @param onPlatformSession - Private credential updates for embedded Platform views.
    * @param onPluginOperation - Optional diagnostic sink; malformed records are ignored without failing the Host.
+   * @param onAxiomRequest - Optional original-page handler; receives only validated requests from this owned child.
    */
   constructor(
     private readonly node: string,
@@ -199,6 +202,7 @@ export class DesktopHostProcess {
 
     private readonly onPlatformSession?: (session: PlatformSession | null) => void,
     private readonly onPluginOperation?: (record: PluginOperationRecord) => void,
+    private readonly onAxiomRequest?: AxiomHostHandler,
   ) {}
 
   /**
@@ -227,6 +231,7 @@ export class DesktopHostProcess {
     child.stderr?.on('data', (chunk: string) => { this.stderr = (this.stderr + chunk).slice(-MAX_HOST_DIAGNOSTIC_CHARS) })
     child.stdout?.pipe(process.stdout)
     child.on('message', (message: unknown) => {
+      if (this.handleAxiomRequest(child, message)) return
       if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'plugin-operation') {
         const record = 'record' in message ? parsePluginOperationRecord(message.record) : undefined
         if (record !== undefined && record.runId === this.runId) {
@@ -348,6 +353,7 @@ export class DesktopHostProcess {
     const child = this.child
     if (child === undefined) return
     this.stopping = true
+    this.abortAxiomRequests()
     this.onPlatformSession?.(null)
     if (child.connected) child.send({ type: 'shutdown' }, (error) => { if (error !== null) this.fail(error) })
     const exited = this.exitPromise ?? Promise.resolve()
@@ -366,7 +372,47 @@ export class DesktopHostProcess {
     }
   }
 
+  private abortAxiomRequests(): void {
+    for (const request of this.axiomRequests.values()) request.abort()
+    this.axiomRequests.clear()
+  }
+
+  private handleAxiomRequest(child: ChildProcess, message: unknown): boolean {
+    if (typeof message !== 'object' || message === null || !('type' in message)
+      || (message.type !== 'axiom-request' && message.type !== 'axiom-cancel')) return false
+    if (child !== this.child || !child.connected) return true
+    if (message.type === 'axiom-cancel') {
+      const cancel = axiomHostCancelSchema.safeParse(message)
+      if (cancel.success) this.axiomRequests.get(cancel.data.requestId)?.abort()
+      return true
+    }
+    const parsed = axiomHostRequestSchema.safeParse(message)
+    const requestId = 'requestId' in message && typeof message.requestId === 'number'
+      && Number.isSafeInteger(message.requestId) && message.requestId > 0 ? message.requestId : undefined
+    if (requestId === undefined || this.axiomRequests.has(requestId)) return true
+    const reply = (response: object): void => {
+      if (child === this.child && child.connected) child.send({ type: 'axiom-response', requestId, ...response }, (_deliveryFailure) => {
+        // The child owns pending-call rejection when its IPC channel closes.
+      })
+    }
+    if (!parsed.success) { reply({ ok: false, error: { code: 'invalid-request' } }); return true }
+    const handler = this.onAxiomRequest
+    if (this.stopping || this.failureReported || handler === undefined) {
+      reply({ ok: false, error: { code: 'unavailable' } })
+      return true
+    }
+    const controller = new AbortController()
+    this.axiomRequests.set(requestId, controller)
+    void Promise.resolve().then(() => { controller.signal.throwIfAborted(); return handler(parsed.data, controller.signal) }).then(value => {
+      reply(controller.signal.aborted ? { ok: false, error: { code: 'cancelled' } } : { ok: true, value })
+    }, (_nativePageFailure: unknown) => {
+      reply({ ok: false, error: { code: controller.signal.aborted ? 'cancelled' : 'unavailable' } })
+    }).finally(() => { if (this.axiomRequests.get(requestId) === controller) this.axiomRequests.delete(requestId) })
+    return true
+  }
+
   private fail(error: Error): void {
+    this.abortAxiomRequests()
     if (this.runId !== undefined) Object.assign(error, { hostRunId: this.runId })
     this.onPlatformSession?.(null)
     this.readyReject(error)
