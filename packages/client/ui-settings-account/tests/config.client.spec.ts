@@ -11,12 +11,12 @@ const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['rend
 it('injects configured contact options and removes the listener on disposal', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  const config: Config = Config({ contactSource: 'harness' })
-  await ctx.plugin({ Config, apply }, { contactSource: 'harness' })
+  const config: Config = Config({})
+  await ctx.plugin({ Config, apply }, {})
   const table: IndexInjection[] = []
   ctx.emit('webserver/index-inject', table, PAGE_PEER)
   expect(table).toEqual([{ kind: 'global', name: CONTACT_CONFIG_GLOBAL, value: {
-    contactFormUrl: config.contactFormUrl, contactSource: config.contactSource,
+    contactFormUrl: config.contactFormUrl,
   } }])
   await ctx.fiber.dispose()
   table.length = 0
