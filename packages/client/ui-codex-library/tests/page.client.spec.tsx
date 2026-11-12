@@ -62,7 +62,7 @@ describe('Native conversation connections', () => {
 
   it('keeps unavailable bridge operations disabled and reports source failures', async () => {
     const actions = mount({ available: false, failSync: true })
-    expect(screen.getByText('Desktop bridge unavailable')).toBeTruthy()
+    expect(screen.getByText((_text, element) => element?.tagName === 'P' && element.textContent === 'Desktop bridge unavailable · needs-login')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Connect Axiom' }).hasAttribute('disabled')).toBe(true)
     expect(screen.getByRole('button', { name: 'Open ChatGPT login' }).hasAttribute('disabled')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Sync Codex conversations' }))

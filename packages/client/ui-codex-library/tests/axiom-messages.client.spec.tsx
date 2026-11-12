@@ -3,6 +3,8 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { ConversationEventRegistry } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { appendPluginRecord, Session, SessionId } from '@deepseek-ai/dsh-session'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -58,24 +60,28 @@ it('removes the source definition, renderer, and locale together when its plugin
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SlotRegistry)
-  const definitions = new Set<string>()
+  const definitions = new ConversationEventRegistry(ctx)
   const dictionaries = new Set<string>()
-  ctx.provide('uiConversation', { events: { register: (definition: { kind: string }) => {
-    definitions.add(definition.kind)
-    return () => { definitions.delete(definition.kind) }
-  } } } as never)
+  ctx.provide('uiConversation', { events: definitions } as never)
   ctx.provide('locale', { register: (name: string) => {
     dictionaries.add(name)
     return () => { dictionaries.delete(name) }
   } } as never)
-  ctx.slots.register({ name: 'root', children: { 'conversation.chat.node': { kind: 'keyed', scope: 'session' } } }, () => null)
+  ctx.slots.register({ name: 'root', children: { 'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: { hooks: {
+    turnData: () => { throw new Error('Registration fixture does not render nodes') },
+    disclosure: () => { throw new Error('Registration fixture does not render nodes') },
+    groupAction: () => { throw new Error('Registration fixture does not render nodes') },
+  } } } } }, ({ renderSlot }: PropsRenderSlots<'conversation.chat.node'>) => {
+    void renderSlot
+    return null
+  })
   const fiber = ctx.plugin({ inject: ['slots', 'locale', 'uiConversation'], apply: registerAxiomMessages })
   await fiber.await()
   expect(ctx.slots.entriesOfSlot('conversation.chat.node')).toHaveLength(1)
-  expect([...definitions]).toEqual(['native-axiom-message'])
+  expect(definitions.entries().map(definition => definition.kind)).toEqual(['native-axiom-message'])
   expect([...dictionaries]).toEqual(['nativeAxiom'])
   await fiber.dispose()
   expect(ctx.slots.entriesOfSlot('conversation.chat.node')).toHaveLength(0)
-  expect(definitions.size).toBe(0)
+  expect(definitions.entries()).toHaveLength(0)
   expect(dictionaries.size).toBe(0)
 })

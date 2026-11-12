@@ -1,6 +1,7 @@
 /** Feature teardown removes connection navigation, source badges, and its status reader. */
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished } from 'vitest'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { ConversationEventRegistry } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply, inject } from '../src/client/index.ts'
@@ -33,8 +34,15 @@ describe('Native conversation registrations', () => {
       main: { kind: 'keyed', scope: 'root' }, 'sidebar.panellist': { kind: 'list', scope: 'root' },
       'sidebar.session.row.trailing': { kind: 'list', scope: 'root', inline: true },
       'conversation.session.header.actions': { kind: 'list', scope: 'session' },
-      'conversation.chat.node': { kind: 'keyed', scope: 'session' },
-    } }, () => null)
+      'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: { hooks: {
+        turnData: () => { throw new Error('Registration fixture does not render nodes') },
+        disclosure: () => { throw new Error('Registration fixture does not render nodes') },
+        groupAction: () => { throw new Error('Registration fixture does not render nodes') },
+      } } },
+    } }, ({ renderSlot }: PropsRenderSlots<'main' | 'sidebar.panellist' | 'sidebar.session.row.trailing' | 'conversation.session.header.actions' | 'conversation.chat.node'>) => {
+      void renderSlot
+      return null
+    })
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     for (const name of ['main', 'sidebar.panellist', 'sidebar.session.row.trailing', 'conversation.session.header.actions'] as const) {

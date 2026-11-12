@@ -94,10 +94,10 @@ export function NativeAxiomMessageView({ node, t }: MessageProps): ReactNode {
  */
 export function registerAxiomMessages(ctx: Context): void {
   ctx.effect(() => ctx.locale.register('nativeAxiom', { en, zh, pt, ja: en, es: en, fr: en, de: en, ru: en }), 'native-conversations.axiom-copy')
-  ctx.effect(() => ctx.uiConversation.events.register({
+  ctx.uiConversation.events.register({
     ...axiomMessageDefinition,
     match: { [RECORD]: axiomMessageDefinition.match },
-  }), 'native-conversations.axiom-message-definition')
+  })
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node', key: KIND, locale: 'nativeAxiom',
   }, NativeAxiomMessageView))
