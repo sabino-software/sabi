@@ -15,6 +15,7 @@ import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
+import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import PermissionPresets from '@deepseek-ai/dsh-permission-presets'
 import CodexAppServer, { type CodexJsonObject } from '@deepseek-ai/dsh-host-codex-app-server'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
@@ -85,6 +86,7 @@ async function fixture() {
     await ctx.plugin(WorkspaceRegistry)
     await ctx.plugin(SandboxPolicy, { mode: 'workspace-write', workspaceRoot: workspacePath })
     await ctx.plugin(ApprovalService, { policy: 'ask' })
+    await ctx.plugin(UserQuestionService)
     ctx.provide('shell', {
       sandboxMode: 'workspace-write',
       resolve() { throw new Error('Metadata fixtures must not execute shell commands') },
