@@ -8,11 +8,12 @@ import SessionStore, { Session, SessionId, SessionLogOffset, SESSION_FORMAT_VERS
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { CodexJsonObject } from '@deepseek-ai/dsh-host-codex-app-server'
-import { appendSourceMessages, parseCodexHistoryPage, sourceCheckpointProjection, sourceSessionId } from '../src/history.ts'
+import { appendCodexHistoryTurns, appendSourceMessages, parseCodexHistoryPage, sourceCheckpointProjection, sourceSessionId } from '../src/history.ts'
 import { admittedNativeInputIds, appendCodexCut, BINDING_RECORD, nativeCodexCutProjection, nativeStepInputProjection } from '../src/projection.ts'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { NativeConversationId } from '../src/types.ts'
+import { SystemPromptProjection } from '../../../core/agent-loop/src/runtime-context.ts'
 
 function textMessages(session: Session): string[] {
   return session.snapshotEvents().flatMap((event) => {
@@ -22,6 +23,73 @@ function textMessages(session: Session): string[] {
 }
 
 describe('native source history', () => {
+  it.each(['codex-grouped', 'codex-ungrouped', 'axiom', 'user-only', 'assistant-first'] as const)(
+    'reserves the protected system head before %s imports and cold-restores a framework continuation', async (shape) => {
+      const root = await mkdtemp(join(tmpdir(), 'native-head-'))
+      const ctx = new Context()
+      onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(JsonlPersistence, { root, compression: 'zstd' })
+      const checkpoint = await ctx.sessionProjections.register(sourceCheckpointProjection)
+      const session = Session.create(sourceSessionId('fixture', shape), undefined, {
+        version: SESSION_FORMAT_VERSION, id: sourceSessionId('fixture', shape), createdAt: 1000, isSeeded: false, cwd: root,
+      })
+      const messages = [
+        { id: 'original-user', role: 'user' as const, text: 'Original question' },
+        { id: 'original-assistant', role: 'assistant' as const, text: 'Original answer' },
+      ]
+      if (shape === 'codex-grouped' || shape === 'user-only') {
+        appendCodexHistoryTurns(session, checkpoint.stateOf(session), (shape === 'user-only' ? messages.slice(0, 1) : messages)
+          .map(message => ({ kind: 'message', sourceTurnId: 'completed-original-turn', message })),
+        brandString<NativeConversationId>('original-thread'), 'fixture-model', 1, () => {})
+      } else appendSourceMessages(session, checkpoint.stateOf(session), shape === 'assistant-first' ? messages.slice(1) : messages,
+        shape === 'axiom' ? 'axiom-original' : 'codex-app-server', 'fixture-model', false, 1)
+      const imported = session.snapshotEvents()
+      const firstSurface = imported.find(event => event.surfaceOp !== undefined)
+      expect(firstSurface).toMatchObject({ type: 'system/message', surfaceOp: 'append', data: { message: { content: [] } } })
+      expect(session.deriveMessages().some(message => message.role === 'system')).toBe(false)
+      const writer = await ctx.sessionPersistence.create(session.header)
+      try { await writer.append(imported); await writer.flush() } finally { await writer.close() }
+      const cold = await ctx.sessionPersistence.open(session.id, 'write')
+      try {
+        const restored = await cold.read()
+        const resumed = Session.fromRestore(session.id, restored.events, cold.header, cold.inheritedEventCount, restored.eventState)
+        const lastTurn = Math.max(...restored.events.flatMap(event => event.type === 'turn/end' ? [event.data.turn] : []))
+        const turn = lastTurn + 1
+        resumed.append('turn/start', { turn })
+        resumed.append('step/start', { turn, step: 1 })
+        const commits = new SystemPromptProjection(resumed).project('Current Harness framework instructions', {
+          inHistory: false, startsSeries: true,
+        })
+        expect(commits).toHaveLength(1)
+        expect(commits[0]?.intent).toMatchObject({
+          surfaceOp: { op: 'replace', startSeq: firstSurface?.seq, endSeq: firstSurface?.seq },
+          sourceEventSeqs: [firstSurface?.seq],
+        })
+        for (const { message, intent } of commits) resumed.append('system/message', { turn, step: 1, message }, intent)
+        resumed.append('user/message', createUserMessage({ source: { kind: 'user' },
+          content: [{ type: 'text', text: 'Continue original work' }],
+        }), { surfaceOp: 'append' })
+        resumed.append('assistant/message', { turn, step: 1, stream: [], message: createAssistantMessage({
+          source: { provider: 'codex-app-server', model: 'fixture-model' }, content: [{ type: 'text', text: 'Continued answer' }],
+        }) }, { surfaceOp: 'append' })
+        resumed.append('step/end', { turn, step: 1 })
+        resumed.append('turn/end', { turn, reason: { kind: 'completed' } })
+        await cold.append(resumed.snapshotEvents().slice(restored.events.length))
+        await cold.flush()
+      } finally { await cold.close() }
+      const reopened = await ctx.sessionPersistence.open(session.id, 'read')
+      try {
+        const stored = await reopened.read()
+        const resumed = Session.fromRestore(session.id, stored.events, reopened.header, reopened.inheritedEventCount, stored.eventState)
+        expect(resumed.deriveMessages()[0]).toMatchObject({ role: 'system', content: [{ text: 'Current Harness framework instructions' }] })
+        expect(textMessages(resumed).at(-1)).toBe('Continued answer')
+        expect(stored.events.filter(event => event.type === 'system/message')).toHaveLength(2)
+      } finally { await reopened.close() }
+    },
+  )
+
   it('keeps inherited partial-turn evidence sticky across later own input until the child receives its own binding', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())

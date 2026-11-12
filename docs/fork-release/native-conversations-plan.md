@@ -4,7 +4,9 @@ English | [中文](native-conversations-plan.zh.md)
 
 Existing work Codex conversations become ordinary Harness Sessions in their workspace sidebar. Their original Codex thread remains authoritative. Opening history does not start a turn. Sending continues that thread through the work app-server, with scoped Harness tools provided through an authenticated loopback MCP endpoint. Existing Harness approvals and sandbox selections govern that endpoint and native Codex operations.
 
-Axiom uses the original authenticated ChatGPT page as its engine. The native conversation displays observed original messages and sends exact user-authored input through that page's real composer. Browser credentials remain in a dedicated Electron session. Unsupported page states and ambiguous sends fail explicitly without retrying.
+Axiom uses the original authenticated ChatGPT page as its engine. The native conversation displays observed original messages and sends exact user-authored input through that page's real composer. Sign-in stays in the selected browser: either the dedicated Electron session or the optional companion in the regular work browser. Unsupported page states and ambiguous sends fail explicitly without retrying.
+
+Imported histories reserve an empty first system surface so later Harness context can replace that protected head. The importer does not infer original hidden instructions. Compressed cold-load tests cover both import and a real framework context replacement. Prototype mirrors hydrated before this fix need separate explicit recovery; their existing logs and local tool or approval evidence must be preserved.
 
 Implementation and acceptance:
 

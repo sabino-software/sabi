@@ -1,7 +1,7 @@
 /** Original message ingestion, independent of a live model turn. */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord, SessionId, type Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { pluginRecordOf } from '@deepseek-ai/dsh-session'
@@ -61,23 +61,31 @@ export function appendSourceMessages(
     seen.add(message.id)
     if (!message.text) continue
     session.append('turn/start', { turn })
+    const firstSurface = session.surface.nodes.length === 0
+    const hasStep = firstSurface || message.role === 'assistant'
+    if (hasStep) session.append('step/start', { turn, step: 1 })
+    if (firstSurface) reserveSystemHead(session, turn, 1)
     if (message.role === 'user') {
       session.append('user/message', createUserMessage({ content: [{ type: 'text', text: message.text }], source: { kind: 'user' }, authoredAt: message.timestamp ?? null }), { surfaceOp: 'append' })
     } else {
-      session.append('step/start', { turn, step: 1 })
       session.append('assistant/message', {
         turn, step: 1,
         message: createAssistantMessage({ content: [{ type: 'text', text: message.text }], source: { provider, model }, authoredAt: message.timestamp ?? null }),
         stream: [],
       }, { surfaceOp: 'append' })
-      session.append('step/end', { turn, step: 1 })
     }
+    if (hasStep) session.append('step/end', { turn, step: 1 })
     session.append('turn/end', { turn, reason: { kind: 'completed' } })
     turn++
   }
   if (!checkpoint.hydrated || checkpoint.historyLimited !== historyLimited || seen.size !== checkpoint.ids.length) {
     appendPluginRecord(session, CHECKPOINT_RECORD, { ids: [...seen], hydrated: true, historyLimited })
   }
+}
+
+/** An empty first system surface reserves the framework head without importing unknown source instructions. */
+function reserveSystemHead(session: Session, turn: number, step: number): void {
+  session.append('system/message', { turn, step, message: createSystemMessage('') }, { surfaceOp: 'append' })
 }
 
 const itemSchema = z.object({
@@ -153,6 +161,12 @@ export function appendCodexHistoryTurns(
     const fresh = group.some(entry => entry.kind === 'message' && !seen.has(entry.message.id))
     if (fresh) session.append('turn/start', { turn })
     let step = 0
+    let stepOpen = fresh && session.surface.nodes.length === 0
+    if (stepOpen) {
+      step = 1
+      session.append('step/start', { turn, step })
+      reserveSystemHead(session, turn, step)
+    }
     for (const entry of group) {
       if (entry.kind === 'activity') { activity(entry.activity); continue }
       const message = entry.message
@@ -162,14 +176,18 @@ export function appendCodexHistoryTurns(
       if (message.role === 'user') {
         session.append('user/message', createUserMessage({ content: [{ type: 'text', text: message.text }], source: { kind: 'user' }, authoredAt: message.timestamp ?? null }), { surfaceOp: 'append' })
       } else {
-        step++
-        session.append('step/start', { turn, step })
+        if (!stepOpen) {
+          step++
+          session.append('step/start', { turn, step })
+        }
         session.append('assistant/message', { turn, step, stream: [],
           message: createAssistantMessage({ content: [{ type: 'text', text: message.text }], source: { provider: 'codex-app-server', model }, authoredAt: message.timestamp ?? null }),
         }, { surfaceOp: 'append' })
         session.append('step/end', { turn, step })
+        stepOpen = false
       }
     }
+    if (stepOpen) session.append('step/end', { turn, step })
     if (fresh) {
       appendCodexCut(session, { sourceId, turnId: sourceTurnId })
       session.append('turn/end', { turn, reason: { kind: 'completed' } })
