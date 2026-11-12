@@ -35,15 +35,17 @@ The owner-only Remote surface contains `status`, `syncCodex`, `connectAxiom`, an
 
 ## Model Experience
 
-### Model-visible additions
+### Native source turns
+
+#### What the model sees
 
 Codex retains its original thread and receives the direct user text plus the current step's Harness tool declarations through MCP. The original Dot receives the user text through its website. Connection metadata and source URLs do not become extra persona instructions.
 
-### Token usage
+#### Token effect
 
 Native turns use the original Codex or ChatGPT account. Metadata synchronization and history hydration do not generate model replies. Harness tool schemas, instructions, and tool results may add input to a Codex turn.
 
-### KV-cache effect
+#### KV Cache effect
 
 The original service owns cache behavior. Keeping the source conversation does not guarantee cache reuse; changes to the declared Harness tools or instructions may affect it.
 
