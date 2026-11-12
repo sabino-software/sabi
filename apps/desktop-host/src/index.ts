@@ -15,6 +15,7 @@ import { installDesktopUpdateTaskControl } from './update-tasks.ts'
 import { installDesktopQuitInspection } from './quit-inspection.ts'
 import { installPlatformSessionPublisher } from './platform-session.ts'
 import { installOperationDiagnostics } from './operation-diagnostics.ts'
+import { installDesktopAxiomProvider } from './axiom-provider.ts'
 
 async function main(): Promise<void> {
   const runId = randomUUID() as PluginOperationRunId
@@ -126,6 +127,10 @@ async function main(): Promise<void> {
   })
   process.once('disconnect', () => { void stop() })
   const { ctx } = await application
+  const nativeConversations = ctx.get('nativeConversations')
+  if (nativeConversations !== undefined) {
+    installDesktopAxiomProvider(ctx, { requestTimeoutMs: nativeConversations.axiomRequestTimeoutMs })
+  }
   installOperationDiagnostics(ctx, record => send({ type: 'plugin-operation', record }), 32, runId)
   control.updateTasks = installDesktopUpdateTaskControl(ctx)
   control.quitInspection = installDesktopQuitInspection(ctx)
