@@ -4,16 +4,35 @@ import { randomUUID } from 'node:crypto'
 import { ServerResponse } from 'node:http'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, LlmAdapter, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { PtcRuntime, type PtcRunRequest, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { defineTool, type ToolBatchResult, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { defineTool, RUN_CODE_NAME, type ToolBatchResult, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { startHarnessMcp } from '../src/mcp.ts'
 import type { HarnessMcpEndpoint } from '../src/mcp.ts'
 
 class UnusedAdapter extends LlmAdapter {
   override async *stream(): AsyncIterable<StreamChunk> { yield { type: 'finish', reason: { kind: 'stop' } } }
+}
+
+/** The real PTC executor owns bindings and policies; this fixture selects which binding the program invokes. */
+class ConditionalRuntime extends PtcRuntime {
+  readonly language = 'typescript'
+  readonly isolation = 'fixture'
+  readonly admitted: string[][] = []
+  resolve(request: PtcRunRequest): PtcRunSpec { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 } }
+  async run(request: PtcRunRequest) {
+    const functions = request.bindings[0]!.functions
+    this.admitted.push(Object.keys(functions))
+    const name = request.program === 'await tools.activate({})' ? 'activate' : 'conditional'
+    const invoke = functions[name]
+    if (invoke === undefined) return { output: [], error: { kind: 'exception' as const, message: `${name} is not admitted` } }
+    try { return { output: [{ type: 'text' as const, text: JSON.stringify(await invoke({})) }] } }
+    catch (error: unknown) { return { output: [], error: { kind: 'exception' as const, message: error instanceof Error ? error.message : String(error) } } }
+  }
 }
 
 async function fixture(tools: readonly ToolDefinition[] = [], onBatch?: (batch: ToolBatchResult) => void | Promise<void>,
@@ -50,6 +69,63 @@ async function fixture(tools: readonly ToolDefinition[] = [], onBatch?: (batch: 
 }
 
 describe('native Harness MCP tools', () => {
+  it('refreshes conditional PTC admission between calls while preserving the catalog, deferred SDK guidance, and live guards', async () => {
+    const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(ConditionalRuntime)
+    await mountAgentLoopTestDependencies(ctx, { tools: { mode: 'ptc' } })
+    ctx.llm.registerAdapter(['fixture'], new UnusedAdapter())
+    const loop = await mountAgentLoopTestHarness(ctx)
+    const modelSelection = { provider: 'fixture', model: 'fixture' }
+    const agent = await loop.create(SessionId(`native-conditional-${randomUUID()}`), modelSelection)
+    agent.session.append('turn/start', { turn: 1 })
+    let enabled = false
+    let conditionalCalls = 0
+    ctx.tools.register(defineContentToolFixture({ name: 'activate', description: 'Load a conditional capability.', parameters: {},
+      async execute(_args, exec) {
+        enabled = true
+        exec.deferContext(createUserMessage({ content: [{ type: 'text', text: 'SDK: tools.conditional({}) is now available.' }], source: { kind: 'tool-registry' } }))
+        return [{ type: 'text', text: 'activated' }]
+      },
+    }))
+    ctx.tools.register(defineContentToolFixture({ name: 'conditional', description: 'An activated capability.', parameters: {},
+      async execute() { conditionalCalls++; return [{ type: 'text', text: 'conditional result' }] },
+    }), { when: () => enabled })
+    const signal = new AbortController().signal
+    const admission = await ctx.tools.resolve({ agent, modelSelection, signal })
+    const assembly = await ctx.systemPrompt.assemble({ ...assembleContextFor(agent, signal), modelSelection, toolSet: admission })
+    admission.dispose()
+    expect(assembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
+    const endpoint = await startHarnessMcp({ ctx, agent, schemas: assembly.tools, instructions: 'Stable PTC transport.', modelSelection,
+      log: { turn: 1, step: 1 }, signal,
+      onBatch: batch => { for (const message of batch.additionalContexts) agent.session.append('user/message', message, { surfaceOp: 'append' }) },
+    })
+    const client = new Client({ name: 'native-conditional-test', version: '1.0.0' })
+    onTestFinished(async () => { await client.close(); await endpoint.close(); await ctx.fiber.dispose() })
+    await client.connect(new StreamableHTTPClientTransport(new URL(endpoint.url), { requestInit: { headers: { authorization: `Bearer ${endpoint.token}` } } }))
+    const initialCatalog = await client.listTools()
+    const run = (code: string) => client.callTool({ name: RUN_CODE_NAME, arguments: { code, description: 'Exercise conditional admission.' } })
+    const activated = await run('await tools.activate({})')
+    expect(activated.isError).toBe(false)
+    expect(JSON.stringify(activated)).toContain('harness-deferred-context')
+    expect(JSON.stringify(activated)).toContain('SDK: tools.conditional({}) is now available.')
+    expect((ctx.ptcRuntime as ConditionalRuntime).admitted[0]).not.toContain('conditional')
+    expect(JSON.stringify(await run('await tools.conditional({})'))).toContain('conditional result')
+    expect((ctx.ptcRuntime as ConditionalRuntime).admitted[1]).toContain('conditional')
+    expect(conditionalCalls).toBe(1)
+    expect(await client.listTools()).toEqual(initialCatalog)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data)).toMatchObject([
+      { name: 'activate', isError: false }, { name: 'conditional', isError: false },
+    ])
+    ctx.tools.guard(exec => exec.name === 'conditional' ? { reason: 'Conditional access denied by Harness.', info: { name: 'FixtureDenial', code: 'FIXTURE_DENIED' } } : undefined)
+    expect(JSON.stringify(await run('await tools.conditional({})'))).toContain('Conditional access denied by Harness.')
+    expect(conditionalCalls).toBe(1)
+    enabled = false
+    expect((await run('await tools.conditional({})')).isError).toBe(true)
+    expect((ctx.ptcRuntime as ConditionalRuntime).admitted.at(-1)).not.toContain('conditional')
+    expect(conditionalCalls).toBe(1)
+  })
+
   it('exposes the exact step schemas and system guidance, and logs real tool execution under its Agent', async () => {
     const body = vi.fn(async (value: string) => value)
     const tool = defineTool({ name: 'echo', description: 'Repeat text.', parameters: { text: { type: 'string', required: true } },

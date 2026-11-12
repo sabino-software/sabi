@@ -77,7 +77,6 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
     if (schema.parameters.type !== 'object') throw new HarnessError('Native MCP tools require object input schemas.', 'NATIVE_MCP_SCHEMA')
     return { name: schema.name, description: schema.description, inputSchema: schema.parameters as Tool['inputSchema'] }
   })
-  const toolSet = await ctx.agents.withInitiator(agent, () => ctx.tools.resolve({ agent, modelSelection: options.modelSelection, signal }))
   const token = randomBytes(32).toString('base64url')
   const credential = Buffer.from(`Bearer ${token}`)
   const calls = new Set<Promise<ExecutedCall>>()
@@ -95,10 +94,16 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
     const active = AbortSignal.any([signal, requestSignal])
     active.throwIfAborted()
     if (concluded) throw new ProtocolError(INVALID_PARAMS, 'The Harness tool batch concluded this turn; no further tools are admitted.')
-    const batch = await ctx.agents.withInitiator(agent, () => ctx.tools.execute({
-      calls: [{ type: 'tool-call', id: ToolCallId(`native_mcp_${randomUUID()}`), name, arguments: JSON.stringify(args) }],
-      agent, log: options.log, signal: active, toolSet,
-    }))
+    const batch = await ctx.agents.withInitiator(agent, async () => {
+      // Each serialized native program is a complete tool batch; activation can change after its predecessor.
+      const toolSet = await ctx.tools.resolve({ agent, modelSelection: options.modelSelection, signal: active })
+      try {
+        return await ctx.tools.execute({
+          calls: [{ type: 'tool-call', id: ToolCallId(`native_mcp_${randomUUID()}`), name, arguments: JSON.stringify(args) }],
+          agent, log: options.log, signal: active, toolSet,
+        })
+      } finally { toolSet.dispose() }
+    })
     concluded ||= batch.concluded
     if (options.onBatch !== undefined) await options.onBatch(batch)
     else if (batch.additionalContexts.length > 0 || batch.concluded) {
@@ -188,8 +193,7 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
         if (deliveryFailed) throw new HarnessError('A native MCP delivery callback failed.', 'NATIVE_MCP_DELIVERY')
       } finally {
         server.closeAllConnections()
-        try { await stopped }
-        finally { toolSet.dispose() }
+        await stopped
       }
     })()
     return closing
@@ -212,7 +216,7 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
     return { url: `http://127.0.0.1:${address.port}/mcp`, token, close }
   } catch (error: unknown) {
     if (server.listening) await close()
-    else { await handler.close(); toolSet.dispose() }
+    else await handler.close()
     throw error
   }
 }
