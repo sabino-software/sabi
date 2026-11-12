@@ -176,6 +176,10 @@ function settleMessage(
   event: SessionEvent<'assistant/message'>,
 ): AssistantState {
   const blocks = toAssistantBlocks(event.data.message.content)
+  if (blocks.length > 0 && blocks.every(block => block.kind === 'tool-call')) {
+    // Tool advertisements settle their calls, while an enclosing prose stream can still continue.
+    return { ...state, final: match, usage: event.data.usage ?? state.usage }
+  }
   const visibleByIndex = blocks.map(blockIsVisible)
   return {
     ...state,
@@ -203,7 +207,10 @@ function finalNode(
   context: ConversationNodeContext<AssistantState>,
 ): AssistantMessageNode | undefined {
   const final = state.final
-  if (final?.event.type === 'assistant/message') {
+  const onlyToolCalls = final?.event.type === 'assistant/message'
+    && final.event.data.message.content.length > 0
+    && final.event.data.message.content.every(block => block.type === 'tool-call')
+  if (final?.event.type === 'assistant/message' && !(onlyToolCalls && state.visibleBlocks > 0)) {
     const event = final.event
     return {
       kind: 'assistant',

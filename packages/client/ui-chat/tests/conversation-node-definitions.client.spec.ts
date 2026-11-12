@@ -3153,3 +3153,58 @@ it('keeps user cancellations and forked endings free of a failure row', () => {
     expect(node(snapshot(value), 'turn-error')).toBeUndefined()
   }
 })
+
+describe('tool-only assistant advertisements inside a continuing prose step', () => {
+  function advertisement(seq: number) {
+    return at(seq, 'assistant/message', {
+      turn: 1, step: 1,
+      message: {
+        ...assistantMessage('tool-advertisement', ''),
+        content: [{ type: 'tool-call', id: ToolCallId('advertised-call'), name: 'read', arguments: '{}' }],
+      },
+      stream: [
+        { type: 'tool-call-chunks', index: 0, id: 'advertised-call', name: 'read', args: ['{}'], time0: 1_700_000_000_000 + seq, dt: [] },
+        { type: 'chunk', time: 1_700_000_000_000 + seq, chunk: { type: 'finish', reason: { kind: 'tool-calls' } } },
+      ],
+    }, { surfaceOp: 'append' })
+  }
+
+  it('preserves the live prefix, continues deltas, and settles only on the enclosing prose response', () => {
+    const value = assembler([at(1, 'turn/start', { turn: 1 }), at(2, 'step/start', { turn: 1, step: 1 })])
+    appendAssistantChunk(value, 3, { type: 'text-delta', index: 0, text: 'Visible prefix' })
+    const key = node(snapshot(value), 'assistant-step')!.key
+    value.append(advertisement(4))
+    value.append(at(5, 'tool/call', { turn: 1, step: 1, callId: 'advertised-call', name: 'read', arguments: '{}' }))
+    value.flush()
+    const during = node(snapshot(value), 'assistant-step')!
+    expect(during.key).toBe(key)
+    expect(during.visibility).toBe('visible')
+    expect(during.data).toMatchObject({ status: 'running', blocks: [{ kind: 'text', text: 'Visible prefix' }] })
+    appendAssistantChunk(value, 6, { type: 'text-delta', index: 0, text: ' and suffix' })
+    expect(node(snapshot(value), 'assistant-step')?.data).toMatchObject({ status: 'running', blocks: [{ kind: 'text', text: 'Visible prefix and suffix' }] })
+    value.append(at(7, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('outer-final', 'Visible prefix and suffix'), stream: [] }, { surfaceOp: 'append' }))
+    value.flush()
+    expect(node(snapshot(value), 'assistant-step')?.data).toMatchObject({ status: 'settled', blocks: [{ kind: 'text', text: 'Visible prefix and suffix' }], finalNode: { messageId: 'outer-final' } })
+    expect(snapshot(value).nodes.values().filter(candidate => candidate.kind === 'tool-call')).toHaveLength(1)
+  })
+
+  it('retains an interrupted prefix when a tool advertisement is the only durable assistant evidence', () => {
+    const value = assembler([at(1, 'turn/start', { turn: 1 }), at(2, 'step/start', { turn: 1, step: 1 })])
+    appendAssistantChunk(value, 3, { type: 'text-delta', index: 0, text: 'Actually observed partial text' })
+    value.append(advertisement(4))
+    value.append(at(5, 'step/end', { turn: 1, step: 1 }))
+    value.append(at(6, 'turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } }))
+    value.flush()
+    expect(node(snapshot(value), 'assistant-step')?.data).toMatchObject({ status: 'interrupted', blocks: [{ kind: 'text', text: 'Actually observed partial text' }] })
+  })
+
+  it('keeps ordinary tool-only evidence and imported prose with an empty recorded stream', () => {
+    const toolOnly = assembler([at(1, 'turn/start', { turn: 1 }), at(2, 'step/start', { turn: 1, step: 1 }), advertisement(3)])
+    expect(node(snapshot(toolOnly), 'assistant-step')?.data).toMatchObject({ status: 'settled', finalNode: { blocks: [{ kind: 'tool-call', callId: 'advertised-call' }] } })
+    const imported = assembler([
+      at(1, 'turn/start', { turn: 1 }), at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('imported-source', 'Original imported prose'), stream: [] }, { surfaceOp: 'append' }),
+    ])
+    expect(node(snapshot(imported), 'assistant-step')?.data).toMatchObject({ status: 'settled', blocks: [{ kind: 'text', text: 'Original imported prose' }] })
+  })
+})
