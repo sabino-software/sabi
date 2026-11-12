@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-api-authorization-controller
 
+English | [中文](README.zh.md)
+
 ## Summary
 
 This package connects registered authorization flows to the Models settings page. The Host owns the conversation stream; the browser owns its initiating interaction and redacted state. Provider plugins continue to own OAuth, credential commits, and token refresh.
@@ -21,15 +23,9 @@ Mount the default Host plugin beside `authorization`, `credentials`, and `typert
 
 ## Model Experience
 
-### Text
+None. This package contributes no model prompt, tool, or Session event. Provider sign-in UI is not sent to the model.
 
-None. This package contributes no model prompt or tool.
-
-### Tokens
-
-None. Provider sign-in UI is not sent to the model.
-
-### KV cache
+#### KV Cache effect
 
 None. Authorization interaction does not change model context.
 

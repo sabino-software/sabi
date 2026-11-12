@@ -1,5 +1,5 @@
 /** Provider-owned sign-in conversations, presented within Models settings. */
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -77,7 +77,7 @@ export function ProviderSignIn(props: InjectFace<ProviderSignInInjected>): React
   const active = state.active
   const running = active !== null && (active.frame === undefined || active.frame.status === 'running')
   const removal = flows.find(entry => entry.key === removing)
-  if (state.status === 'idle') void load()
+  useEffect(() => { void load() }, [load])
   if (state.status === 'ready' && flows.length === 0) return null
   return (
     <section className={authStyles['section']} aria-label={t('authTitle')}>
