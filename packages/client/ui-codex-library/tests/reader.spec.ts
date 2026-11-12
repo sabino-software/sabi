@@ -1,10 +1,11 @@
 /** Existing source data stays untouched through bounded catalog and transcript reads. */
 import { mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import * as fs from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
 import { createHash } from 'node:crypto'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { CodexLibraryReader } from '../src/reader.ts'
 import type { CodexChatId } from '../src/types.ts'
 
@@ -78,6 +79,93 @@ describe('Codex source library', () => {
     reader.list({ query: '', archived: false, cursor: null })
     reader.read(CHAT, null)
     expect(hashes(home)).toEqual(before)
+  })
+
+  it('reads uncheckpointed WAL data without modifying or creating source sidecars', () => {
+    const { home, reader } = fixture()
+    const catalogPath = join(home, 'state_5.sqlite')
+    const historyPath = join(home, 'thread_history_1.sqlite')
+    const catalog = new DatabaseSync(catalogPath)
+    const history = new DatabaseSync(historyPath)
+    try {
+      catalog.exec('PRAGMA journal_mode = WAL; PRAGMA wal_autocheckpoint = 0')
+      history.exec('PRAGMA journal_mode = WAL; PRAGMA wal_autocheckpoint = 0')
+      catalog.prepare('UPDATE threads SET name = ? WHERE id = ?').run('Only in the active WAL', CHAT)
+      history.prepare('INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?)').run(
+        CHAT, 'wal-only-message', 500, 1700000000500, JSON.stringify({ type: 'agentMessage', text: 'Uncheckpointed answer' }), 'agentMessage',
+      )
+      expect(fs.statSync(`${catalogPath}-wal`).size).toBeGreaterThan(0)
+      expect(fs.statSync(`${historyPath}-wal`).size).toBeGreaterThan(0)
+      const before = hashes(home)
+      expect(reader.list({ query: 'Only in the active WAL', archived: false, cursor: null }).chats.map(chat => chat.id)).toEqual([CHAT])
+      expect(reader.read(CHAT, null).messages.at(-1)?.text).toBe('Uncheckpointed answer')
+      expect(hashes(home)).toEqual(before)
+      // Source SHM is not necessary: only private SQLite copies may recreate it.
+      rmSync(`${catalogPath}-shm`)
+      rmSync(`${historyPath}-shm`)
+      const withoutShm = hashes(home)
+      expect(reader.read(CHAT, null).messages.at(-1)?.text).toBe('Uncheckpointed answer')
+      expect(hashes(home)).toEqual(withoutShm)
+    } finally {
+      catalog.close()
+      history.close()
+    }
+  })
+
+  it('retries a database change during cloning and removes each private snapshot', () => {
+    const { home, reader } = fixture()
+    const source = join(home, 'state_5.sqlite')
+    const originalCopy = fs.copyFileSync
+    let copies = 0
+    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementation((from, to, flags) => {
+      originalCopy(from, to, flags)
+      if (String(from) !== source) return
+      copies += 1
+      if (copies !== 1) return
+      const writer = new DatabaseSync(source)
+      writer.prepare('UPDATE threads SET name = ? WHERE id = ?').run('Changed during clone', CHAT)
+      writer.close()
+    })
+    const removed = vi.spyOn(fs, 'rmSync')
+    onTestFinished(() => { copy.mockRestore(); removed.mockRestore() })
+    expect(reader.list({ query: 'Changed during clone', archived: false, cursor: null }).chats.map(chat => chat.id)).toEqual([CHAT])
+    expect(copies).toBe(2)
+    expect(removed.mock.calls).toHaveLength(2)
+    for (const [path] of removed.mock.calls) expect(fs.existsSync(path)).toBe(false)
+  })
+
+  it('stops after three unstable copies and removes private files on failure', () => {
+    const { home, reader } = fixture()
+    const source = join(home, 'state_5.sqlite')
+    const originalCopy = fs.copyFileSync
+    let copies = 0
+    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementation((from, to, flags) => {
+      originalCopy(from, to, flags)
+      if (String(from) !== source) return
+      copies += 1
+      const writer = new DatabaseSync(source)
+      writer.prepare('UPDATE threads SET name = ? WHERE id = ?').run(`Changing ${copies}`, CHAT)
+      writer.close()
+    })
+    const removed = vi.spyOn(fs, 'rmSync')
+    onTestFinished(() => { copy.mockRestore(); removed.mockRestore() })
+    expect(() => reader.list({ query: '', archived: false, cursor: null })).toThrow('changed while copying')
+    expect(copies).toBe(3)
+    expect(removed.mock.calls).toHaveLength(3)
+    for (const [path] of removed.mock.calls) expect(fs.existsSync(path)).toBe(false)
+  })
+
+  it('refuses symlinked WAL, active rollback journals, and oversized snapshot sources', () => {
+    const { home, reader } = fixture()
+    const path = join(home, 'state_5.sqlite')
+    symlinkSync(join(home, 'auth.json'), `${path}-wal`)
+    expect(() => reader.list({ query: '', archived: false, cursor: null })).toThrow('unavailable')
+    rmSync(`${path}-wal`)
+    writeFileSync(`${path}-journal`, 'unfinished')
+    expect(() => reader.list({ query: '', archived: false, cursor: null })).toThrow('rollback journal')
+    rmSync(`${path}-journal`)
+    fs.truncateSync(path, 2 * 1024 * 1024 * 1024 + 1)
+    expect(() => reader.list({ query: '', archived: false, cursor: null })).toThrow('snapshot size limit')
   })
 
   it('bounds the complete emitted UTF-8 page and marks oversized rows visibly', () => {
