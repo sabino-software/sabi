@@ -1,5 +1,5 @@
 /** Local authorization conversation for the assembled Models settings test. */
-import { credentialKey } from '@deepseek-ai/dsh-credentials'
+import { credentialKey } from '../../../../../packages/credentials/credentials/lib/index.js'
 
 export const name = 'fixture-provider-authorization'
 export const inject = ['authorization']

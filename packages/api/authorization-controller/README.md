@@ -11,6 +11,13 @@ English | [中文](README.zh.md)
 
 This package connects registered authorization flows to the Models settings page. The Host owns the conversation stream; the browser owns its initiating interaction and redacted state. Provider plugins continue to own OAuth, credential commits, and token refresh.
 
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
 ## Use this package
 
 Mount the default Host plugin beside `authorization`, `credentials`, and `typert`, mount `/client` beside the generated `authorization` Remote namespace, and include `/remote` in the API contribution assembly. The browser service is `ctx.providerAuthorization`.
@@ -23,7 +30,7 @@ Mount the default Host plugin beside `authorization`, `credentials`, and `typert
 
 ## Model Experience
 
-None. This package contributes no model prompt, tool, or Session event. Provider sign-in UI is not sent to the model.
+None, as this package contributes no model prompt, tool, or Session event.
 
 #### KV Cache effect
 
@@ -31,4 +38,13 @@ None. Authorization interaction does not change model context.
 
 ## Known Limitations and Deferred Work
 
-A disconnected browser cannot determine whether a credential commit completed from the stream alone; it refreshes stored-record status and reports the interruption. Provider token validity is checked when the provider uses the credential. A running sign-in in another browser is visible after refresh; this package does not transfer its prompts between browsers.
+- A disconnected browser cannot determine whether a credential commit completed from the stream alone; it refreshes stored-record status and reports the interruption. Provider token validity is checked when the provider uses the credential. A running sign-in in another browser is visible after refresh; this package does not transfer its prompts between browsers.
+
+### Dev Note
+
+<details>
+<summary>Working context for maintainers — click to expand</summary>
+
+The Host keeps OAuth secrets within the provider-owned credential store; the browser receives redacted projections only.
+
+</details>

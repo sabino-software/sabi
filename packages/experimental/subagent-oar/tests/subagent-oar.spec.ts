@@ -121,7 +121,7 @@ describe('OAR provider composition', () => {
 
   it('rejects timeout values beyond the platform timer range for direct composition', () => {
     const ctx = new Context()
-    expect(() =>{  oar.apply(ctx, { runtime: 'codex', timeoutMs: 2 ** 31 }) }).toThrow('no greater than')
+    expect(() => { oar.apply(ctx, { runtime: 'codex', timeoutMs: 2 ** 31 }) }).toThrow('no greater than')
   })
 
   it('supports direct provider composition with the declared defaults', async () => {
@@ -322,7 +322,7 @@ describe('OAR one-shot execution', () => {
       turn: async (turn) => {
         turn.say('partial')
         active.resolve(undefined)
-        await new Promise<void>((resolve) =>{  turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+        await new Promise<void>((resolve) => { turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
       },
     }))
     const controller = new AbortController()
@@ -365,7 +365,7 @@ describe('OAR one-shot execution', () => {
     const observed = observedRuntime(scriptedRuntime({
       turn: async (turn) => {
         active.resolve(undefined)
-        await new Promise<void>((resolve) =>{  turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+        await new Promise<void>((resolve) => { turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
       },
     }))
     const run = await startOarRun(await request(), spec(observed.runtime, { timeoutMs: 10 }))
@@ -473,7 +473,7 @@ describe('OAR one-shot execution', () => {
   })
 
   it('settles a rejected prompt without repeating the native rejection text', async () => {
-    const base = scriptedRuntime({ turn: async turn => new Promise<void>((resolve) =>{  turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) }) })
+    const base = scriptedRuntime({ turn: async turn => new Promise<void>((resolve) => { turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) }) })
     const runtime: Runtime = { ...base, session: async (installation, options) => {
       const session = await base.session(installation, options)
       await session.prompt('occupy this native session')
@@ -505,7 +505,7 @@ describe('OAR one-shot execution', () => {
     const entered = Promise.withResolvers<undefined>()
     const base = scriptedRuntime({ turn: async (turn) => {
       entered.resolve(undefined)
-      await new Promise<void>((resolve) =>{  turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+      await new Promise<void>((resolve) => { turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
     } })
     const runtime: Runtime = { ...base, session: async (installation, options) => {
       const session = await base.session(installation, options)
@@ -541,7 +541,7 @@ describe('OAR one-shot execution', () => {
     const active = Promise.withResolvers<undefined>()
     const base = scriptedRuntime({ turn: async (turn) => {
       active.resolve(undefined)
-      await new Promise<void>((resolve) =>{  turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+      await new Promise<void>((resolve) => { turn.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
     } })
     const runtime: Runtime = { ...base, session: async (installation, options) => {
       const session = await base.session(installation, options)

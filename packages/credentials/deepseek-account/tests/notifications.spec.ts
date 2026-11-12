@@ -630,9 +630,8 @@ it.each(['list', 'content', 'display'] as const)('discards a successful %s respo
   }
 })
 
-
 it.each([undefined, false])('keeps notification interactions local without a reporting opt-in: %s', async (enabled) => {
-  const f = await fixture({ reportNotificationEvents: enabled })
+  const f = await fixture(enabled === undefined ? {} : { reportNotificationEvents: enabled })
   await f.grant('private-notification-grant')
   for (const event of ['displayed', 'cta_clicked', 'dismissed'] as const) {
     expect(await f.account.reportNotificationEvent(ORDER as AccountNotificationId, event, clientMetadata())).toBe(false)

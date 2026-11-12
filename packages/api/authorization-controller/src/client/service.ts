@@ -1,7 +1,7 @@
 /** React-free sign-in state and command lifecycle over one non-restarting Remote stream. */
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials/types'
 import type { AuthorizationFlowView, AuthorizationFrame, AuthorizationPromptId } from '../types.ts'
 
@@ -28,7 +28,8 @@ declare module '@deepseek-ai/cordis' {
 
 /** Client sign-in owner; a broken connection requires a new explicit attempt. */
 export class ClientProviderAuthorization extends Service {
-  readonly state = createSnapshotStore<ProviderAuthorizationState>({
+  /** Redacted observable sign-in state; credential payloads are never retained. */
+  readonly state: SnapshotStore<ProviderAuthorizationState> = createSnapshotStore<ProviderAuthorizationState>({
     status: 'idle', entries: [], error: null, active: null, pending: false,
   })
   private running: { controller: AbortController; done: Promise<void> } | undefined
@@ -49,18 +50,18 @@ export class ClientProviderAuthorization extends Service {
   /** Refresh redacted stored state, preserving entries on failure. @returns after publication. */
   async load(): Promise<void> {
     const generation = ++this.generation
-    this.state.update(state => { state.status = 'loading' })
+    this.state.update((state) => { state.status = 'loading' })
     try {
       const result = await this.remote.list()
       if (generation !== this.generation) return
-      this.state.update(state => {
+      this.state.update((state) => {
         state.status = result.ok ? 'ready' : 'error'
         if (result.ok) { state.entries = result.value; if (state.error === 'load') state.error = null }
         else state.error = 'load'
       })
     } catch (_error) {
       if (generation !== this.generation) return
-      this.state.update(state => { state.status = 'error'; state.error = 'load' })
+      this.state.update((state) => { state.status = 'error'; state.error = 'load' })
     }
   }
 
@@ -72,7 +73,7 @@ export class ClientProviderAuthorization extends Service {
   begin(key: CredentialKey, method: string): void {
     if (this.running !== undefined) return
     const controller = new AbortController()
-    this.state.update(state => { state.active = { key }; state.error = null })
+    this.state.update((state) => { state.active = { key }; state.error = null })
     const running = { controller, done: Promise.resolve() }
     this.running = running
     running.done = this.follow(key, method, controller.signal).finally(() => {
@@ -84,7 +85,7 @@ export class ClientProviderAuthorization extends Service {
     let settled = false
     try {
       for await (const frame of this.remote.begin(key, method, signal)) {
-        this.state.update(state => { state.active = { key, frame }; state.pending = false })
+        this.state.update((state) => { state.active = { key, frame }; state.pending = false })
         if (frame.status !== 'running') settled = true
       }
       if (!settled && !signal.aborted) this.interrupted()
@@ -105,14 +106,14 @@ export class ClientProviderAuthorization extends Service {
   async answer(promptId: AuthorizationPromptId, value: string): Promise<void> {
     const frame = this.state.getSnapshot().active?.frame
     if (frame?.prompt?.id !== promptId) return
-    this.state.update(state => { state.pending = true; state.error = null })
+    this.state.update((state) => { state.pending = true; state.error = null })
     try {
       const result = await this.remote.answer(frame.attemptId, promptId, value)
-      if (!result.ok) this.state.update(state => { state.error = 'answer' })
+      if (!result.ok) this.state.update((state) => { state.error = 'answer' })
     } catch (_error) {
-      this.state.update(state => { state.error = 'answer' })
+      this.state.update((state) => { state.error = 'answer' })
     } finally {
-      this.state.update(state => { state.pending = false })
+      this.state.update((state) => { state.pending = false })
     }
   }
 
@@ -120,7 +121,7 @@ export class ClientProviderAuthorization extends Service {
   async cancel(): Promise<void> {
     const frame = this.state.getSnapshot().active?.frame
     if (frame === undefined) { this.running?.controller.abort(); this.interrupted(); return }
-    this.state.update(state => { state.pending = true })
+    this.state.update((state) => { state.pending = true })
     try {
       const result = await this.remote.cancel(frame.attemptId)
       if (!result.ok) this.interrupted()
@@ -128,7 +129,7 @@ export class ClientProviderAuthorization extends Service {
       this.running?.controller.abort()
       this.interrupted()
     } finally {
-      this.state.update(state => { state.pending = false })
+      this.state.update((state) => { state.pending = false })
       await this.load()
     }
   }
@@ -139,20 +140,20 @@ export class ClientProviderAuthorization extends Service {
    * @returns after the write acknowledgment and refresh.
    */
   async logout(key: CredentialKey): Promise<void> {
-    this.state.update(state => { state.pending = true; state.error = null })
+    this.state.update((state) => { state.pending = true; state.error = null })
     try {
       const result = await this.remote.logout(key)
-      if (!result.ok) this.state.update(state => { state.error = 'logout' })
-      else this.state.update(state => { state.active = null })
+      if (!result.ok) this.state.update((state) => { state.error = 'logout' })
+      else this.state.update((state) => { state.active = null })
     } catch (_error) {
-      this.state.update(state => { state.error = 'logout' })
+      this.state.update((state) => { state.error = 'logout' })
     } finally {
-      this.state.update(state => { state.pending = false })
+      this.state.update((state) => { state.pending = false })
       await this.load()
     }
   }
 
   private interrupted(): void {
-    this.state.update(state => { state.error = 'interrupted'; state.active = null; state.pending = false })
+    this.state.update((state) => { state.error = 'interrupted'; state.active = null; state.pending = false })
   }
 }

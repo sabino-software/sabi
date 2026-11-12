@@ -154,7 +154,7 @@ export function apply(ctx: ClientContext): void {
       inject: (): ProviderSignInInjected => ({
         hooks: { authorization: authorization.state },
         load: () => authorization.load(),
-        begin: (key, method) => authorization.begin(key, method),
+        begin: (key, method) => { authorization.begin(key, method) },
         answer: (id, value) => authorization.answer(id, value),
         cancel: () => authorization.cancel(),
         logout: key => authorization.logout(key),

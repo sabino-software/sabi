@@ -30,7 +30,7 @@ it.each(['desktop', 'web'])('keeps product collection unmounted for %s without m
   await ctx.loader.root.update(rows)
   await ctx.loader.await()
   for (const row of rows) {
-    const entry = ctx.loader.resolve(row.id!)
+    const entry = ctx.loader.resolve(row.id)
     expect(entry.disabled).toBe(true)
     expect(entry.fiber).toBeUndefined()
   }

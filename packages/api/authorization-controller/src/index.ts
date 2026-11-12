@@ -62,7 +62,7 @@ export class AuthorizationController extends TypertRemoteService {
   @Remote
   async list(): Promise<AuthorizationFlowView[]> {
     try {
-      return await Promise.all(this.ctx.authorization.list().map(async entry => {
+      return await Promise.all(this.ctx.authorization.list().map(async (entry) => {
         const info = await this.ctx.credentials.describeRecord(entry.key)
         return {
           key: entry.key, label: entry.label,
@@ -108,24 +108,26 @@ export class AuthorizationController extends TypertRemoteService {
     attempt.done = this.ctx.authorization.begin({
       key: recordKey, method, signal: controller.signal,
       interaction: {
-        notify: notice => publish({
-          ...frame,
-          notice: {
-            message: notice.message,
-            ...notice.url === undefined ? {} : { url: notice.url },
-            ...notice.code === undefined ? {} : { code: notice.code },
-          },
-        }),
+        notify: (notice) => {
+          publish({
+            ...frame,
+            notice: {
+              message: notice.message,
+              ...notice.url === undefined ? {} : { url: notice.url },
+              ...notice.code === undefined ? {} : { code: notice.code },
+            },
+          })
+        },
         prompt: question => new Promise<string>((resolve, reject) => {
           const id = brandString<AuthorizationPromptId>(randomUUID())
           const promptSignal = question.signal
           const view: AuthorizationQuestion = question.kind === 'select'
             ? { kind: 'select', message: question.message, options: question.options.map(option => ({
-                id: option.id, label: option.label,
-                ...option.description === undefined ? {} : { description: option.description },
-              })) }
+              id: option.id, label: option.label,
+              ...option.description === undefined ? {} : { description: option.description },
+            })) }
             : { kind: question.kind, message: question.message,
-                ...question.placeholder === undefined ? {} : { placeholder: question.placeholder } }
+              ...question.placeholder === undefined ? {} : { placeholder: question.placeholder } }
           const clear = (): void => {
             delete attempt.answer
             promptSignal?.removeEventListener('abort', withdrawn)
@@ -138,14 +140,14 @@ export class AuthorizationController extends TypertRemoteService {
             reject(new DOMException('Authorization question withdrawn.', 'AbortError'))
           }
           if (controller.signal.aborted || promptSignal?.aborted) { withdrawn(); return }
-          attempt.answer = { id, question: view, resolve: value => { clear(); resolve(value) } }
+          attempt.answer = { id, question: view, resolve: (value) => { clear(); resolve(value) } }
           promptSignal?.addEventListener('abort', withdrawn, { once: true })
           controller.signal.addEventListener('abort', withdrawn, { once: true })
           publish({ ...frame, prompt: { id, question: view } })
         }),
       },
     }).then(
-      outcome => { publish({ attemptId, status: outcome.status }) },
+      (outcome) => { publish({ attemptId, status: outcome.status }) },
       (_error: unknown) => { publish({ attemptId, status: 'failed' }) },
     )
     try {
@@ -157,7 +159,7 @@ export class AuthorizationController extends TypertRemoteService {
           yield current
           if (current.status !== 'running') return
         }
-        await new Promise<void>(resolve => { wake = resolve; if (delivered !== revision) resolve() })
+        await new Promise<void>((resolve) => { wake = resolve; if (delivered !== revision) resolve() })
       }
     } finally {
       signal.removeEventListener('abort', cancel)

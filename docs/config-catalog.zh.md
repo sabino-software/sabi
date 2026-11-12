@@ -568,7 +568,7 @@ export interface Config {
 ```ts config-catalog
 /** Application-owned collection policy; no user settings surface. */
 export interface Config {
-  /** Live application collection policy; ordinary Web does not mount this service. */
+  /** Live application collection policy; disabled by default. */
   enabled: Volatile<boolean>
   /** Running Desktop release, absent when unavailable. */
   appVersion?: string
@@ -663,8 +663,6 @@ export interface Config extends ContactConfig {
 export interface ContactConfig {
   /** HTTPS questionnaire URL; override for a test form. */
   contactFormUrl: string
-  /** Questionnaire source option; empty until Harness is supported by the form. */
-  contactSource: string
 }
 
 /** Persisted steps; a native top-up page leaves the durable step at credit. */
@@ -923,6 +921,8 @@ export interface Config {
   platformOrigin?: string
   /** Harness API origin for account notifications. */
   harnessOrigin?: string
+  /** Opt into notification impression, action, and dismissal reports; disabled by default. */
+  reportNotificationEvents?: boolean
   /** Native desktop identity for Host API and embedded Platform requests; null identifies the client as web. */
   desktopPlatform?: 'darwin' | 'win32' | null
   /** Optional frontend deployment selector for embedded Usage and Top-up pages. */
@@ -2868,7 +2868,7 @@ export interface Config {
 ```ts config-catalog
 /** Plugin-package request contribution configuration. */
 export interface Config {
-  /** Contribute `dsh_plugin_packages` to official DeepSeek requests. Defaults to `true`. */
+  /** Contribute `dsh_plugin_packages` to official DeepSeek requests. Defaults to `false`. */
   enabled?: boolean
 }
 ```
@@ -3179,7 +3179,7 @@ export interface JsonRpcConfig {
 ```ts config-catalog
 /** Session-log request contribution configuration. */
 export interface Config {
-  /** Contribute `dsh_session_log` to official DeepSeek requests. Defaults to `true`. */
+  /** Contribute `dsh_session_log` to official DeepSeek requests. Defaults to `false`. */
   enabled: Volatile<boolean>
   /**
    * Largest serialized `dsh_session_log` field, in UTF-8 bytes, that one request carries.
@@ -3356,7 +3356,7 @@ export interface Config {
  * and shutdown deadline at plugin load; `DISABLED` reads neither.
  */
 export interface Config {
-  /** Defaults to `FEEDBACK_ONLY`: capture session history only when feedback is explicitly submitted. */
+  /** Defaults to `DISABLED`: no Session log is captured or exported. */
   mode?: SessionTelemetryMode
   /**
    * Explicit SDK HTTP transport settings, including optional routing headers.
@@ -5081,6 +5081,7 @@ export interface Config {
 | --- | --- | --- |
 | `@deepseek-ai/dsh-acp-app` | `cmdlineArgs` | [`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts) |
 | `@deepseek-ai/dsh-agent` | `sessionProjections` | [`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts) |
+| `@deepseek-ai/dsh-api-authorization-controller` | `authorization` · `credentials` · `typert` | [`packages/api/authorization-controller/src/index.ts`](../packages/api/authorization-controller/src/index.ts) |
 | `@deepseek-ai/dsh-api-remote-access` | — | [`packages/api/remote-access/src/index.ts`](../packages/api/remote-access/src/index.ts) |
 | `@deepseek-ai/dsh-api-remotes` | `typertGateway` | [`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts) |
 | `@deepseek-ai/dsh-authorization` | `credentials` | [`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts) |

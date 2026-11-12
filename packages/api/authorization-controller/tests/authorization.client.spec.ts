@@ -60,7 +60,7 @@ describe('provider sign-in client', () => {
 
   it('keeps secret answers out of state and ignores answers for withdrawn prompts', async () => {
     const { client, remote } = harness()
-    const answered = Promise.withResolvers<void>()
+    const answered = Promise.withResolvers<undefined>()
     remote.begin.mockImplementation(streamMethod<ClientRemote['authorization']['begin']>(async function* () {
       yield { attemptId: ATTEMPT, status: 'running', prompt: { id: PROMPT, question: { kind: 'secret', message: 'Code' } } }
       await answered.promise
@@ -71,7 +71,7 @@ describe('provider sign-in client', () => {
     await client.answer(PROMPT, 'private-answer')
     expect(remote.answer).toHaveBeenCalledWith(ATTEMPT, PROMPT, 'private-answer')
     expect(JSON.stringify(client.state.getSnapshot())).not.toContain('private-answer')
-    answered.resolve()
+    answered.resolve(undefined)
     await vi.waitFor(() => { expect(client.state.getSnapshot().status).toBe('ready') })
     await client.answer(PROMPT, 'late')
     expect(remote.answer).toHaveBeenCalledOnce()
@@ -81,7 +81,7 @@ describe('provider sign-in client', () => {
     const { client, remote } = harness()
     remote.begin.mockImplementation(streamMethod<ClientRemote['authorization']['begin']>(async function* (_key, _method, signal) {
       yield { attemptId: ATTEMPT, status: 'running' }
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve) => {
         if (signal?.aborted) resolve()
         else signal?.addEventListener('abort', () => { resolve() }, { once: true })
       })

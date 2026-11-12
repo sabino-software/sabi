@@ -43,7 +43,7 @@ function Question({ prompt, answer, pending, t }: {
   const question = prompt.question
   const [value, setValue] = useState(question.kind === 'select' ? question.options[0]?.id ?? '' : '')
   return (
-    <form className={authStyles['question']} onSubmit={event => {
+    <form className={authStyles['question']} onSubmit={(event) => {
       event.preventDefault()
       if (value.length === 0 || pending) return
       const submitted = value
@@ -53,13 +53,13 @@ function Question({ prompt, answer, pending, t }: {
       <label htmlFor={id}>{question.message}</label>
       {question.kind === 'select'
         ? <select id={id} className={authStyles['input']} value={value} disabled={pending}
-          onChange={event => { setValue(event.target.value) }}>
+          onChange={(event) => { setValue(event.target.value) }}>
           {question.options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
         </select>
         : <input id={id} className={authStyles['input']} type={question.kind === 'secret' ? 'password' : 'text'}
           autoComplete="off" spellCheck={false} value={value} placeholder={question.placeholder}
-          disabled={pending} onChange={event => { setValue(event.target.value) }} />}
-      <Button type="submit" variant="filled" size="sm" disabled={pending || value.length === 0}>{t('authContinue')}</Button>
+          disabled={pending} onChange={(event) => { setValue(event.target.value) }} />}
+      <Button type="submit" variant="primary" size="sm" disabled={pending || value.length === 0}>{t('authContinue')}</Button>
     </form>
   )
 }
@@ -88,9 +88,9 @@ export function ProviderSignIn(props: InjectFace<ProviderSignInInjected>): React
           : state.error === 'logout' ? 'authLogoutFailed' : 'authInterrupted',
       )}</p>}
       {(state.status === 'error' || state.error === 'interrupted')
-        && <Button variant="outlined" size="sm" onClick={() => { void load() }}>{t('retry')}</Button>}
+        && <Button variant="outline" size="sm" onClick={() => { void load() }}>{t('retry')}</Button>}
       <ul className={authStyles['flows']}>
-        {flows.map(entry => {
+        {flows.map((entry) => {
           const current = active?.key === entry.key ? active.frame : undefined
           const notice = current?.status === 'running' ? current.notice : undefined
           const url = externalUrl(notice?.url)
@@ -101,10 +101,10 @@ export function ProviderSignIn(props: InjectFace<ProviderSignInInjected>): React
                 <span className={styles['intro']}>{entry.configured ? t('authStored') : t('authNotStored')}</span>
                 <div className={authStyles['actions']}>
                   {entry.methods.filter(method => method.id === 'oauth').map(method =>
-                    <Button key={method.id} variant="outlined" size="sm"
+                    <Button key={method.id} variant="outline" size="sm"
                       disabled={running || state.pending || entry.inFlight || !entry.writable || state.status !== 'ready'}
                       onClick={() => { begin(entry.key, method.id) }}>{method.label}</Button>)}
-                  {entry.configured && <Button variant="outlined" size="sm"
+                  {entry.configured && <Button variant="outline" size="sm"
                     disabled={running || state.pending || entry.inFlight || !entry.writable}
                     onClick={() => { setRemoving(entry.key) }}>{t('authSignOut')}</Button>}
                 </div>
@@ -117,7 +117,7 @@ export function ProviderSignIn(props: InjectFace<ProviderSignInInjected>): React
                 {notice?.code !== undefined && <code className={authStyles['code']}>{notice.code}</code>}
                 {current?.prompt !== undefined && <Question key={current.prompt.id} prompt={current.prompt}
                   answer={answer} pending={state.pending} t={t} />}
-                {running && <Button variant="outlined" size="sm" disabled={state.pending}
+                {running && <Button variant="outline" size="sm" disabled={state.pending}
                   onClick={() => { void cancel() }}>{t('cancel')}</Button>}
               </div>}
               {entry.inFlight && active?.key !== entry.key && <p className={styles['intro']}>{t('authElsewhere')}</p>}
@@ -128,8 +128,8 @@ export function ProviderSignIn(props: InjectFace<ProviderSignInInjected>): React
       <Modal open={removal !== undefined} onClose={() => { if (!state.pending) setRemoving(undefined) }}
         closeLabel={t('close')} title={t('authSignOutTitle')} description={t('authSignOutDescription').replace('{provider}', removal?.label ?? '')}
         footer={<>
-          <Button variant="outlined" size="sm" disabled={state.pending} onClick={() => { setRemoving(undefined) }}>{t('cancel')}</Button>
-          <Button variant="filled" size="sm" disabled={state.pending} onClick={() => {
+          <Button variant="outline" size="sm" disabled={state.pending} onClick={() => { setRemoving(undefined) }}>{t('cancel')}</Button>
+          <Button variant="primary" size="sm" disabled={state.pending} onClick={() => {
             if (removing === undefined) return
             void logout(removing).then(() => { setRemoving(undefined) })
           }}>{t('authSignOut')}</Button>

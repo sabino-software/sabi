@@ -16,7 +16,7 @@ it('signs into Codex from Models settings, cancels safely, and removes the saved
   const page = await newEnglishPage(browser)
   const tripwire = watchConsole(page)
   const received: string[] = []
-  page.on('websocket', socket => { socket.on('framereceived', frame => { received.push(String(frame.payload)) }) })
+  page.on('websocket', (socket) => { socket.on('framereceived', (frame) => { received.push(String(frame.payload)) }) })
   const key = credentialKey('llm-pi-ai', 'openai-codex')
   await page.goto(scaffold.authenticatedUrl)
   await openSettings(page, 'en')

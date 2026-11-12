@@ -16,6 +16,11 @@ export interface ProductPackagePolicy {
  * Optional integrations may be reached by an optional bundle without becoming default capabilities.
  */
 export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolicy>> = {
+  'packages/host/product-telemetry-otel': { category: 'optional', reason: 'Reporting requires explicit deployment opt-in; shipped profiles disable collection.' },
+  'packages/llm/plugin-package-inventory-deepseek': { category: 'optional', reason: 'Reporting requires explicit deployment opt-in; shipped profiles disable collection.' },
+  'packages/session/session-log-deepseek': { category: 'optional', reason: 'Reporting requires explicit deployment opt-in; shipped profiles disable collection.' },
+  'packages/session/session-telemetry': { category: 'optional', reason: 'Reporting requires explicit deployment opt-in; shipped profiles disable collection.' },
+  'packages/session/session-telemetry-otel': { category: 'optional', reason: 'Reporting requires explicit deployment opt-in; shipped profiles disable collection.' },
   'packages/core/agent-tool-presentation': { category: 'optional', reason: 'Deprecated selector retained for existing executor configurations.' },
   'packages/browser-use/browser-use': { category: 'optional', reason: 'Service definition used by explicitly selected browser providers.' },
   'packages/computer-use/computer-use': { category: 'optional', reason: 'Service definition used by explicitly selected computer providers.' },

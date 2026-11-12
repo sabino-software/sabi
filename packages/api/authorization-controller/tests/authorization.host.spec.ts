@@ -35,7 +35,7 @@ function collect(ctx: Context) {
 describe('provider authorization Remote', () => {
   it('relays notices and secret prompts, commits once, and exposes only stored presence', async () => {
     let answer: string | undefined
-    const ctx = await harness(async session => {
+    const ctx = await harness(async (session) => {
       session.notify({ message: 'Continue in browser', url: 'https://example.com/login', code: 'ABCD' })
       answer = await session.prompt({ kind: 'secret', message: 'Paste callback code' })
       await session.commit({ kind: 'grant', payload: { refreshToken: 'private-refresh-token' } })
@@ -57,8 +57,8 @@ describe('provider authorization Remote', () => {
 
   it('withdraws callback-raced prompts and refuses stale answers', async () => {
     const withdrawn = new AbortController()
-    const proceed = Promise.withResolvers<void>()
-    const ctx = await harness(async session => {
+    const proceed = Promise.withResolvers<undefined>()
+    const ctx = await harness(async (session) => {
       const prompt = session.prompt({ kind: 'text', message: 'Code', signal: withdrawn.signal }).catch(() => undefined)
       await proceed.promise
       withdrawn.abort()
@@ -68,15 +68,15 @@ describe('provider authorization Remote', () => {
     const { frames, done } = collect(ctx)
     await vi.waitFor(() => { expect(frames.at(-1)?.prompt).toBeDefined() })
     const stale = frames.at(-1)!
-    proceed.resolve()
+    proceed.resolve(undefined)
     await done
-    expect(() => ctx.authorizationController.answer(stale.attemptId, stale.prompt!.id, 'late'))
+    expect(() => { ctx.authorizationController.answer(stale.attemptId, stale.prompt!.id, 'late') })
       .toThrow('no longer active')
     expect(frames.at(-1)).toMatchObject({ status: 'authorized' })
   })
 
   it('cancels the flow when its stream closes and allows a new attempt', async () => {
-    const ctx = await harness(async session => {
+    const ctx = await harness(async (session) => {
       await session.prompt({ kind: 'text', message: 'Code' })
     })
     const first = collect(ctx)
@@ -94,14 +94,14 @@ describe('provider authorization Remote', () => {
   })
 
   it('redacts provider failures and rejects invalid selection answers', async () => {
-    const ctx = await harness(async session => {
+    const ctx = await harness(async (session) => {
       await session.prompt({ kind: 'select', message: 'Account', options: [{ id: 'work', label: 'Work' }] })
       throw new Error('Bearer private-access-token')
     })
     const { frames, done } = collect(ctx)
     await vi.waitFor(() => { expect(frames.at(-1)?.prompt).toBeDefined() })
     const current = frames.at(-1)!
-    expect(() => ctx.authorizationController.answer(current.attemptId, current.prompt!.id, 'other'))
+    expect(() => { ctx.authorizationController.answer(current.attemptId, current.prompt!.id, 'other') })
       .toThrow('Invalid authorization answer')
     ctx.authorizationController.answer(current.attemptId, current.prompt!.id, 'work')
     await done

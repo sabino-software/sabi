@@ -4,9 +4,15 @@ description: "Shipped profiles stop uploading analytics, feedback history, Sessi
 ---
 # Telemetry requires explicit opt-in
 
+English | [中文](guide.zh.md)
+
 ## Change
 
 Shipped profiles leave Session OTel, DeepSeek Session-log and plugin-inventory reporting, and Desktop product analytics unmounted. Their collection policies also default to disabled. Recording feedback remains local. Existing local sessions, diagnostics, model calls, and requested network tools continue working.
+
+Support links no longer append account, build, device, timezone, or screen identifiers. The `contactSource` option was removed from the account settings and desktop bootstrap configuration. Remove that option from custom patches.
+
+Native Codex, Claude Code, and optional OAR child runtimes are launched with their supported analytics, error reporting, and OpenTelemetry suppression controls. Model requests and explicitly requested tools still use the network.
 
 ## Migration
 
@@ -16,5 +22,5 @@ Deployments that require reporting must opt into each independent path:
 
 1. In the profile's `cordis.patch.yml`, set `disabled: false` on the desired reporting row.
 2. Set `enabled: true` for `session-log-deepseek`, `plugin-package-inventory-deepseek`, or `product-analytics`. Product analytics also requires the `desktop-product-telemetry` row and a service version.
-3. For `session-telemetry-otel`, explicitly configure `mode: FEEDBACK_ONLY` and `exporter.url`; environment variables alone no longer enable the shipped row. See its [configuration reference](../../../../../packages/session/session-telemetry-otel/README.md).
+3. For `session-telemetry-otel`, explicitly configure `mode: FEEDBACK_ONLY` and `exporter.url`; environment variables alone no longer enable the shipped row. See its [configuration reference](../../../../packages/session/session-telemetry-otel/README.md).
 4. Confirm the intended rows are enabled in the Plugins view and verify delivery against your own collector. A feedback acknowledgement confirms local recording only.

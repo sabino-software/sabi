@@ -88,6 +88,7 @@ describe('pi-ai login flows', () => {
 
     // The OAuth-only provider is exactly the case this exists for: nothing
     // else could ever configure it.
+    expect(offered.find(entry => entry.key === CODEX)?.label).toBe('ChatGPT (Codex)')
     expect(offered.find(entry => entry.key === CODEX)?.methods)
       .toEqual([{ id: 'oauth', label: expect.stringContaining('ChatGPT') as string }])
     // A provider offering both keeps both, the subscription login first.
@@ -180,7 +181,7 @@ describe('pi-ai login flows', () => {
       { kind: 'secret', message: 'Paste the key' },
       { kind: 'secret', message: 'Paste the token', placeholder: 'sk-…' },
       { kind: 'select', message: 'Which account?', options: [{ id: 'a', label: 'Work' }] },
-      { kind: 'text', message: 'Paste the code', signal: withdraw.signal },
+      { kind: 'secret', message: 'Paste the code', signal: withdraw.signal },
     ])
   })
 

@@ -554,6 +554,40 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'authorizationController',
+    summary: 'The browser carrier owns each attempt; closing it cancels and awaits the flow.',
+    description: 'The browser carrier owns each attempt; closing it cancels and awaits the flow.',
+    methods: [
+      {
+        signature: '@Remote async list(): Promise<AuthorizationFlowView[]>',
+        description: 'List registered methods and stored-record presence without reading secrets.',
+        parameters: [],
+        returns: 'redacted provider entries.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *begin(key: CredentialKey, method: string, signal: AbortSignal): AsyncIterable<AuthorizationFrame>',
+        description: 'Start one conversation. Frames replace previous notices and unanswered prompts.',
+        parameters: [{ name: 'key', description: 'registered credential key.' }, { name: 'method', description: 'method declared by that flow.' }, { name: 'signal', description: 'carrier-owned cancellation; disconnect cancels rather than restarting OAuth.' }],
+        returns: 'current interaction frames and a redacted terminal outcome.',
+      },
+      {
+        signature: '@Remote answer(attemptId: AuthorizationAttemptId, promptId: AuthorizationPromptId, value: string): void',
+        description: 'Answer only the current question; a callback-withdrawn question rejects stale answers.',
+        parameters: [{ name: 'attemptId', description: 'capability delivered by the attempt stream.' }, { name: 'promptId', description: 'capability of the currently displayed question.' }, { name: 'value', description: 'human answer; never retained in an event, snapshot, or error.' }],
+      },
+      {
+        signature: '@Remote async cancel(attemptId: AuthorizationAttemptId): Promise<void>',
+        description: 'Cancel and await settlement, including a credential commit already admitted.',
+        parameters: [{ name: 'attemptId', description: 'capability delivered by the initiating attempt stream.' }],
+      },
+      {
+        signature: '@Remote async logout(key: CredentialKey): Promise<void>',
+        description: 'Remove only a registered flow\'s app-owned credential; active sign-in must settle first.',
+        parameters: [{ name: 'key', description: 'registered credential key.' }],
+      },
+    ],
+  },
+  {
     key: 'browserUse',
     summary: 'Owns one optional provider registration in the shared browser-use service.',
     description: 'Owns one optional provider registration in the shared browser-use service.',
@@ -1013,9 +1047,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async reportNotificationEvent(id: AccountNotificationId, event: AccountNotificationEvent, client: AccountClientMetadata): Promise<boolean>',
-        description: 'Report a notification interaction; the backend decides consumption.',
+        description: 'Report a notification interaction only when explicitly enabled; the backend decides consumption.',
         parameters: [{ name: 'id', description: 'notification the user interacted with.' }, { name: 'event', description: 'displayed frame, non-dismiss action click, or explicit dismissal.' }, { name: 'client', description: 'identity of the requesting UI for this call.' }],
-        returns: 'true once the server accepts the event; false if signed out or credentials changed during the call.',
+        returns: 'true once the server accepts the event; false if reporting is disabled, signed out, or credentials changed during the call.',
       },
       {
         signature: 'async rejectToken(token: string): Promise<void>',
@@ -6026,12 +6060,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'AuthorizationAttemptId',
+    declaration: 'export type AuthorizationAttemptId = Branded<\'AuthorizationAttemptId\'>;',
+  },
+  {
     name: 'AuthorizationEntry',
     declaration: 'export interface AuthorizationEntry {\n    key: CredentialKey;\n    label: string;\n    methods: readonly AuthorizationMethod[];\n    inFlight: boolean;\n}',
   },
   {
     name: 'AuthorizationFlow',
     declaration: 'export interface AuthorizationFlow {\n    readonly key: CredentialKey;\n    readonly label: string;\n    readonly methods: readonly [\n        AuthorizationMethod,\n        ...AuthorizationMethod[]\n    ];\n    run(session: AuthorizationSession): Promise<void>;\n}',
+  },
+  {
+    name: 'AuthorizationFlowView',
+    declaration: 'export interface AuthorizationFlowView extends AuthorizationEntry {\n    configured: boolean;\n    writable: boolean;\n}',
+  },
+  {
+    name: 'AuthorizationFrame',
+    declaration: 'export interface AuthorizationFrame {\n    attemptId: AuthorizationAttemptId;\n    status: \'running\' | \'authorized\' | \'cancelled\' | \'failed\';\n    notice?: AuthorizationNotice;\n    prompt?: {\n        id: AuthorizationPromptId;\n        question: AuthorizationQuestion;\n    };\n}',
   },
   {
     name: 'AuthorizationInteraction',
@@ -6054,8 +6100,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AuthorizationPrompt = {\n    signal?: AbortSignal;\n} & ({\n    kind: \'text\';\n    message: string;\n    placeholder?: string;\n} | {\n    kind: \'secret\';\n    message: string;\n    placeholder?: string;\n} | {\n    kind: \'select\';\n    message: string;\n    options: readonly AuthorizationPromptOption[];\n});',
   },
   {
+    name: 'AuthorizationPromptId',
+    declaration: 'export type AuthorizationPromptId = Branded<\'AuthorizationPromptId\'>;',
+  },
+  {
     name: 'AuthorizationPromptOption',
     declaration: 'export interface AuthorizationPromptOption {\n    id: string;\n    label: string;\n    description?: string;\n}',
+  },
+  {
+    name: 'AuthorizationQuestion',
+    declaration: 'export type AuthorizationQuestion = {\n    [Kind in AuthorizationPrompt[\'kind\']]: Omit<Extract<AuthorizationPrompt, {\n        kind: Kind;\n    }>, \'signal\'>;\n}[AuthorizationPrompt[\'kind\']];',
   },
   {
     name: 'AuthorizationRequest',

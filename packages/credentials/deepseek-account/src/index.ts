@@ -699,7 +699,7 @@ export class DeepSeekAccount extends TypertRemoteService {
     const deadline = new AbortController()
     let expiresAt = Date.now() + this.attemptTimeout
     const signal = AbortSignal.any([session.signal, deadline.signal])
-    let timer = setTimeout(() =>{  deadline.abort() }, this.attemptTimeout)
+    let timer = setTimeout(() => { deadline.abort() }, this.attemptTimeout)
     const abort = (): void => { code.reject(new PlatformAuthError('expired')) }
     signal.addEventListener('abort', abort, { once: true })
     try {
@@ -738,7 +738,7 @@ export class DeepSeekAccount extends TypertRemoteService {
       const remaining = expiresAt - now
       if (remaining <= 0) { deadline.abort(); signal.throwIfAborted() }
       clearTimeout(timer)
-      timer = setTimeout(() =>{  deadline.abort() }, remaining)
+      timer = setTimeout(() => { deadline.abort() }, remaining)
       this.update(attempt, { phase: 'waiting-browser', authorizeUrl, expiresAt })
       const receivedCode = await code.promise
       signal.throwIfAborted()

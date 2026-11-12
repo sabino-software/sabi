@@ -42,7 +42,7 @@ describe('Models provider sign-in', () => {
 
   it('shows a safe browser link, masks answers, clears the draft, and cancels', async () => {
     const { store, commands } = harness()
-    act(() => { store.update(state => {
+    act(() => { store.update((state) => {
       state.active = { key: KEY, frame: { attemptId: ATTEMPT, status: 'running',
         notice: { message: 'Continue in your browser', url: 'https://example.com/oauth', code: 'ABCD' },
         prompt: { id: PROMPT, question: { kind: 'secret', message: 'Callback code' } } } }
@@ -60,7 +60,7 @@ describe('Models provider sign-in', () => {
     expect(document.body.textContent).not.toContain('private-code')
     fireEvent.click(screen.getByRole('button', { name: en.cancel }))
     expect(commands.cancel).toHaveBeenCalledOnce()
-    act(() => { store.update(state => {
+    act(() => { store.update((state) => {
       state.active = { key: KEY, frame: { attemptId: ATTEMPT, status: 'cancelled' } }
     }) })
     expect(screen.getByText(en.authCancelled)).toBeDefined()
@@ -69,13 +69,13 @@ describe('Models provider sign-in', () => {
 
   it('refuses unsafe link schemes and displays success, failure, and stored-state changes', () => {
     const { store } = harness()
-    act(() => { store.update(state => {
+    act(() => { store.update((state) => {
       state.active = { key: KEY, frame: { attemptId: ATTEMPT, status: 'running', notice: { message: 'Open browser', url: 'javascript:alert(1)' } } }
     }) })
     expect(screen.queryByRole('link')).toBeNull()
-    act(() => { store.update(state => { state.active = { key: KEY, frame: { attemptId: ATTEMPT, status: 'failed' } } }) })
+    act(() => { store.update((state) => { state.active = { key: KEY, frame: { attemptId: ATTEMPT, status: 'failed' } } }) })
     expect(screen.getByText(en.authFailed)).toBeDefined()
-    act(() => { store.update(state => {
+    act(() => { store.update((state) => {
       state.active = { key: KEY, frame: { attemptId: ATTEMPT, status: 'authorized' } }
       state.entries = state.entries.map(entry => ({ ...entry, configured: true }))
     }) })
@@ -86,13 +86,13 @@ describe('Models provider sign-in', () => {
 
   it('confirms sign-out and keeps a visible, localized failure for unsuccessful removal', async () => {
     const { store, commands } = harness()
-    act(() => { store.update(state => { state.entries = state.entries.map(entry => ({ ...entry, configured: true })) }) })
+    act(() => { store.update((state) => { state.entries = state.entries.map(entry => ({ ...entry, configured: true })) }) })
     fireEvent.click(screen.getByRole('button', { name: en.authSignOut }))
     const dialog = screen.getByRole('dialog', { name: en.authSignOutTitle })
     expect(commands.logout).not.toHaveBeenCalled()
     await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: en.authSignOut })) })
     expect(commands.logout).toHaveBeenCalledWith(KEY)
-    act(() => { store.update(state => { state.error = 'logout' }) })
+    act(() => { store.update((state) => { state.error = 'logout' }) })
     expect(screen.getByRole('alert').textContent).toBe(en.authLogoutFailed)
     expect(screen.getByText(en.authStored)).toBeDefined()
   })

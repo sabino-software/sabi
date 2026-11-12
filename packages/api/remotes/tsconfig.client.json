@@ -11,8 +11,12 @@
     "src/types.ts"
   ],
   "references": [
-    { "path": "../../team/agent-team" },
-    { "path": "../../client/product-analytics/tsconfig.client.json" },
+    {
+      "path": "../../team/agent-team"
+    },
+    {
+      "path": "../../client/product-analytics/tsconfig.client.json"
+    },
     {
       "path": "../../../vendor/cordis"
     },
@@ -117,6 +121,9 @@
     },
     {
       "path": "../../web/web"
+    },
+    {
+      "path": "../authorization-controller/tsconfig.client.json"
     }
   ]
 }

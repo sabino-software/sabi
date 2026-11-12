@@ -40,7 +40,8 @@ const UNSERVED_OAUTH: ReadonlySet<string> = new Set(['openai'])
 function loginMethods(provider: Provider | undefined): AuthorizationMethod[] {
   const methods: AuthorizationMethod[] = []
   const oauth = provider === undefined || UNSERVED_OAUTH.has(provider.id) ? undefined : provider.auth.oauth
-  if (oauth !== undefined) methods.push({ id: 'oauth', label: oauth.loginLabel ?? oauth.name })
+  if (oauth !== undefined) methods.push({ id: 'oauth', label: provider?.id === 'openai-codex'
+    ? 'Sign in with ChatGPT' : oauth.loginLabel ?? oauth.name })
   const apiKey = provider?.auth.apiKey
   if (apiKey?.login !== undefined) methods.push({ id: 'api-key', label: apiKey.name })
   return methods
@@ -89,11 +90,9 @@ function relay(event: AuthEvent, session: AuthorizationSession): void {
 /**
  * Restate one pi-ai prompt in the seam's vocabulary.
  *
- * `manual_code` becomes a plain text question because the difference pi-ai
- * draws — a code the human copies from a browser rather than a value they know
- * — changes nothing a surface renders. Its own `signal` is carried through, and
- * that is the part which matters: it is how a flow racing a typed code against
- * a browser callback withdraws the losing question.
+ * `manual_code` becomes a secret question because an OAuth callback code can
+ * authorize a credential exchange. Its signal is carried through so a flow
+ * racing a typed code against a browser callback withdraws the losing question.
  * @param prompt - what pi-ai asked.
  * @returns the neutral prompt to put to the human.
  */
@@ -102,6 +101,7 @@ function restate(prompt: AuthPrompt): AuthorizationPrompt {
   switch (prompt.type) {
     case 'select':
       return { ...signal, kind: 'select', message: prompt.message, options: prompt.options }
+    case 'manual_code':
     case 'secret':
       return {
         ...signal,
@@ -148,7 +148,7 @@ export function registerPiAiFlows(ctx: Context, auth: PiAiAuthInjection): void {
     }
     ctx.authorization.registerFlow({
       key: recordKeyFor(providerId),
-      label: provider.name,
+      label: providerId === 'openai-codex' ? 'ChatGPT (Codex)' : provider.name,
       methods: [first, ...rest],
       async run(session) {
         // A collection of its own, holding only the provider being signed

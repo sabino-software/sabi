@@ -132,6 +132,51 @@ async begin(request: AuthorizationRequest): Promise<AuthorizationOutcome>
 
 Source: [`packages/credentials/authorization/src/index.ts`](../../packages/credentials/authorization/src/index.ts)
 
+<a id="ctxauthorizationcontroller--authorizationcontroller"></a>
+
+### `ctx.authorizationController` — `AuthorizationController`
+
+The browser carrier owns each attempt; closing it cancels and awaits the flow.
+
+```ts cordis-catalog
+/**
+ * List registered methods and stored-record presence without reading secrets.
+ * @returns redacted provider entries.
+ */
+@Remote async list(): Promise<AuthorizationFlowView[]>
+
+/**
+ * Start one conversation. Frames replace previous notices and unanswered prompts.
+ * @param key - registered credential key.
+ * @param method - method declared by that flow.
+ * @param signal - carrier-owned cancellation; disconnect cancels rather than restarting OAuth.
+ * @returns current interaction frames and a redacted terminal outcome.
+ */
+@Remote({ mode: 'stream' }) async *begin(key: CredentialKey, method: string, signal: AbortSignal): AsyncIterable<AuthorizationFrame>
+
+/**
+ * Answer only the current question; a callback-withdrawn question rejects stale answers.
+ * @param attemptId - capability delivered by the attempt stream.
+ * @param promptId - capability of the currently displayed question.
+ * @param value - human answer; never retained in an event, snapshot, or error.
+ */
+@Remote answer(attemptId: AuthorizationAttemptId, promptId: AuthorizationPromptId, value: string): void
+
+/**
+ * Cancel and await settlement, including a credential commit already admitted.
+ * @param attemptId - capability delivered by the initiating attempt stream.
+ */
+@Remote async cancel(attemptId: AuthorizationAttemptId): Promise<void>
+
+/**
+ * Remove only a registered flow's app-owned credential; active sign-in must settle first.
+ * @param key - registered credential key.
+ */
+@Remote async logout(key: CredentialKey): Promise<void>
+```
+
+Source: [`packages/api/authorization-controller/src/index.ts`](../../packages/api/authorization-controller/src/index.ts)
+
 <a id="ctxcredentials--credentialprovider-abstract-seam"></a>
 
 ### `ctx.credentials` — `CredentialProvider` (abstract seam)
@@ -307,11 +352,11 @@ Account login, credentials, and client-safe Remote operations.
 @Remote async getNotificationContent(id: AccountNotificationId, client: AccountClientMetadata): Promise<AccountNotification | null>
 
 /**
- * Report a notification interaction; the backend decides consumption.
+ * Report a notification interaction only when explicitly enabled; the backend decides consumption.
  * @param id - notification the user interacted with.
  * @param event - displayed frame, non-dismiss action click, or explicit dismissal.
  * @param client - identity of the requesting UI for this call.
- * @returns true once the server accepts the event; false if signed out or credentials changed during the call.
+ * @returns true once the server accepts the event; false if reporting is disabled, signed out, or credentials changed during the call.
  */
 @Remote async reportNotificationEvent(id: AccountNotificationId, event: AccountNotificationEvent, client: AccountClientMetadata): Promise<boolean>
 
