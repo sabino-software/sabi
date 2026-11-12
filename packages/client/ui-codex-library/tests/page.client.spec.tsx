@@ -6,7 +6,8 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { CodexLibraryPage } from '../src/client/page.tsx'
 import { en } from '../src/client/locales.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async importOriginal => ({
+  ...await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(),
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props}>{children}</button>,
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
   IconLayersOutlineRegular: () => null,
@@ -26,7 +27,7 @@ function mount(options: { available?: boolean; failSync?: boolean; loading?: boo
   const useResource = ((address: string) => {
     addresses.push(address)
     return { status: options.loading ? 'loading' : 'live', failure: undefined, value: options.loading ? undefined : {
-      codex: { connected: true, error: null }, axiom: { available: options.available ?? true, phase: 'needs-login' }, syncing: false,
+      codex: { connected: true, authenticated: true, selected: true, error: null }, axiom: { available: options.available ?? true, phase: 'needs-login' }, syncing: false,
     } }
   }) as PageProps['useResource']
   render(<CodexLibraryPage {...{ useResource, t: makeTranslate(en), syncCodex, connectAxiom, showAxiomLogin } as PageProps} />)
