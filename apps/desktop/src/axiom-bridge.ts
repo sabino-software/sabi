@@ -4,6 +4,9 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { AxiomSendRequest, AxiomSendResult, AxiomSnapshot } from './axiom-protocol.ts'
 import { readAxiomPage, focusAxiomComposer, clickAxiomSend, findAxiomAcknowledgement } from './axiom-page.ts'
+import { axiomConversationUrl, axiomNavigation } from './axiom-navigation.ts'
+
+export { axiomConversationUrl } from './axiom-navigation.ts'
 
 const pageSchema = z.object({
   url: z.string().max(4096), title: z.string().max(300),
@@ -14,21 +17,6 @@ const pageSchema = z.object({
 })
 const requestSchema = z.object({ requestId: z.string().min(8).max(200).regex(/^[a-zA-Z0-9_-]+$/u),
   revision: z.number().int().nonnegative(), text: z.string().min(1).max(131072) }).strict()
-
-/**
- * Accept only a directly selected original ChatGPT Dot conversation, without URL decorations.
- * @param value Renderer-supplied saved selection.
- * @returns Canonical URL containing no authentication or query material.
- */
-export function axiomConversationUrl(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 4096) throw new Error('Axiom requires a ChatGPT Dot conversation URL')
-  const url = new URL(value)
-  if (url.origin !== 'https://chatgpt.com' || url.username || url.password || url.search || url.hash
-    || !/^\/dots\/[a-zA-Z0-9_~-]+\/?$/u.test(url.pathname)) {
-    throw new Error('Axiom requires a ChatGPT Dot conversation URL')
-  }
-  return url.href.replace(/\/$/u, '')
-}
 
 function initialSnapshot(): AxiomSnapshot {
   return { source: 'chatgpt-web', url: null, title: '', revision: 0, phase: 'disconnected',
@@ -46,6 +34,8 @@ export class DesktopAxiomPage {
   private sending = false
   private closing = false
   private sessionConfigured = false
+  private authenticating = false
+  private readonly loginPopups = new Set<BrowserWindow>()
   private readonly submissions = new Map<string, { digest: string; pending?: Promise<AxiomSendResult>; outcome?: Pick<AxiomSendResult, 'status' | 'messageId'> }>()
 
   /** @param publish Sends safe projections only to the owned application renderer. */
@@ -80,17 +70,54 @@ export class DesktopAxiomPage {
         backgroundThrottling: false, spellcheck: false },
     })
     this.page = page
-    page.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-    const allowNavigation = (target: string): boolean => {
-      try { const next = new URL(target); return next.origin === 'https://chatgpt.com' && !next.username && !next.password }
-      catch (_invalidDestination) { return false }
+    const admit = (target: string): boolean => {
+      const category = axiomNavigation(target, url, this.authenticating)
+      if (category === 'authentication') this.authenticating = true
+      return category !== 'blocked'
     }
-    page.webContents.on('will-frame-navigate', event => {
-      if (event.isMainFrame && !allowNavigation(event.url)) event.preventDefault()
+    page.webContents.setWindowOpenHandler(details => {
+      if (this.page !== page || generation !== this.generation || !page.isVisible()
+        || this.loginPopups.size > 0 || details.postBody !== undefined
+        || axiomNavigation(details.url, url, this.authenticating) !== 'authentication') return { action: 'deny' }
+      this.authenticating = true
+      return { action: 'allow', overrideBrowserWindowOptions: { show: true, width: 600, height: 800,
+        webPreferences: { session: browserSession, nodeIntegration: false, nodeIntegrationInWorker: false,
+          nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: true, webSecurity: true,
+          allowRunningInsecureContent: false, webviewTag: false, navigateOnDragDrop: false },
+      } }
     })
-    page.webContents.on('will-redirect', (event, target, _inPlace, mainFrame) => {
-      if (mainFrame && !allowNavigation(target)) event.preventDefault()
+    const guardNavigation = (window: BrowserWindow): void => {
+      window.webContents.on('will-frame-navigate', event => {
+        if (event.isMainFrame && !admit(event.url)) event.preventDefault()
+      })
+      window.webContents.on('will-redirect', (event, target, _inPlace, mainFrame) => {
+        if (mainFrame && !admit(target)) event.preventDefault()
+      })
+    }
+    guardNavigation(page)
+    const returnToSelected = (window: BrowserWindow): void => {
+      if (this.page !== page || generation !== this.generation || window.isDestroyed()) return
+      const category = axiomNavigation(window.webContents.getURL(), url, this.authenticating)
+      if (category !== 'return' && !(window !== page && category === 'conversation')) return
+      this.authenticating = false
+      if (window !== page) window.destroy()
+      void page.loadURL(url).catch((_loginReturnFailure: unknown) => {
+        if (this.page === page) this.unavailable('page-unavailable')
+      })
+    }
+    page.webContents.on('did-create-window', popup => {
+      if (this.page !== page || generation !== this.generation) { popup.destroy(); return }
+      this.loginPopups.add(popup)
+      guardNavigation(popup)
+      popup.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+      popup.webContents.on('will-attach-webview', event => { event.preventDefault() })
+      popup.webContents.on('did-finish-load', () => { returnToSelected(popup) })
+      popup.once('closed', () => {
+        this.loginPopups.delete(popup)
+        if (this.page === page) void this.snapshot()
+      })
     })
+    page.webContents.on('did-finish-load', () => { returnToSelected(page) })
     page.webContents.on('will-attach-webview', event => { event.preventDefault() })
     page.webContents.on('render-process-gone', () => { if (this.page === page) this.unavailable('page-unavailable') })
     page.on('close', event => { if (!this.closing) { event.preventDefault(); page.hide() } })
@@ -113,7 +140,7 @@ export class DesktopAxiomPage {
     return pending
   }
 
-  /** Show the actual original page for direct website authentication or an unsupported interaction. */
+  /** Show the original page for direct OpenAI authentication; any approved login popup shares its isolated session. */
   showLogin(): void {
     if (this.page === undefined || this.page.isDestroyed()) throw new Error('Connect an original conversation first')
     this.page.show()
@@ -127,6 +154,9 @@ export class DesktopAxiomPage {
     this.refreshing = undefined
     const page = this.page
     this.page = undefined
+    this.authenticating = false
+    for (const popup of this.loginPopups) if (!popup.isDestroyed()) popup.destroy()
+    this.loginPopups.clear()
     this.selected = null
     this.closing = true
     if (page !== undefined && !page.isDestroyed()) page.destroy()
@@ -207,10 +237,11 @@ export class DesktopAxiomPage {
   private async read(generation: number): Promise<AxiomSnapshot> {
     const page = this.page
     if (page === undefined || page.isDestroyed()) return this.current
-    if (!this.matches(page.webContents.getURL())) {
+    if (this.loginPopups.size > 0 || !this.matches(page.webContents.getURL())) {
       const currentUrl = page.webContents.getURL()
       if (currentUrl === '' || currentUrl === 'about:blank') return this.current
-      const loginPage = /^https:\/\/chatgpt\.com\/(?:auth(?:\/|$)|$)/u.test(currentUrl)
+      const category = this.selected === null ? 'blocked' : axiomNavigation(currentUrl, this.selected, this.authenticating)
+      const loginPage = this.loginPopups.size > 0 || category === 'authentication' || category === 'return'
       this.update({ ...initialSnapshot(), url: this.selected, phase: loginPage ? 'login-required' : 'unavailable',
         ...loginPage ? {} : { errorCode: 'unsupported-page' as const } })
       return this.current
