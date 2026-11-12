@@ -8,7 +8,7 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import { expect, it, onTestFinished } from 'vitest'
 import type { AxiomSendRequest, AxiomSendResult, AxiomSnapshot } from '../../desktop/src/axiom-protocol.ts'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
-import { newEnglishPage, revealNavigationDrawer } from './support.ts'
+import { newEnglishPage, revealNavigationDrawer, REPO_ROOT } from './support.ts'
 
 type Json = Record<string, unknown>
 function object(value: unknown): Json {
@@ -193,44 +193,66 @@ it.skipIf(process.platform === 'win32')('continues original Codex and Axiom chat
   browser = await chromium.launch({ headless: true })
   const page = await newEnglishPage(browser)
   const console = watchConsole(page)
-  await page.goto(scaffold.authenticatedUrl)
-  await revealNavigationDrawer(page, 'en')
-  const workspace = page.locator('[data-row-key^="workspace:"]').filter({ hasText: 'native-e2e-workspace' }).first()
-  await workspace.waitFor()
-  if (await workspace.getAttribute('aria-expanded') !== 'true') await workspace.click()
-  const codexRow = page.locator('[data-row-key^="session:"]').filter({ hasText: 'Existing work coding chat' })
-  const axiomRow = page.locator('[data-row-key^="session:"]').filter({ hasText: 'Existing Axiom conversation' })
-  await codexRow.getByLabel('Codex', { exact: true }).waitFor()
-  await axiomRow.getByLabel('Axiom', { exact: true }).waitFor()
-  expect(daemon.frames.some(frame => frame.method === 'thread/items/list' || frame.method === 'turn/start')).toBe(false)
-  expect(scaffold.ctx.sessions.list()).toEqual([])
+  const captureFailure = async (): Promise<void> => {
+    const artifacts = join(REPO_ROOT, '.cache', 'native-browser-e2e')
+    await mkdir(artifacts, { recursive: true })
+    await page.screenshot({ path: join(artifacts, 'native-chat-failure.png'), fullPage: true })
+    await writeFile(join(artifacts, 'native-chat-failure.json'), JSON.stringify({
+      text: await page.locator('body').innerText(),
+      rows: await page.locator('[data-row-key]').evaluateAll(rows => rows.map(row => row.outerHTML)),
+      sessions: await rpc(scaffold!, 'session/list', { _request: {} }),
+      console,
+    }, null, 2))
+  }
+  try {
+    await page.goto(scaffold.authenticatedUrl)
+    await revealNavigationDrawer(page, 'en')
+    const workspace = page.locator('[data-row-key^="workspace:"]').filter({ hasText: 'native-e2e-workspace' }).first()
+    await workspace.waitFor()
+    await expect.poll(async () => {
+      if (await workspace.getAttribute('aria-expanded') !== 'true') await workspace.click()
+      return workspace.getAttribute('aria-expanded')
+    }, { timeout: 10000 }).toBe('true')
+    const codexRow = page.locator('[data-row-key^="session:"]').filter({ hasText: 'Existing work coding chat' })
+    const axiomRow = page.locator('[data-row-key^="session:"]').filter({ hasText: 'Existing Axiom conversation' })
+    await codexRow.getByLabel('Codex', { exact: true }).waitFor()
+    await axiomRow.getByLabel('Axiom', { exact: true }).waitFor()
+    expect(daemon.frames.some(frame => frame.method === 'thread/items/list' || frame.method === 'turn/start')).toBe(false)
+    for (const row of [codexRow, axiomRow]) {
+      const key = await row.getAttribute('data-row-key')
+      expect(scaffold.ctx.sessions.list().some(session => `session:${session.id}` === key)).toBe(false)
+    }
 
-  await codexRow.click()
-  await page.getByText('Original work question from the source.', { exact: true }).waitFor()
-  await page.getByText('Original work answer from the source.', { exact: true }).waitFor()
-  const composer = page.locator('[data-composer-input][contenteditable="true"]').last()
-  await composer.fill('Continue this exact work thread.')
-  const codexSettled = scaffold.whenTurnSettled(30000)
-  await page.getByRole('button', { name: 'Send message', exact: true }).click()
-  await codexSettled
-  await page.getByText('Continued original work answer.', { exact: true }).waitFor()
-  expect(daemon.frames.filter(frame => frame.method === 'turn/start').map(frame => frame.params)).toEqual([
-    expect.objectContaining({ threadId: 'existing-codex-thread', input: [{ type: 'text', text: 'Continue this exact work thread.', text_elements: [] }] }),
-  ])
-  expect(daemon.frames.some(frame => frame.method === 'thread/start')).toBe(false)
-  expect(daemon.catalog().length).toBeGreaterThan(0)
+    await codexRow.click()
+    await page.getByText('Original work question from the source.', { exact: true }).waitFor()
+    await page.getByText('Original work answer from the source.', { exact: true }).waitFor()
+    const composer = page.locator('[data-composer-input][contenteditable="true"]').last()
+    await composer.fill('Continue this exact work thread.')
+    const codexSettled = scaffold.whenTurnSettled(30000)
+    await page.getByRole('button', { name: 'Send message', exact: true }).click()
+    await codexSettled
+    await page.getByText('Continued original work answer.', { exact: true }).waitFor()
+    expect(daemon.frames.filter(frame => frame.method === 'turn/start').map(frame => frame.params)).toEqual([
+      expect.objectContaining({ threadId: 'existing-codex-thread', input: [{ type: 'text', text: 'Continue this exact work thread.', text_elements: [] }] }),
+    ])
+    expect(daemon.frames.some(frame => frame.method === 'thread/start')).toBe(false)
+    expect(daemon.catalog().length).toBeGreaterThan(0)
 
-  await axiomRow.click()
-  await page.getByText('Original Axiom question.', { exact: true }).waitFor()
-  await page.getByText('Axiom answer', { exact: true }).waitFor()
-  await composer.fill('Continue Axiom exactly.\nKeep this second line.')
-  const axiomSettled = scaffold.whenTurnSettled(30000)
-  await page.getByRole('button', { name: 'Send message', exact: true }).click()
-  await axiomSettled
-  await page.getByText('Continued original Axiom answer.', { exact: true }).waitFor()
-  expect(source.sent.map(request => request.text)).toEqual(['Continue Axiom exactly.\nKeep this second line.'])
-  expect(await page.locator('iframe').count()).toBe(0)
-  expect(await page.getByText('Read-only source', { exact: true }).count()).toBe(0)
-  expect(console.pageErrors).toEqual([])
-  expect(daemon.failures).toEqual([])
+    await axiomRow.click()
+    await page.getByText('Original Axiom question.', { exact: true }).waitFor()
+    await page.getByText('Axiom answer', { exact: true }).waitFor()
+    await composer.fill('Continue Axiom exactly.\nKeep this second line.')
+    const axiomSettled = scaffold.whenTurnSettled(30000)
+    await page.getByRole('button', { name: 'Send message', exact: true }).click()
+    await axiomSettled
+    await page.getByText('Continued original Axiom answer.', { exact: true }).waitFor()
+    expect(source.sent.map(request => request.text)).toEqual(['Continue Axiom exactly.\nKeep this second line.'])
+    expect(await page.locator('iframe').count()).toBe(0)
+    expect(await page.getByText('Read-only source', { exact: true }).count()).toBe(0)
+    expect(console.pageErrors).toEqual([])
+    expect(daemon.failures).toEqual([])
+    const artifacts = join(REPO_ROOT, '.cache', 'native-browser-e2e')
+    await mkdir(artifacts, { recursive: true })
+    await page.screenshot({ path: join(artifacts, 'native-chat-success.png'), fullPage: true })
+  } catch (error) { await captureFailure(); throw error }
 })
