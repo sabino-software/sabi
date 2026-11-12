@@ -26,9 +26,9 @@ Best-effort active Loader-backed plugin package inventory for official DeepSeek 
 
 | Key | Default | Meaning |
 |---|---:|---|
-| `enabled` | `true` | Register the `dsh_plugin_packages` contribution. Set it to `false` to omit package metadata. |
+| `enabled` | `false` | Register the `dsh_plugin_packages` contribution. Set it to `false` to omit package metadata. |
 
-Shipped profiles use the default, so every official DeepSeek request carries the package inventory when preparation succeeds.
+Shipped profiles leave this plugin unmounted with `enabled: false`; official model requests omit `dsh_plugin_packages`. Reporting requires an explicit profile patch that enables the row and sets `enabled: true`.
 
 <a id="collection"></a>
 ## Collection

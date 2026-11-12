@@ -33,7 +33,7 @@ afterEach(async () => {
 
 /** Boot the official upload route through the Loader with one session-log configuration. */
 async function boot(
-  sessionLog: { enabled: boolean; maxBytes?: number }, mock: MockLlmServerOptions,
+  sessionLog: { enabled?: boolean; maxBytes?: number }, mock: MockLlmServerOptions,
 ): Promise<{ ctx: Context; server: MockLlmServer }> {
   root = await mkdtemp(join(tmpdir(), 'dsh-feedback-upload-'))
   vi.stubEnv('DSH_HOME', root)
@@ -205,4 +205,18 @@ it('changes API log upload on the next request without replacing the plugin fibe
   const resumed = (server.requests[2]!.body as { dsh_session_log: DeepSeekSessionLogExtension }).dsh_session_log
   expect(resumed.afterSeq).toBe(accepted)
   expect(resumed.events.some(event => event.type === 'feedback/record')).toBe(true)
+})
+
+it('keeps feedback local by default while ordinary model requests still succeed', async () => {
+  const { ctx, server } = await boot({}, { sequence: ['success'], repeatLast: true })
+  const session = ctx.sessions.create(SessionId('private-feedback'))
+  session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'Hello' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+  recordFeedback(session, { text: 'Local feedback' })
+  const chunks = []
+  for await (const chunk of ctx.llm.stream({ provider: 'deepseek-official', model: 'deepseek-v4-flash', sessionId: session.id, messages: session.deriveMessages() })) chunks.push(chunk)
+  expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'stop' } })
+  expect(server.requests).toHaveLength(1)
+  expect(server.requests[0]!.body).not.toHaveProperty('dsh_session_log')
+  expect(session.snapshotEvents().some(event => event.type === 'feedback/record')).toBe(true)
+  expect(session.snapshotEvents().some(event => event.type === 'session-log-deepseek/delivery-accepted')).toBe(false)
 })

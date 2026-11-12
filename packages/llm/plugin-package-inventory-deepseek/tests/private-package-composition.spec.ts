@@ -46,6 +46,7 @@ it.each([true, false])('reports an unversioned package by name alongside a versi
     '- name: cordis:projections',
     '- name: cordis:deepseek-extensions',
     '- name: cordis:plugin-inventory',
+    '  config: { enabled: true }',
     `- name: ${JSON.stringify(privateUrl)}`,
     `- name: ${JSON.stringify(siblingUrl)}`,
     '',

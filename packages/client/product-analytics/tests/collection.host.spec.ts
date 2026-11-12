@@ -21,7 +21,7 @@ beforeEach(() => { vi.resetAllMocks(); vi.mocked(collectEnvironment).mockResolve
 const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose() })
 
-async function setup(enabled: boolean) {
+async function setup(enabled?: boolean) {
   const ctx = new Context()
   cleanup.push(() => ctx.fiber.dispose())
   const getDeviceIdentity = vi.fn().mockResolvedValue({ deviceId: 'login-device', userId: 'user-1', osVersion: 'fixture-os', ignored: 'private-field' })
@@ -29,12 +29,12 @@ async function setup(enabled: boolean) {
   ctx.provide('deepseekAccount', { getDeviceIdentity } as never)
   ctx.provide('webServer', {} as never)
   ctx.provide('productTelemetry', { emit } as never)
-  const fiber = await ctx.plugin(Analytics, { enabled, appVersion: 'test-version' })
+  const fiber = await ctx.plugin(Analytics, { ...enabled === undefined ? {} : { enabled }, appVersion: 'test-version' })
   return { ctx, fiber, getDeviceIdentity, emit }
 }
 
-it('disabled collection does not read identity or submit an event', async () => {
-  const b = await setup(false)
+it.each([undefined, false])('default and disabled collection do not read identity or submit an event: %s', async (enabled) => {
+  const b = await setup(enabled)
   expect(b.ctx.productAnalytics.enabled()).toBe(false)
   await b.ctx.productAnalytics.report({ eventName: 'desktop_app_launch', timestamp: 100, attributes: {} })
   expect(collectEnvironment).not.toHaveBeenCalled()

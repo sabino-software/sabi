@@ -32,10 +32,10 @@ describe('dsh-base bundle', () => {
     )
     expect(rows.length).toBeGreaterThan(50)
     expect(rows.some(row => row.id === 'agent-loop')).toBe(true)
-    expect(rows.find(row => row.id === 'session-telemetry-otel')?.disabled).toBeUndefined()
-    expect(rows.find(row => row.id === 'session-telemetry-otel')?.config?.['mode']).toEqual({
-      __jsExpr: "process.env.DSH_TELEMETRY_MODE || 'FEEDBACK_ONLY'",
-    })
+    for (const id of ['session-telemetry-otel', 'session-log-deepseek', 'plugin-package-inventory-deepseek']) {
+      expect(rows.find(row => row.id === id)?.disabled, id).toBe(true)
+    }
+    expect(rows.find(row => row.id === 'session-telemetry-otel')?.config).toEqual({ mode: 'DISABLED' })
     expect(rows.find(row => row.id === 'hmr')).toMatchObject({
       config: { root: [] },
     })

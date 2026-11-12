@@ -26,9 +26,9 @@ kind: "package-reference"
 
 | 配置键 | 默认值 | 含义 |
 |---|---:|---|
-| `enabled` | `true` | 注册 `dsh_plugin_packages` 贡献。将其设为 `false` 可省略包元数据。 |
+| `enabled` | `false` | 注册 `dsh_plugin_packages` 贡献。将其设为 `false` 可省略包元数据。 |
 
-随附 profile 使用该默认值，因此只要准备成功，每个 DeepSeek 官方请求都会携带包清单。
+随附 profile 不挂载此插件，并设置 `enabled: false`；官方模型请求省略 `dsh_plugin_packages`。上报需要显式 profile patch 开启该行并设置 `enabled: true`。
 
 <a id="collection"></a>
 ## 收集

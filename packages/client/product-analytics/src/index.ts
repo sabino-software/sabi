@@ -13,7 +13,7 @@ import { collectEnvironment, type EnvironmentAttributes } from './environment.ts
 
 /** Application-owned collection policy; no user settings surface. */
 export interface Config {
-  /** Live application collection policy; ordinary Web does not mount this service. */
+  /** Live application collection policy; disabled by default. */
   enabled: Volatile<boolean>
   /** Running Desktop release, absent when unavailable. */
   appVersion?: string
@@ -33,7 +33,7 @@ declare module '@deepseek-ai/cordis' {
 export default class ProductAnalytics extends TypertRemoteService {
   static inject = ['deepseekAccount', 'productTelemetry']
   static Config = z.object({
-    enabled: z.boolean().default(true).volatile(), appVersion: z.string(),
+    enabled: z.boolean().default(false).volatile(), appVersion: z.string(),
     environmentQueryTimeoutMillis: z.number().step(1).min(1).max(2_147_483_647).default(5000),
     environmentQueryMaxOutputBytes: z.number().step(1).min(1).max(2_147_483_647).default(16384),
   })

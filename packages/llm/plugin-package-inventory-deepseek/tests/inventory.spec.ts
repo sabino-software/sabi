@@ -38,7 +38,7 @@ async function packagePlugin(
 }
 
 async function harness(
-  enabled?: boolean, packageService = false,
+  enabled: boolean | null = true, packageService = false,
 ): Promise<{ ctx: Context; root: string; disposeInventory: () => Promise<void> }> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-plugin-packages-'))
   roots.push(root)
@@ -52,7 +52,7 @@ async function harness(
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentPresets, { default: 'fixture' })
   await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
-  const inventory = enabled === undefined
+  const inventory = enabled === null
     ? ctx.plugin(PluginInventory)
     : ctx.plugin(PluginInventory, { enabled })
   await inventory
@@ -60,18 +60,19 @@ async function harness(
 }
 
 describe('DeepSeek plugin package inventory', () => {
-  it('contributes by default and can be explicitly disabled', async () => {
-    const defaultHarness = await harness()
+  it('omits inventory by default and contributes only after opt-in', async () => {
+    const defaultHarness = await harness(null)
     const defaultFields = await defaultHarness.ctx.deepseekLlmApiExtensions.prepare({
       body: { messages: [] }, signal: SIGNAL,
     })
-    expect(defaultFields.fields).toHaveProperty('dsh_plugin_packages')
+    expect(PluginInventory.Config({}).enabled).toBe(false)
+    expect(defaultFields.fields).not.toHaveProperty('dsh_plugin_packages')
 
-    const disabledHarness = await harness(false)
-    const disabledFields = await disabledHarness.ctx.deepseekLlmApiExtensions.prepare({
+    const enabledHarness = await harness(true)
+    const enabledFields = await enabledHarness.ctx.deepseekLlmApiExtensions.prepare({
       body: { messages: [] }, signal: SIGNAL,
     })
-    expect(disabledFields.fields).not.toHaveProperty('dsh_plugin_packages')
+    expect(enabledFields.fields).toHaveProperty('dsh_plugin_packages')
   })
 
   it('reports active package versions once, retains parallel versions, and excludes inactive or loose entries', async () => {

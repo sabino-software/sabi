@@ -7,9 +7,9 @@ kind: "package-bundle"
 
 English | [中文](README.zh.md)
 
-Desktop analytics follows the [product collection policy](../../client/product-analytics/README.md), including its live application setting. Web usage is excluded.
+Desktop and Web leave the analytics consumer and exporter unmounted by default. The optional [product collection policy](../../client/product-analytics/README.md) also defaults to disabled.
 
-Desktop analytics schedules partial batches every 30 seconds, with a 15-second exporter timeout and a 20-second processor timeout. Shutdown allows 2 seconds to drain, then cancels pending requests and retry waits so telemetry does not keep the Host alive. Pending events may be lost on exit.
+When explicitly enabled, Desktop analytics schedules partial batches every 30 seconds, with a 15-second exporter timeout, a 20-second processor timeout, and a 2-second shutdown allowance. Pending events may be lost on exit.
 
 ## Summary
 
