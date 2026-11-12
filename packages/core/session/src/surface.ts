@@ -171,6 +171,12 @@ export function validateSessionEventData(
   if (SURFACE_EVENT_TYPES.has(event.type) && isRecord(data)) {
     const message = event.type === 'user/message' ? data : data['message']
     if (isRecord(message)) {
+      const authoredAt = message['authoredAt']
+      if (authoredAt !== undefined && authoredAt !== null
+        && (typeof authoredAt !== 'number' || !Number.isSafeInteger(authoredAt)
+          || authoredAt < 0 || authoredAt > 8_640_000_000_000_000 || Object.is(authoredAt, -0))) {
+        throw new Error(`${subject} message authoredAt must be non-negative safe epoch milliseconds or null`)
+      }
       if ((event.type === 'developer/message') !== (message['role'] === 'developer')) {
         throw new Error(`${subject} developer/message and developer role must occur together`)
       }

@@ -27,6 +27,7 @@ const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
 const sessionListMetadataSchema: z.ZodType<SessionListMetadata> = z.object({
   blank: z.boolean(),
   lastPromptAt: z.number().nullable(),
+  authoredPrompt: z.literal(true).optional(),
 })
 
 const imageLimitsSchema = z.object({
@@ -50,12 +51,18 @@ export function applySessionListMetadata(
   sourceContent = false,
 ): SessionListMetadata {
   const blank = state.blank && event.type !== 'turn/start' && !sourceContent
-  const lastPromptAt = event.type === 'user/message' && event.data.source.kind === 'user'
-    ? event.time
-    : state.lastPromptAt
-  return blank === state.blank && lastPromptAt === state.lastPromptAt
+  let lastPromptAt = state.lastPromptAt
+  let authoredPrompt = state.authoredPrompt === true
+  if (event.type === 'user/message' && event.data.source.kind === 'user' && event.data.authoredAt !== null) {
+    const candidate = event.data.authoredAt ?? event.time
+    if (lastPromptAt === null || candidate >= lastPromptAt) {
+      lastPromptAt = candidate
+      authoredPrompt = event.data.authoredAt !== undefined
+    }
+  }
+  return blank === state.blank && lastPromptAt === state.lastPromptAt && authoredPrompt === (state.authoredPrompt === true)
     ? state
-    : { blank, lastPromptAt }
+    : { blank, lastPromptAt, ...authoredPrompt ? { authoredPrompt: true } : {} }
 }
 
 /**
@@ -96,7 +103,7 @@ export class ApiSessionList {
       init: () => ({ blank: true, lastPromptAt: null }),
       apply: (state, event) => applySessionListMetadata(state, event, this.ctx.bail('api-session/has-content', event) === true),
       wire: { viewSchema: sessionListMetadataSchema, view: state => state },
-      stateVersion: 2,
+      stateVersion: 3,
     })
     await this.ctx.sessionProjections.register<'imageLimits', null>({
       key: 'imageLimits',
@@ -367,6 +374,7 @@ function normalizeSearchQuery(query: string): string {
 }
 
 function updatedAt(header: SessionHeader, metadata: SessionListMetadata | undefined): number {
+  if (metadata?.authoredPrompt === true && metadata.lastPromptAt !== null) return metadata.lastPromptAt
   return Math.max(header.createdAt, metadata?.lastPromptAt ?? 0)
 }
 

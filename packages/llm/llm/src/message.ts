@@ -139,6 +139,10 @@ export type MessageSource = MessageSourceMap[keyof MessageSourceMap]
 interface MessageBase {
   /** Stable identity preserved across every representation boundary. */
   readonly id: MessageId
+  /** Original author time in Unix epoch milliseconds; null means the importing source did not record it.
+   * Absent on locally authored messages, whose Session event carries their time. This is presentation data, never request input.
+   */
+  readonly authoredAt?: number | null
   /** Exact model-facing blocks. */
   readonly content: readonly ContentBlock[]
   /** Required source fields supplied by the producer.
@@ -262,6 +266,7 @@ export function createAssistantMessage(
 ): AssistantMessage {
   return createMessage({
     role: 'assistant',
+    ...input.authoredAt === undefined ? {} : { authoredAt: input.authoredAt },
     content: input.content,
     source: {
       kind: 'model',

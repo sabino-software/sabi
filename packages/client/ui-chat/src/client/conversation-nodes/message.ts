@@ -118,6 +118,7 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         messageId: event.data.id,
         seq: event.seq,
         time: event.time,
+        ...event.data.authoredAt === undefined ? {} : { authoredAt: event.data.authoredAt },
         content: event.data.content,
         source: event.data.source,
         ...claim.firstClaimedHuman === id && followsProcessEvidence(match.location, reader)
@@ -129,6 +130,7 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         messageId: event.data.id,
         seq: event.seq,
         time: event.time,
+        ...event.data.authoredAt === undefined ? {} : { authoredAt: event.data.authoredAt },
         content: event.data.content,
         source: event.data.source,
       }

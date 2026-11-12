@@ -137,8 +137,8 @@ describe('native source history', () => {
     const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id, createdAt: 1000, isSeeded: false, cwd: root }
     const original = Session.create(id, undefined, header)
     const messages = [
-      { id: 'source-user', role: 'user' as const, text: 'Existing question' },
-      { id: 'source-assistant', role: 'assistant' as const, text: 'Existing answer' },
+      { id: 'source-user', role: 'user' as const, text: 'Existing question', timestamp: 1_600_000_000_000 },
+      { id: 'source-assistant', role: 'assistant' as const, text: 'Existing answer', timestamp: 1_600_000_000_500 },
     ]
     appendSourceMessages(original, first.checkpoint.stateOf(original), messages, 'codex-app-server', 'fixture-model', true, 1)
     const writer = await first.ctx.sessionPersistence.create(header)
@@ -154,6 +154,9 @@ describe('native source history', () => {
       appendSourceMessages(restored, second.checkpoint.stateOf(restored), [...messages, messages[1]!,
         { id: 'source-followup', role: 'assistant', text: 'New original answer' }], 'codex-app-server', 'fixture-model', true, 3)
       expect(textMessages(restored)).toEqual(['Existing question', 'Existing answer', 'New original answer'])
+      expect(restored.deriveMessages().map(message => message.authoredAt)).toEqual([
+        1_600_000_000_000, 1_600_000_000_500, null,
+      ])
       expect(restored.snapshotEvents().some(event => event.type === 'tool/call' || event.type === 'tool/result')).toBe(false)
       expect(second.checkpoint.stateOf(restored).ids).toEqual(['source-user', 'source-assistant', 'source-followup'])
       await handle.append(restored.snapshotEvents().slice(stored.events.length))
@@ -164,6 +167,9 @@ describe('native source history', () => {
       const stored = await reread.read()
       const restored = Session.fromRestore(id, stored.events, reread.header, reread.inheritedEventCount, stored.eventState)
       expect(textMessages(restored)).toEqual(['Existing question', 'Existing answer', 'New original answer'])
+      expect(restored.deriveMessages().map(message => message.authoredAt)).toEqual([
+        1_600_000_000_000, 1_600_000_000_500, null,
+      ])
       expect(second.checkpoint.stateOf(restored).ids).toEqual(['source-user', 'source-assistant', 'source-followup'])
     } finally { await reread.close() }
   })

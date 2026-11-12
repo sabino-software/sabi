@@ -82,8 +82,12 @@ export function NativeAxiomMessageView({ node, t }: MessageProps): ReactNode {
       codeLabel: t('codeLabel'), wrapLabel: t('wrap'), unwrapLabel: t('unwrap'),
     } }, footnotes: t('footnotes'),
   }), [t])
+  const timestamp = node.data.timestamp === null ? Number.NaN : Date.parse(node.data.timestamp)
   return <div className={css.body} data-native-axiom-message={node.data.id}>
     <MarkdownText text={node.data.text} labels={labels} omitHtml omitImages />
+    {Number.isFinite(timestamp) && <time className={css.timestamp} dateTime={new Date(timestamp).toISOString()}>
+      {new Date(timestamp).toLocaleString()}
+    </time>}
     {node.data.truncated && <p role="note">{t('sourceTruncated')}</p>}
   </div>
 }

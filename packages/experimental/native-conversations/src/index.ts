@@ -464,7 +464,11 @@ export default class NativeConversations extends TypertRemoteService {
     let pendingUser = false
     for (const message of snapshot.messages) {
       if (message.role === 'user') {
-        if (includeUsers) appendSourceMessages(session, this.checkpoints.stateOf(session), [{ id: message.id, role: 'user', text: message.text }], 'axiom-original', 'original-dot', snapshot.limited, this.ctx.agents.turnBoundaryOf(session).lastTurn + 1)
+        const parsedTime = message.timestamp === null ? Number.NaN : Date.parse(message.timestamp)
+        const timestamp = Number.isSafeInteger(parsedTime) && parsedTime >= 0 ? parsedTime : null
+        if (includeUsers) appendSourceMessages(session, this.checkpoints.stateOf(session),
+          [{ id: message.id, role: 'user', text: message.text, timestamp }], 'axiom-original', 'original-dot', snapshot.limited,
+          this.ctx.agents.turnBoundaryOf(session).lastTurn + 1)
         else if (!seen.has(message.id)) pendingUser = true
       } else {
         // A concurrent original-site user belongs before its reply. Reconcile the

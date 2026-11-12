@@ -63,7 +63,7 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
       {tail}
       <MessageIconActions
         text={assistantText(closing.blocks)}
-        time={closing.time}
+        time={closing.finalNode.authoredAt === null ? undefined : closing.finalNode.authoredAt ?? closing.time}
         clock="end"
         // The branch action owns boundary resolution: it sends the real
         // turn/end seq it already has, and the Host cuts exactly there.

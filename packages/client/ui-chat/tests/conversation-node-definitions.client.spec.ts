@@ -237,6 +237,26 @@ function toolResult(callId: string, text: string, isError = false) {
 }
 
 describe('built-in conversation node Definitions', () => {
+  it('preserves source-authored message dates while retaining receipt-based assistant timing', () => {
+    const authoredAt = 1_600_000_000_000
+    const value = snapshot(assembler([
+      at(0, 'turn/start', { turn: 1 }),
+      at(1, 'user/message', { ...textMessage('source-user', 'Old question'), authoredAt }, { surfaceOp: 'append' }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/message', { turn: 1, step: 1, message: {
+        id: 'source-assistant', role: 'assistant', source: { kind: 'model', provider: 'native', model: 'original' },
+        content: [{ type: 'text', text: 'Old answer' }], authoredAt: authoredAt + 100,
+      } }, { surfaceOp: 'append' }),
+      at(4, 'step/end', { turn: 1, step: 1 }),
+      at(5, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ]))
+    expect(node(value, 'user')?.data).toMatchObject({ authoredAt, time: 1_700_000_000_001 })
+    expect(node(value, 'assistant-step')?.data).toMatchObject({ finalNode: {
+      authoredAt: authoredAt + 100, time: 1_700_000_000_003,
+      timing: { completedTime: 1_700_000_000_003 },
+    } })
+  })
+
   it.each(['replay', 'live', 'prepend'] as const)('shows ordinary Context and developer tool changes in Chat order (%s)', (mode) => {
     const entries = [
       at(0, 'request/header', { reason: 'initial', header: {

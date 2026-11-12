@@ -35,6 +35,8 @@ export interface SessionListMetadata {
   readonly blank: boolean
   /** Latest human-authored prompt time in the folded prefix. */
   readonly lastPromptAt: number | null
+  /** The latest prompt has an original source clock, independent of local mirror creation. */
+  readonly authoredPrompt?: true | undefined
 }
 
 /**

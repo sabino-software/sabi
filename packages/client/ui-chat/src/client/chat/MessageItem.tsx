@@ -350,7 +350,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       actions={text => (
         <MessageIconActions
           text={text}
-          time={data.time}
+          time={data.authoredAt === null ? undefined : data.authoredAt ?? data.time}
           clock="start"
           className={css.actions}
           t={t}

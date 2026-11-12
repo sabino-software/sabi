@@ -60,6 +60,11 @@ it('renders and replaces genuine prose with shared Markdown while keeping HTML a
   expect(screen.getByText('Observed').tagName).toBe('STRONG')
   expect(view.container.querySelector('img')).toBeNull()
   expect(view.container.querySelector('script')).toBeNull()
+  expect(view.container.querySelector('time')).toBeNull()
+  const timestamp = '2026-11-11T10:00:00.000Z'
+  view.rerender(<NativeAxiomMessageView {...{ ...props, node: { ...node, data: { ...node.data, timestamp } } }} />)
+  expect(view.container.querySelector('time')?.dateTime).toBe(timestamp)
+  expect(view.container.querySelector('time')?.textContent).toBe(new Date(timestamp).toLocaleString())
   view.rerender(<NativeAxiomMessageView {...{ ...props, node: { ...node, data: { ...node.data, text: 'Later **source** edit' } } }} />)
   expect(view.container.querySelectorAll('[data-native-axiom-message]')).toHaveLength(1)
   expect(view.container.textContent).toBe('Later source edit')

@@ -8,6 +8,35 @@ function message(text: string) {
 }
 
 describe('multiple Session appends', () => {
+  it('retains author time separately from receipt time through restore', () => {
+    const session = Session.create(SessionId('authored-time'))
+    const authoredAt = 1_600_000_000_000
+    const event = session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'Imported question' }], source: { kind: 'user' }, authoredAt,
+    }), { surfaceOp: 'append' })
+    expect(event.time).toBeGreaterThan(authoredAt)
+    expect(event.data.authoredAt).toBe(authoredAt)
+    const restored = Session.create(session.id, session.snapshotEvents(), session.header)
+    expect(restored.snapshotEvents()[0]).toEqual(event)
+    expect(restored.deriveMessages()[0]?.authoredAt).toBe(authoredAt)
+  })
+
+  it('rejects malformed author dates without changing the Session', () => {
+    const session = Session.create(SessionId('invalid-authored-time'))
+    for (const authoredAt of [-1, 0.5, 8_640_000_000_000_001]) {
+      expect(() => session.append('user/message', createUserMessage({
+        content: [{ type: 'text', text: 'Invalid' }], source: { kind: 'user' }, authoredAt,
+      }), { surfaceOp: 'append' })).toThrow(/authoredAt/)
+    }
+    expect(session.seq).toBe(0)
+    const event = session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'Unknown original date' }], source: { kind: 'user' }, authoredAt: null,
+    }), { surfaceOp: 'append' })
+    expect(event.data.authoredAt).toBeNull()
+    expect(() => Session.create(session.id, [{ ...event, data: { ...event.data, authoredAt: 8_640_000_000_000_001 } }]))
+      .toThrow(/authoredAt/)
+  })
+
   it('rejects sparse arrays before changing the log or surface', () => {
     const session = Session.create(SessionId('sparse-append'))
     const inputs = new Array<SessionEventInput>(3)

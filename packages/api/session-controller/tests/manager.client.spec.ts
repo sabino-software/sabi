@@ -372,6 +372,21 @@ describe('SessionManager instances', () => {
     expect(session.getSnapshot().running).toBe(true) // list preceded instantiation
   })
 
+  it('uses an original author clock over a newer local mirror summary', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    onTestFinished(() => manager.dispose())
+    remote.session.list.mockResolvedValue(ok({ items: [summary(S1, { updatedAt: 9000 })] as never[] }))
+    await manager.refreshList()
+    manager.handleControlFrame({ type: 'projection', sessionId: S1, seq: 1,
+      changes: [{ key: 'sessionListMetadata', val: { blank: false, lastPromptAt: 1200, authoredPrompt: true } }],
+    })
+    expect(manager.getListSnapshot().items[0]?.updatedAt).toBe(1200)
+    manager.handleControlFrame({ type: 'projection', sessionId: S1, seq: 2,
+      changes: [{ key: 'sessionListMetadata', val: { blank: false, lastPromptAt: 10000 } }],
+    })
+    expect(manager.getListSnapshot().items[0]?.updatedAt).toBe(10000)
+  })
+
   it('initializes blankness from metadata published before the Session and list exist', async ({ mock, remote }) => {
     const manager = makeManager(mock, remote)
     const published = Promise.withResolvers<undefined>()

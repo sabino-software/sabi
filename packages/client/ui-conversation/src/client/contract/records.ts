@@ -46,6 +46,8 @@ export interface UserMessageNode {
   seq: number
   /** Unix epoch ms from the source session event. */
   time: number
+  /** Source-authored epoch milliseconds; null suppresses an unknown imported clock. */
+  authoredAt?: number | null
   content: readonly ContentBlock[]
   source: unknown
 }
@@ -72,6 +74,8 @@ export interface AssistantMessageNode {
   messageId?: MessageId
   /** Unix epoch ms from the source session event (or turn/end when frozen from a partial). */
   time: number
+  /** Source-authored epoch milliseconds; null suppresses an unknown imported clock. */
+  authoredAt?: number | null
   turn: number
   step: number
   blocks: readonly AssistantBlock[]
@@ -94,6 +98,8 @@ export interface SteeringMessageNode {
   seq: number
   /** Unix epoch ms from the source session event. */
   time: number
+  /** Source-authored epoch milliseconds; null suppresses an unknown imported clock. */
+  authoredAt?: number | null
   content: readonly ContentBlock[]
   source: unknown
 }

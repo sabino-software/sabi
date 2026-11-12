@@ -4,3 +4,10 @@
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-primary);
 }
+
+/* A source-owned date is shown only when the original page recorded one. */
+.timestamp {
+  display: block;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}

@@ -217,6 +217,7 @@ function finalNode(
       seq: event.seq,
       messageId: event.data.message.id,
       time: event.time,
+      ...event.data.message.authoredAt === undefined ? {} : { authoredAt: event.data.message.authoredAt },
       turn: state.turn,
       step: state.step,
       blocks: toAssistantBlocks(event.data.message.content),

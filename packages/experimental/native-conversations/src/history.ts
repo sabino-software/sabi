@@ -62,12 +62,12 @@ export function appendSourceMessages(
     if (!message.text) continue
     session.append('turn/start', { turn })
     if (message.role === 'user') {
-      session.append('user/message', createUserMessage({ content: [{ type: 'text', text: message.text }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+      session.append('user/message', createUserMessage({ content: [{ type: 'text', text: message.text }], source: { kind: 'user' }, authoredAt: message.timestamp ?? null }), { surfaceOp: 'append' })
     } else {
       session.append('step/start', { turn, step: 1 })
       session.append('assistant/message', {
         turn, step: 1,
-        message: createAssistantMessage({ content: [{ type: 'text', text: message.text }], source: { provider, model } }),
+        message: createAssistantMessage({ content: [{ type: 'text', text: message.text }], source: { provider, model }, authoredAt: message.timestamp ?? null }),
         stream: [],
       }, { surfaceOp: 'append' })
       session.append('step/end', { turn, step: 1 })
@@ -85,7 +85,9 @@ const itemSchema = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() }).loose()).optional(),
 }).loose()
 const pageSchema = z.object({
-  data: z.array(z.object({ item: itemSchema, turnId: z.string().optional(), startedAtMs: z.number().nullable().optional() }).loose()),
+  data: z.array(z.object({ item: itemSchema, turnId: z.string().optional(),
+    startedAtMs: z.number().int().nonnegative().max(8_640_000_000_000_000).nullable().optional(),
+  }).loose()),
   nextCursor: z.string().nullable(),
 }).loose()
 export type SourceHistoryEntry = (
@@ -158,12 +160,12 @@ export function appendCodexHistoryTurns(
       seen.add(message.id)
       if (!message.text) continue
       if (message.role === 'user') {
-        session.append('user/message', createUserMessage({ content: [{ type: 'text', text: message.text }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+        session.append('user/message', createUserMessage({ content: [{ type: 'text', text: message.text }], source: { kind: 'user' }, authoredAt: message.timestamp ?? null }), { surfaceOp: 'append' })
       } else {
         step++
         session.append('step/start', { turn, step })
         session.append('assistant/message', { turn, step, stream: [],
-          message: createAssistantMessage({ content: [{ type: 'text', text: message.text }], source: { provider: 'codex-app-server', model } }),
+          message: createAssistantMessage({ content: [{ type: 'text', text: message.text }], source: { provider: 'codex-app-server', model }, authoredAt: message.timestamp ?? null }),
         }, { surfaceOp: 'append' })
         session.append('step/end', { turn, step })
       }

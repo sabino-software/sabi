@@ -242,7 +242,8 @@ export class SessionController extends TypertRemoteService {
     })
     ctx.on('session/event', (session, event) => {
       if (event.type !== 'user/message' || event.data.source.kind !== 'user') return
-      ctx.emit('api-session/activity', session.id, event.time)
+      if (event.data.authoredAt === null) return
+      ctx.emit('api-session/activity', session.id, event.data.authoredAt ?? event.time)
     })
   }
 
