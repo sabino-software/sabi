@@ -2,7 +2,7 @@
 /** Original message edits preserve one Conversation node and use the shared assistant Markdown primitive. */
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, onTestFinished } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { ConversationEventRegistry } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -12,6 +12,15 @@ import type { ConversationNodeContext, ConversationStartMatch } from '@deepseek-
 import type { ChatConversationViewNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { axiomMessageDefinition, NativeAxiomMessageView, registerAxiomMessages } from '../src/client/axiom-messages.tsx'
 import { en } from '../src/client/axiom-locales.ts'
+
+/** Preserve the real UiConversation service's caller-context tracing for nested registries. */
+class FixtureUiConversation extends Service {
+  readonly events: ConversationEventRegistry
+  constructor(ctx: Context) {
+    super(ctx, 'uiConversation')
+    this.events = new ConversationEventRegistry(ctx)
+  }
+}
 
 afterEach(cleanup)
 
@@ -60,9 +69,8 @@ it('removes the source definition, renderer, and locale together when its plugin
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SlotRegistry)
-  const definitions = new ConversationEventRegistry(ctx)
+  const { events: definitions } = new FixtureUiConversation(ctx)
   const dictionaries = new Set<string>()
-  ctx.provide('uiConversation', { events: definitions } as never)
   ctx.provide('locale', { register: (name: string) => {
     dictionaries.add(name)
     return () => { dictionaries.delete(name) }

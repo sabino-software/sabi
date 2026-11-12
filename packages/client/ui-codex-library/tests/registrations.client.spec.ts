@@ -1,5 +1,5 @@
 /** Feature teardown removes connection navigation, source badges, and its status reader. */
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { ConversationEventRegistry } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -7,13 +7,21 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply, inject } from '../src/client/index.ts'
 import { en, type CodexLibraryKey } from '../src/client/locales.ts'
 
+/** Preserve the real UiConversation service's caller-context tracing for nested registries. */
+class FixtureUiConversation extends Service {
+  readonly events: ConversationEventRegistry
+  constructor(ctx: Context) {
+    super(ctx, 'uiConversation')
+    this.events = new ConversationEventRegistry(ctx)
+  }
+}
+
 describe('Native conversation registrations', () => {
   it('removes its controls, badges, status resource, and copy on unload', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SlotRegistry)
-    const events = new ConversationEventRegistry(ctx)
-    ctx.provide('uiConversation', { events } as never)
+    const { events } = new FixtureUiConversation(ctx)
     const providers = new Map<string, object>()
     const dictionaries = new Map<string, object>()
     ctx.provide('resources', { register: (provider: { protocol: string }) => {
