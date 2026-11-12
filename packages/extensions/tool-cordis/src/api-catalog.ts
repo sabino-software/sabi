@@ -2432,6 +2432,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Count of newly imported Sessions.',
       },
       {
+        signature: '@Remote async rebuildCodexMirror(sessionId: SessionId): Promise<{ sessionId: SessionId; archivedSessionId: SessionId }>',
+        description: 'Replace one inactive derived mirror; its archived log remains local audit evidence. This compensates caught failures, but interruption can leave recoverable navigation/index state.',
+        parameters: [{ name: 'sessionId', description: 'Explicitly selected old local mirror, never an original Codex thread id.' }],
+        returns: 'New mirror and archived evidence identities; no local tool or approval records are replayed.',
+      },
+      {
         signature: '@Remote async connectAxiom(url: string): Promise<{ sessionId: SessionId }>',
         description: 'Connect the original selected Dot and open it as an ordinary Session.',
         parameters: [{ name: 'url', description: 'Exact original ChatGPT Dot URL selected by the user.' }],

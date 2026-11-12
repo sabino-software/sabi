@@ -112,6 +112,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'nativeConversations/useCodex': 'owner-only',
   'nativeConversations/startCodexLogin': 'owner-only',
   'nativeConversations/cancelCodexLogin': 'owner-only',
+  'nativeConversations/rebuildCodexMirror': 'owner-only',
   'authorization/list': 'owner-only', // provider sign-in and stored account presence
   'authorization/begin': 'owner-only',
   'authorization/answer': 'owner-only',

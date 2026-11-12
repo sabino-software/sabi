@@ -492,6 +492,14 @@ attachAxiomTransport(transport: AxiomTransport): () => void
 @Remote syncCodex(): Promise<{ imported: number }>
 
 /**
+ * Replace one inactive derived mirror; its archived log remains local audit evidence.
+ * This compensates caught failures, but interruption can leave recoverable navigation/index state.
+ * @param sessionId - Explicitly selected old local mirror, never an original Codex thread id.
+ * @returns New mirror and archived evidence identities; no local tool or approval records are replayed.
+ */
+@Remote async rebuildCodexMirror(sessionId: SessionId): Promise<{ sessionId: SessionId; archivedSessionId: SessionId }>
+
+/**
  * Connect the original selected Dot and open it as an ordinary Session.
  * @param url Exact original ChatGPT Dot URL selected by the user.
  * @returns The ordinary Session assigned to that original conversation.

@@ -8,6 +8,8 @@ Axiom uses the original authenticated ChatGPT page as its engine. The native con
 
 Imported histories reserve an empty first system surface so later Harness context can replace that protected head. The importer does not infer original hidden instructions. Compressed cold-load tests cover both import and a real framework context replacement. Prototype mirrors hydrated before this fix need separate explicit recovery; their existing logs and local tool or approval evidence must be preserved.
 
+The owner-only `nativeConversations/rebuildCodexMirror` operation creates a new local mirror of the same original Codex chat and archives the old local mirror without reading or rewriting its body. Its new transcript hydrates canonical source history; local Harness tool and approval evidence stays in the archived original and is not copied or executed. Recovery refuses active, pinned, archived, seeded or related Sessions and requires matching cached source identity and assignment. Strict reopening validates the new metadata before publication. Caught failures compensate index and navigation changes; a process interruption is not atomic and requires inspecting the retained candidate, source assignment and archive state before retrying. Back up the exact affected logs and metadata first. Installed-app recovery acceptance remains pending.
+
 Implementation and acceptance:
 
 1. Persist source bindings and hydrate original messages into ordinary Sessions without duplicating source messages on reopen.

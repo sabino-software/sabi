@@ -34,6 +34,7 @@ import { createCodexActivityRecorder, type CodexActivityRecorder } from './codex
 import type { NativeConversationBinding, NativeConversationId, NativeConversationStatus } from './types.ts'
 import { NativeCodexLoginController } from './codex-login.ts'
 import { nativeSourceIndex, type SourceSessionAssignment } from './source-index.ts'
+import { rebuildCodexMirror } from './rebuild.ts'
 
 // Cordis derives RPC receivers; the stable lifetime signal keeps controllers off service properties.
 const managedLogins = new WeakMap<AbortSignal, NativeCodexLoginController>()
@@ -44,11 +45,13 @@ function managedLogin(signal: AbortSignal): NativeCodexLoginController {
   return login
 }
 
-function requireOwnerLoginInvocation(ctx: Context, method: 'startCodexLogin' | 'cancelCodexLogin'): void {
+function requireOwnerNativeInvocation(ctx: Context, method: 'startCodexLogin' | 'cancelCodexLogin' | 'rebuildCodexMirror'): void {
   const invocation = ctx.invocation
   if (invocation?.peer.principal.kind !== 'owner' || invocation.service !== 'nativeConversations'
     || invocation.request.namespace !== 'nativeConversations' || invocation.request.method !== method) {
-    throw new RemoteError('gateway/bad-request', 'Manage Codex sign-in from the Native conversations panel.', {})
+    throw new RemoteError('gateway/bad-request', method === 'rebuildCodexMirror'
+      ? 'Codex mirror recovery requires its exact owner request.'
+      : 'Manage Codex sign-in from the Native conversations panel.', {})
   }
 }
 
@@ -103,7 +106,9 @@ export default class NativeConversations extends TypertRemoteService {
   private readonly observedCodex = new WeakSet<Agent>()
   private axiom: AxiomTransport | undefined
   private axiomPhase = 'disconnected'
-  private sync: Promise<{ imported: number }> | undefined
+  // RPC receivers inherit this shared state; assigning a primitive on a receiver would hide an in-flight sync.
+  private readonly synchronization: { task: Promise<{ imported: number }> | undefined } = { task: undefined }
+  private readonly rebuilding = { pending: false, ids: new Set<SessionId>() }
   private readonly requestLogs = new Map<SessionId, { turn: number; step: number }>()
   private readonly pendingResponses = new Map<SessionId, { readonly ids: readonly string[]; readonly turnId?: string }>()
   private readonly lifetime = new AbortController()
@@ -196,6 +201,7 @@ export default class NativeConversations extends TypertRemoteService {
     })
     this.ctx.effect(() => this.ctx.llm.registerAdapter(['axiom-original'], axiom))
     this.ctx.on('agent/created', async ({ agent, signal }) => {
+      if (this.rebuilding.ids.has(agent.id)) throw new Error('This local Codex mirror is being explicitly rebuilt.')
       let binding = this.bindings.stateOf(agent.session)
       const bindingSeq = this.bindingSequences.stateOf(agent.session)
       let forked = false
@@ -241,7 +247,7 @@ export default class NativeConversations extends TypertRemoteService {
     this.ctx.effect(() => {
       // List metadata in the background; failure is visible through the connection panel.
       const startup = this.syncCodex().catch(() => {})
-      return async () => { this.lifetime.abort(); await startup; await this.sync?.catch(() => {}) }
+      return async () => { this.lifetime.abort(); await startup; await this.synchronization.task?.catch(() => {}) }
     })
   }
 
@@ -263,7 +269,7 @@ export default class NativeConversations extends TypertRemoteService {
   async status(): Promise<NativeConversationStatus> {
     const authenticated = await this.workAccountReady()
     const status = this.ctx.codexAppServer.status()
-    return { codex: { login: managedLogin(this.lifetime.signal).status(), connected: status.state === 'ready', authenticated, selected: this.ctx.get('agentDefaultModel')?.currentSelection().provider === CODEX_PROVIDER, error: status.reason }, axiom: { available: this.axiom !== undefined, phase: this.axiomPhase }, syncing: this.sync !== undefined }
+    return { codex: { login: managedLogin(this.lifetime.signal).status(), connected: status.state === 'ready', authenticated, selected: this.ctx.get('agentDefaultModel')?.currentSelection().provider === CODEX_PROVIDER, error: status.reason }, axiom: { available: this.axiom !== undefined, phase: this.axiomPhase }, syncing: this.synchronization.task !== undefined }
   }
   /**
    * Start managed login after an explicit owner action; Codex owns OAuth and the local callback.
@@ -271,13 +277,13 @@ export default class NativeConversations extends TypertRemoteService {
    */
   @Remote
   async startCodexLogin(): Promise<{ authUrl: string }> {
-    requireOwnerLoginInvocation(this.ctx, 'startCodexLogin')
+    requireOwnerNativeInvocation(this.ctx, 'startCodexLogin')
     return await managedLogin(this.lifetime.signal).start()
   }
   /** Cancel only the pending login created by this service. */
   @Remote
   async cancelCodexLogin(): Promise<void> {
-    requireOwnerLoginInvocation(this.ctx, 'cancelCodexLogin')
+    requireOwnerNativeInvocation(this.ctx, 'cancelCodexLogin')
     await managedLogin(this.lifetime.signal).cancel()
   }
   private async workAccountReady(): Promise<boolean> {
@@ -306,8 +312,26 @@ export default class NativeConversations extends TypertRemoteService {
    */
   @Remote
   syncCodex(): Promise<{ imported: number }> {
-    this.sync ??= this.importCodex().finally(() => { this.sync = undefined })
-    return this.sync
+    if (this.rebuilding.pending) throw new RemoteError('gateway/bad-request', 'Wait for explicit Codex mirror recovery before synchronizing.', {})
+    this.synchronization.task ??= this.importCodex().finally(() => { this.synchronization.task = undefined })
+    return this.synchronization.task
+  }
+  /**
+   * Replace one inactive derived mirror; its archived log remains local audit evidence.
+   * This compensates caught failures, but interruption can leave recoverable navigation/index state.
+   * @param sessionId - Explicitly selected old local mirror, never an original Codex thread id.
+   * @returns New mirror and archived evidence identities; no local tool or approval records are replayed.
+   */
+  @Remote
+  async rebuildCodexMirror(sessionId: SessionId): Promise<{ sessionId: SessionId; archivedSessionId: SessionId }> {
+    requireOwnerNativeInvocation(this.ctx, 'rebuildCodexMirror')
+    if (this.rebuilding.pending || this.synchronization.task !== undefined) {
+      throw new RemoteError('gateway/bad-request', 'Wait for the current native conversation operation before rebuilding.', {})
+    }
+    this.rebuilding.pending = true
+    this.rebuilding.ids.add(sessionId)
+    try { return await rebuildCodexMirror(this.ctx, this.sourceSessions, sessionId, this.rebuilding.ids) }
+    finally { this.rebuilding.pending = false; this.rebuilding.ids.delete(sessionId) }
   }
   private async importCodex(): Promise<{ imported: number }> {
     let cursor: string | null = null
