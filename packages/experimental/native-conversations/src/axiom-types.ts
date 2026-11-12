@@ -1,5 +1,27 @@
 /** Browser-safe projections and the owned transport to the original ChatGPT page. */
 import type { NativeConversationId } from './types.ts'
+import type {} from '@deepseek-ai/dsh-session/types'
+
+/** Latest bounded text of one original assistant message, without a completion claim. */
+export interface NativeAxiomMessage {
+  readonly id: string
+  readonly text: string
+  readonly timestamp: string | null
+  readonly truncated: boolean
+}
+
+/** Host-only deduplication state scoped to the original source binding. */
+export interface AxiomMessagesState {
+  readonly sourceId: NativeConversationId | null
+  readonly byId: Readonly<Record<string, NativeAxiomMessage>>
+}
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface PluginRecordMap {
+    /** An observed original assistant body; later records with the same id replace its text. */
+    'plugin:native-conversations/axiom-message': NativeAxiomMessage
+  }
+}
 
 /** One bounded, currently rendered original-site message. */
 export interface AxiomMessage {

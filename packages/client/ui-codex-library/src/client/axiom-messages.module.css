@@ -1,0 +1,6 @@
+/* Match the normal assistant body while shared Markdown owns prose layout. */
+.body {
+  font-size: var(--dsh-content-font-size, 14px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-primary);
+}
