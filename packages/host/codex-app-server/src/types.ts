@@ -7,7 +7,7 @@ export type CodexJsonObject = { [key: string]: JsonValue }
 /** The native operations currently consumed by the coding workspace. */
 export type CodexMethod =
   | 'thread/list' | 'thread/read' | 'thread/turns/list' | 'thread/items/list' | 'thread/loaded/list'
-  | 'model/list' | 'permissionProfile/list'
+  | 'model/list' | 'permissionProfile/list' | 'mcpServerStatus/list'
   | 'thread/start' | 'thread/resume' | 'thread/unsubscribe'
   | 'thread/name/set' | 'thread/archive' | 'thread/unarchive' | 'thread/settings/update'
   | 'turn/start' | 'turn/steer' | 'turn/interrupt'

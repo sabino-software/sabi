@@ -32,13 +32,13 @@ export interface Config {
 
 const METHODS = new Set<CodexMethod>([
   'thread/list', 'thread/read', 'thread/turns/list', 'thread/items/list', 'thread/loaded/list',
-  'model/list', 'permissionProfile/list', 'thread/start', 'thread/resume', 'thread/unsubscribe',
+  'model/list', 'permissionProfile/list', 'mcpServerStatus/list', 'thread/start', 'thread/resume', 'thread/unsubscribe',
   'thread/name/set', 'thread/archive', 'thread/unarchive', 'thread/settings/update',
   'turn/start', 'turn/steer', 'turn/interrupt',
 ])
 const READS = new Set<CodexMethod>([
   'thread/list', 'thread/read', 'thread/turns/list', 'thread/items/list', 'thread/loaded/list',
-  'model/list', 'permissionProfile/list',
+  'model/list', 'permissionProfile/list', 'mcpServerStatus/list',
 ])
 const SERVER_METHODS = new Set<CodexServerRequestMethod>([
   'item/commandExecution/requestApproval', 'item/fileChange/requestApproval',
