@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Axiom link">
+  <rect width="64" height="64" rx="16" fill="#225b73"/>
+  <g fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M27 39l-3 3a10 10 0 0 1-14-14l10-10a10 10 0 0 1 14 0"/>
+    <path d="M37 25l3-3a10 10 0 0 1 14 14L44 46a10 10 0 0 1-14 0"/>
+    <path d="M23 37l18-14"/>
+  </g>
+</svg>
