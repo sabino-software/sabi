@@ -40,6 +40,15 @@
     },
     {
       "path": "../product-analytics/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/authorization-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../credentials/credentials"
+    },
+    {
+      "path": "../../util/brand"
     }
   ]
 }

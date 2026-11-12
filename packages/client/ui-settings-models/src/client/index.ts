@@ -16,6 +16,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the ctx.remote merge and the forwarded-event key face
 // (settings/credentials invalidations ride the allowlist) into this program.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-api-authorization-controller/client'
+import { ProviderSignIn, type ProviderSignInInjected } from './ProviderSignIn.tsx'
 import { ModelsSection } from './ModelsSection.tsx'
 import type { ModelsSectionInjected } from './ModelsSection.tsx'
 import { DeepSeekOnboardingDialog } from './DeepSeekOnboardingDialog.tsx'
@@ -144,6 +146,24 @@ export function apply(ctx: ClientContext): void {
       'settings.models.footer': { kind: 'list', scope: 'root' },
     },
   }, ModelsSection))
+  ctx.inject(['providerAuthorization'], (ctx) => {
+    const authorization = ctx.providerAuthorization
+    ctx.slots.inject('settings.models.footer', () => ctx.slots.register({
+      name: 'settings.models.footer',
+      id: 'provider-sign-in',
+      inject: (): ProviderSignInInjected => ({
+        hooks: { authorization: authorization.state },
+        load: () => authorization.load(),
+        begin: (key, method) => authorization.begin(key, method),
+        answer: (id, value) => authorization.answer(id, value),
+        cancel: () => authorization.cancel(),
+        logout: key => authorization.logout(key),
+        t,
+      }),
+    }, ProviderSignIn))
+    ctx.on('connection/reset', () => { void authorization.load() })
+    ctx.remote.$on('credentials/record-updated', () => { void authorization.load() })
+  })
   if (!('dshDesktop' in globalThis)) ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
     name: 'settings.onboarding',
     id: 'welcome-notice',

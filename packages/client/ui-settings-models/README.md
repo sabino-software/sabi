@@ -27,6 +27,8 @@ Desktop product events use the optional [product analytics service](../product-a
 <a id="use-this-package"></a>
 ## Use this package
 
+The provider sign-in area lists registered OAuth flows, including ChatGPT (Codex), with their app-owned stored status. Open the sign-in page, answer any provider questions, or cancel within Models. Successful sign-in preserves the selected model; choose the provider’s model in the composer. Sign out asks for confirmation and removes only the Harness credential record. A connection interruption prompts a stored-state refresh before retrying. Provider exception text and credential payloads are never displayed.
+
 Saving credentials or a custom provider preserves the selected model. The user can select an available model from the composer.
 
 DeepSeek Account appears first and DeepSeek second in the provider list; third-party providers retain their directory order.
