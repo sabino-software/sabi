@@ -55,6 +55,8 @@ export interface WelcomeOperations {
 
 /** The renderer receives localized copy, login operations, and safe account snapshots. */
 export type WelcomeApi = DesktopLocale & WelcomeOperations & {
+  /** Packaged independent shell identity, when the launcher supplies one. */
+  readonly productName?: string
   /** @param listener - safe account snapshot recipient. @returns subscription disposer. */
   onAccountState(listener: (state: AccountView) => void): () => void
 }

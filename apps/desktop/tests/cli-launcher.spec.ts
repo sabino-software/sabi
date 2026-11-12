@@ -98,7 +98,7 @@ it.skipIf(process.platform === 'win32')('runs the isolated local app executable 
 
 it('rejects executable paths and shell expansions before preparing a launcher', () => {
   for (const name of ['../Skeinlet', '/tmp/Skeinlet', 'Skeinlet$HOME', 'Skeinlet`id`', 'Skeinlet"', 'Skeinlet\n']) {
-    expect(() => prepareDesktopCli('/unused-invalid-name', 'darwin', name)).toThrow('plain basename')
+    expect(() =>{  prepareDesktopCli('/unused-invalid-name', 'darwin', name) }).toThrow('plain basename')
   }
-  expect(() => prepareDesktopCli('/unused-invalid-name', 'win32', 'Skeinlet')).toThrow('require macOS')
+  expect(() =>{  prepareDesktopCli('/unused-invalid-name', 'win32', 'Skeinlet') }).toThrow('require macOS')
 })

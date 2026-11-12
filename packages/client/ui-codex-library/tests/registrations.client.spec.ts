@@ -27,7 +27,7 @@ describe('Codex library registrations', () => {
     ctx.provide('remote.codexLibrary', {} as never)
     ctx.slots.register({ name: 'root', children: {
       main: { kind: 'keyed', scope: 'root' }, 'sidebar.panellist': { kind: 'list', scope: 'root' },
-    } }, () => null)
+    } }, ({ renderSlot }: { renderSlot: unknown }) => { void renderSlot; return null })
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(ctx.slots.entriesOfSlot('main')).toHaveLength(1)

@@ -38,7 +38,7 @@ export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopL
     } as const : {}),
     webPreferences: {
       preload: fileURLToPath(new URL('./preload-welcome.cjs', import.meta.url)),
-      additionalArguments: [`--dsh-welcome-locale=${locale.id}`],
+      additionalArguments: [`--dsh-welcome-locale=${locale.id}`, ...(locale.messages.welcomeBrand === 'Skeinlet' ? ['--dsh-welcome-product=Skeinlet'] : [])],
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,

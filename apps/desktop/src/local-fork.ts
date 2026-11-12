@@ -2,7 +2,6 @@
 
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { DesktopLocale } from './locale.ts'
 
 interface LocalForkApplication {
   getPath(name: 'appData'): string
@@ -38,17 +37,4 @@ export function configureLocalFork(manifest: unknown, application: LocalForkAppl
   return { productName: fork.productName, scheme: fork.scheme }
 }
 
-/**
- * Substitute the packaged product name in locale-owned native copy.
- * @param locale Resolved shell dictionary.
- * @param productName Packaged application name; the upstream name preserves the original dictionary.
- * @returns Locale copy with the local product name, without modifying shared dictionaries.
- */
-export function brandDesktopLocale(locale: DesktopLocale, productName: string): DesktopLocale {
-  if (productName === 'DeepSeek Harness') return locale
-  const messages = { ...locale.messages }
-  for (const key of Object.keys(messages) as (keyof typeof messages)[]) {
-    messages[key] = messages[key].replaceAll('DeepSeek Harness', productName)
-  }
-  return { ...locale, messages }
-}
+export { brandDesktopLocale } from './desktop-branding.ts'

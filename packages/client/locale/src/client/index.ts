@@ -469,9 +469,12 @@ export class LocaleRuntime {
 
   private translate(ns: string, key: string, params?: Record<string, unknown>): string {
     const chain = this.fallbackChain(this.snapshot.active)
-    const template = this.lookup(ns, key, chain)
+    const original = this.lookup(ns, key, chain)
       ?? (ns !== COMMON_NS ? this.lookup(COMMON_NS, key, chain) : undefined)
       ?? key
+    const template = process.env.DSH_CLIENT_BUILD_PROFILE === 'skeinlet'
+      ? original.replaceAll('DeepSeek Harness', process.env.DSH_CLIENT_TITLE ?? 'Skeinlet')
+      : original
     if (!params) return template
     return template.replace(/\{(\w+)\}/g, (match, name: string) =>
       name in params ? String(params[name]) : match)

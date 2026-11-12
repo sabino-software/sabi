@@ -91,8 +91,9 @@ export function CodexLibraryPage({ useResource, t }: PageProps): ReactNode {
             {transcript.value.messages.length === 0 && <p className={css.notice}>{t('noMessages')}</p>}
             {transcript.value.messages.map(message => <section className={css.message} key={message.id} data-role={message.role}>
               <div className={css.messageMeta}><span>{t(message.role === 'user' ? 'user' : 'assistant')}</span>
-                {message.timestamp !== null && <time dateTime={new Date(message.timestamp).toISOString()}>{date(message.timestamp)}</time>}</div>
-              <MarkdownText text={message.text} labels={labels} variant="compact" omitHtml />
+                {message.timestamp !== null && <time dateTime={new Date(message.timestamp).toISOString()}>
+                  {date(message.timestamp)}</time>}</div>
+              <MarkdownText text={message.text} labels={labels} variant="compact" omitHtml omitImages />
             </section>)}
           </>}
         </>}

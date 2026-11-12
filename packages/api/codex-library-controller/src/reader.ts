@@ -1,8 +1,10 @@
 /** SQLite queries run only on private filesystem snapshots of the work source. */
-import { chmodSync, constants, copyFileSync, lstatSync, mkdtempSync, realpathSync, rmSync, type BigIntStats } from 'node:fs'
+import { chmodSync, constants, lstatSync, mkdtempSync, realpathSync, type BigIntStats } from 'node:fs'
+import fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, isAbsolute } from 'node:path'
-import { DatabaseSync, type SQLOutputValue } from 'node:sqlite'
+import type { DatabaseSync, SQLOutputValue } from 'node:sqlite'
+import { createRequire } from 'node:module'
 import { z } from 'zod'
 import type { CodexChatId, CodexChatPage, CodexChatSummary, CodexListRequest, CodexMessage, CodexTranscriptPage } from './types.ts'
 
@@ -56,11 +58,12 @@ function sourceFiles(path: string): SourceFiles {
 
 function summary(row: Record<string, SQLOutputValue>): CodexChatSummary {
   const value = rowSchema.parse(row)
-  return { id: value.id as CodexChatId, title: value.title, cwd: value.cwd, updatedAt: value.updated_at * 1000, archived: value.archived === 1 }
+  return { id: value.id as CodexChatId, title: value.title, cwd: value.cwd,
+    updatedAt: value.updated_at * 1000, archived: value.archived === 1 }
 }
 
 function visibleMessage(value: unknown, id: string, timestamp: number): CodexMessage {
-  const item = z.object({ type: z.string() }).passthrough().parse(value)
+  const item = z.object({ type: z.string() }).loose().parse(value)
   if (item.type === 'agentMessage') {
     const message = z.object({ text: z.string() }).parse(item)
     return { id, role: 'assistant', text: message.text, timestamp }
@@ -92,7 +95,8 @@ export class CodexLibraryReader {
         substr(cwd, 1, 4096) AS cwd, updated_at, archived FROM threads
         WHERE archived = ? AND instr(lower(COALESCE(name, '') || ' ' || title), lower(?)) > 0
         ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`).all(input.archived ? 1 : 0, input.query, PAGE_SIZE + 1, offset)
-      return { sourceHome: this.home, readOnly: true, chats: rows.slice(0, PAGE_SIZE).map(summary), nextCursor: rows.length > PAGE_SIZE ? String(offset + PAGE_SIZE) : null }
+      return { sourceHome: this.home, readOnly: true, chats: rows.slice(0, PAGE_SIZE).map(summary),
+        nextCursor: rows.length > PAGE_SIZE ? String(offset + PAGE_SIZE) : null }
     })
   }
 
@@ -157,8 +161,8 @@ export class CodexLibraryReader {
       try {
         chmodSync(directory, 0o700)
         const destination = join(directory, filename)
-        copyFileSync(path, destination, constants.COPYFILE_FICLONE | constants.COPYFILE_EXCL)
-        if (before.wal !== undefined) copyFileSync(`${path}-wal`, `${destination}-wal`, constants.COPYFILE_FICLONE | constants.COPYFILE_EXCL)
+        fs.copyFileSync(path, destination, constants.COPYFILE_FICLONE | constants.COPYFILE_EXCL)
+        if (before.wal !== undefined) fs.copyFileSync(`${path}-wal`, `${destination}-wal`, constants.COPYFILE_FICLONE | constants.COPYFILE_EXCL)
         const after = sourceFiles(path)
         if (!unchanged(before.database, after.database) || !unchanged(before.wal, after.wal)) continue
         accepted = true
@@ -167,7 +171,7 @@ export class CodexLibraryReader {
         // A checkpoint can replace or remove WAL between stat and clone.
         if (attempt === SNAPSHOT_ATTEMPTS - 1) throw error
       } finally {
-        if (!accepted) rmSync(directory, { recursive: true, force: true })
+        if (!accepted) fs.rmSync(directory, { recursive: true, force: true })
       }
     }
     throw new Error('Codex source changed while copying; refresh to try again')
@@ -177,12 +181,13 @@ export class CodexLibraryReader {
     const snapshot = this.snapshot(filename)
     let database: DatabaseSync | undefined
     try {
-      database = new DatabaseSync(snapshot.path, { readOnly: true, enableExtensions: false })
+      const sqlite = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
+      database = new sqlite.DatabaseSync(snapshot.path, { readOnly: true, allowExtension: false })
       database.exec('PRAGMA query_only = ON; PRAGMA busy_timeout = 500; PRAGMA trusted_schema = OFF')
       return read(database)
     } finally {
       try { database?.close() }
-      finally { rmSync(snapshot.directory, { recursive: true, force: true }) }
+      finally { fs.rmSync(snapshot.directory, { recursive: true, force: true }) }
     }
   }
 }

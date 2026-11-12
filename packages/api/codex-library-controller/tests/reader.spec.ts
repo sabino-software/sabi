@@ -1,6 +1,6 @@
 /** Existing source data stays untouched through bounded catalog and transcript reads. */
 import { mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
-import * as fs from 'node:fs'
+import fs from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
@@ -114,7 +114,7 @@ describe('Codex source library', () => {
 
   it('retries a database change during cloning and removes each private snapshot', () => {
     const { home, reader } = fixture()
-    const source = join(home, 'state_5.sqlite')
+    const source = fs.realpathSync(join(home, 'state_5.sqlite'))
     const originalCopy = fs.copyFileSync
     let copies = 0
     const copy = vi.spyOn(fs, 'copyFileSync').mockImplementation((from, to, flags) => {
@@ -136,7 +136,7 @@ describe('Codex source library', () => {
 
   it('stops after three unstable copies and removes private files on failure', () => {
     const { home, reader } = fixture()
-    const source = join(home, 'state_5.sqlite')
+    const source = fs.realpathSync(join(home, 'state_5.sqlite'))
     const originalCopy = fs.copyFileSync
     let copies = 0
     const copy = vi.spyOn(fs, 'copyFileSync').mockImplementation((from, to, flags) => {

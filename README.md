@@ -1,4 +1,6 @@
-# DeepSeek Harness
+# Skeinlet
+
+Skeinlet is an independent local macOS coding workspace built from DeepSeek Harness, with work Codex sign-in, a read-only Codex chat library, original branding, and reporting disabled by default. Third-party licenses and upstream attribution remain intact. The upstream reference below describes compatible packages and workflows; see the [local release plan](docs/fork-release/plan.md) for this fork.
 
 English | [中文](README.zh.md)
 

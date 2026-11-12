@@ -13,6 +13,14 @@ export const FISH_LOGO_PATH = 'M22.9168 1.43018C22.6713 1.31018 22.5658 1.53918 
  * @returns the logo svg (aria-hidden; pair with the wordmark for accessibility).
  */
 export function FishLogo({ size = 24, className }: IconProps) {
+  if (process.env.DSH_CLIENT_BUILD_PROFILE === 'skeinlet') {
+    return (
+      <svg width={size} height={size} className={className} viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <path d="M46 13 25 20C12 24 15 31 28 35l11 4c12 4 8 12-4 15l-17 5"
+          stroke="currentColor" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
   return (
     <svg
       width={size}

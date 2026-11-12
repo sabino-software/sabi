@@ -28,6 +28,17 @@ const stubLanguages = (...tags: string[]): void => {
 }
 
 describe('LocaleRuntime', () => {
+  it('brands fork-owned templates without rewriting parameter values', () => {
+    vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'skeinlet')
+    vi.stubEnv('DSH_CLIENT_TITLE', 'Skeinlet')
+    try {
+      const { svc } = make()
+      svc.register('test', 'en', { brand: 'DeepSeek Harness: {path}' })
+      svc.setLocale('en')
+      expect(svc.bind('test')('brand', { path: 'DeepSeek Harness' })).toBe('Skeinlet: DeepSeek Harness')
+    } finally { vi.unstubAllEnvs() }
+  })
+
   beforeEach(() => {
     // A Chinese browser is the baseline these specs assert their zh state on.
     stubLanguages('zh-CN')

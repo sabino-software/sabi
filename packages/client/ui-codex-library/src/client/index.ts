@@ -37,16 +37,16 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register('codexLibrary', { en, zh, pt, ja: en, es: en, fr: en, de: en, ru: en }), 'codex-library.copy')
   ctx.effect(() => ctx.resources.register({
     protocol: 'codex-chats',
-    async *open(address, { signal }) {
+    async *open(address) {
       const params = new URL(address).searchParams
-      yield await ctx.remote.codexLibrary.list({ query: params.get('query') ?? '', archived: params.get('archived') === 'true', cursor: params.get('cursor') }, signal)
+      yield await ctx.remote.codexLibrary.list({ query: params.get('query') ?? '', archived: params.get('archived') === 'true', cursor: params.get('cursor') })
     },
   }), 'codex-library.catalog')
   ctx.effect(() => ctx.resources.register({
     protocol: 'codex-transcript',
-    async *open(address, { signal }) {
+    async *open(address) {
       const params = new URL(address).searchParams
-      yield await ctx.remote.codexLibrary.read((params.get('id') ?? '') as CodexChatId, params.get('cursor'), signal)
+      yield await ctx.remote.codexLibrary.read((params.get('id') ?? '') as CodexChatId, params.get('cursor'))
     },
   }), 'codex-library.transcript')
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: panel, locale: 'codexLibrary' }, CodexLibraryPage))

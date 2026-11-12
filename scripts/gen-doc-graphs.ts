@@ -383,6 +383,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Projects the credential-reference seam onto the generated Remote namespace: batch fan-out, view projection, and refusal mapping live here, not on the seam Definition.',
   },
   {
+    key: 'codexLibrary',
+    pkg: 'api-codex-library-controller',
+    title: 'Read-only work Codex history',
+    mode: 'core',
+    note: 'Serves source chat titles and visible messages from private filesystem snapshots; no source mutation or credential access.',
+  },
+  {
     key: 'authorizationController',
     pkg: 'api-authorization-controller',
     title: 'Host provider sign-in Remote controller',

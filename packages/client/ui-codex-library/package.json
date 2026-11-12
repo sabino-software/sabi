@@ -24,14 +24,6 @@
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
-    "./typert": {
-      "types": "./lib/typert.host.d.ts",
-      "default": "./lib/typert.host.js"
-    },
-    "./remote": {
-      "types": "./lib/typert.remote-client.d.ts",
-      "default": "./lib/typert.remote-client.js"
-    },
     "./locale/*.json": "./locale/*.json",
     "./types": {
       "types": "./lib/types/types.d.ts"
@@ -72,7 +64,8 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@testing-library/react": "^16.3.3",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "@deepseek-ai/dsh-api-codex-library-controller": "workspace:*"
   },
   "files": [
     "locale/*.json",
@@ -81,16 +74,7 @@
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "lib/**/*.js.map",
-    "lib/typert.host.js",
-    "lib/typert.host.d.ts",
-    "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts",
-    "lib/typert.remote-client.d.ts.map",
     "src"
   ],
-  "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:~",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
-    "zod": "4.6.6"
-  }
+  "dependencies": {}
 }

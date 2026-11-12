@@ -6,7 +6,7 @@ Open your existing Axiom Dot conversation on the real ChatGPT website beside a H
 
 Install this directory with **Plugins → Add plugin**, or ask Creator mode to install its absolute directory through `plugin_manager` with `action: install_bundle`. No dependency installation scripts or build step are needed. This package follows the shipped Creator decoration template; it was authored outside the running Creator conversation.
 
-In the conversation composer dock, expand **Link your existing Axiom conversation**, paste its `https://chatgpt.com/` URL, and select **Save link**. URLs with queries, fragments, other hosts, or embedded credentials are refused. **Open Axiom here** uses Harness's existing Sidebar Browser; **Open in ChatGPT** opens the same URL in your usual browser. **Change link → Remove saved link** clears this session's saved selection.
+In the conversation composer dock, expand **Link your existing Axiom conversation**, paste its `https://chatgpt.com/` URL, and select **Save link**. Only `/dots/<id>`, `/c/<id>`, and `/g/<id>/c/<id>` links are accepted. Queries, fragments, other hosts, embedded credentials, and authentication routes are refused. **Open Axiom here** uses Harness's existing Sidebar Browser; **Open in ChatGPT** opens the same URL in your usual browser. **Change link → Remove saved link** clears this session's saved selection.
 
 The selected URL is browser-local viewing state, stored separately for each Harness session through the framework store. It is not a credential or a copy of the conversation. Disabling or removing the bundle removes its controls and locale registrations. An already-open Browser tab remains owned by Harness and can be closed normally; disabling the plugin does not delete the saved selection.
 

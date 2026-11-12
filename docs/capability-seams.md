@@ -110,6 +110,8 @@ flowchart LR
   svc_jobController["ctx.jobController<br/>Host job Remote controller"]
   pkg_api_settings_controller["api-settings-controller"]
   svc_credentialsController["ctx.credentialsController<br/>Host credential-surface Remote controller"]
+  pkg_api_codex_library_controller["api-codex-library-controller"]
+  svc_codexLibrary["ctx.codexLibrary<br/>Read-only work Codex history"]
   pkg_api_authorization_controller["api-authorization-controller"]
   svc_authorizationController["ctx.authorizationController<br/>Host provider sign-in Remote controller"]
   svc_settingsController["ctx.settingsController<br/>Host settings-surface Remote controller"]
@@ -324,6 +326,7 @@ flowchart LR
   pkg_agent_preset_registry --> svc_agentPresets
   pkg_agent_team --> svc_agentTeams
   pkg_api_authorization_controller --> svc_authorizationController
+  pkg_api_codex_library_controller --> svc_codexLibrary
   pkg_api_gateway --> svc_typertGateway
   pkg_api_job_controller --> svc_jobController
   pkg_api_remote_access --> svc_remoteAccess
@@ -689,6 +692,7 @@ flowchart LR
 | `ctx.sessionSkillCatalog` | `core` | [`api-session-controller`](../packages/api/session-controller) | - | - | - | Lists the Session composition's user-invocable skills without activating a cold Agent. |
 | `ctx.jobController` | `core` | [`api-job-controller`](../packages/api/job-controller) | - | - | - | Streams one background job's observation record over the generated Remote namespace; the roster stays on the session control stream. |
 | `ctx.credentialsController` | `core` | [`api-settings-controller`](../packages/api/settings-controller) | - | - | - | Projects the credential-reference seam onto the generated Remote namespace: batch fan-out, view projection, and refusal mapping live here, not on the seam Definition. |
+| `ctx.codexLibrary` | `core` | [`api-codex-library-controller`](../packages/api/codex-library-controller) | - | - | - | Serves source chat titles and visible messages from private filesystem snapshots; no source mutation or credential access. |
 | `ctx.authorizationController` | `core` | [`api-authorization-controller`](../packages/api/authorization-controller) | - | - | - | Projects provider-owned authorization into cancellable browser conversations without exposing stored credential payloads. |
 | `ctx.settingsController` | `core` | [`api-settings-controller`](../packages/api/settings-controller) | - | - | - | Projects the user-settings seam onto the generated Remote namespace: the read is always redacted and every refusal is classified here, not on the seam Definition. |
 | `ctx.workspaceFiles` | `core` | [`api-workspace-files`](../packages/api/workspace-files) | - | - | - | Serves stat, paged text, byte windows, directory listings, and the change feed for files inside a Session's workspace root, confined by lstat, containment, and a stat re-check. |

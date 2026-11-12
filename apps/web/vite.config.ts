@@ -25,7 +25,10 @@ function clientDocumentTitle(): Plugin {
   return {
     name: 'dsh-client-document-title',
     transformIndexHtml(html) {
-      return html.replace('<title>DSH Local Build</title>', `<title>${title}</title>`)
+      const document = html.replace('<title>DSH Local Build</title>', `<title>${title}</title>`)
+      return process.env.DSH_CLIENT_BUILD_PROFILE === 'skeinlet'
+        ? document.replaceAll('/favicon-dark.svg', '/favicon-skeinlet.svg').replaceAll('/favicon.svg', '/favicon-skeinlet.svg')
+        : document
     },
   }
 }

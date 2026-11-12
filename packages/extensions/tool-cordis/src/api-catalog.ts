@@ -676,6 +676,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'codexLibrary',
+    summary: 'Provides only catalog and transcript reads; never starts a Codex process.',
+    description: 'Provides only catalog and transcript reads; never starts a Codex process.',
+    methods: [
+      {
+        signature: '@Remote list(request: CodexListRequest): CodexChatPage',
+        description: 'List existing source chats with literal title search.',
+        parameters: [{ name: 'request', description: 'Query, archive selection, and optional paging cursor.' }],
+        returns: 'A bounded page labeled with its source home.',
+      },
+      {
+        signature: '@Remote read(id: CodexChatId, cursor: string | null): CodexTranscriptPage',
+        description: 'Read a page of visible authored text, without resuming its source chat.',
+        parameters: [{ name: 'id', description: 'Existing catalog identity.' }, { name: 'cursor', description: 'Cursor for older messages, or null for the latest page.' }],
+        returns: 'Text and timestamps without tool output, reasoning, auth, or configuration.',
+      },
+    ],
+  },
+  {
     key: 'commands',
     summary: 'Human-command registry.',
     description: 'Human-command registry. Plain-context definitions are global; definitions registered through a command-injected child of an agent context shadow globals for that agent.',
@@ -6242,6 +6261,30 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
+  },
+  {
+    name: 'CodexChatId',
+    declaration: 'export type CodexChatId = Branded<\'CodexChatId\'>;',
+  },
+  {
+    name: 'CodexChatPage',
+    declaration: 'export interface CodexChatPage {\n    readonly sourceHome: string;\n    readonly readOnly: true;\n    readonly chats: readonly CodexChatSummary[];\n    readonly nextCursor: string | null;\n}',
+  },
+  {
+    name: 'CodexChatSummary',
+    declaration: 'export interface CodexChatSummary {\n    readonly id: CodexChatId;\n    readonly title: string;\n    readonly cwd: string;\n    readonly updatedAt: number;\n    readonly archived: boolean;\n}',
+  },
+  {
+    name: 'CodexListRequest',
+    declaration: 'export interface CodexListRequest {\n    readonly query: string;\n    readonly archived: boolean;\n    readonly cursor: string | null;\n}',
+  },
+  {
+    name: 'CodexMessage',
+    declaration: 'export interface CodexMessage {\n    readonly id: string;\n    readonly role: \'user\' | \'assistant\';\n    readonly text: string;\n    readonly timestamp: number | null;\n}',
+  },
+  {
+    name: 'CodexTranscriptPage',
+    declaration: 'export interface CodexTranscriptPage {\n    readonly chat: CodexChatSummary;\n    readonly messages: readonly CodexMessage[];\n    readonly nextCursor: string | null;\n    readonly limited: boolean;\n}',
   },
   {
     name: 'CollectedOutput',

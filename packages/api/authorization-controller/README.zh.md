@@ -16,7 +16,7 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [模型体验](#model-experience)
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
-- [开发说明](#dev-note)
+- [开发备注](#dev-note)
 
 <a id="use-this-package"></a>
 ## 使用本包
@@ -44,7 +44,7 @@ kind: "package-reference"
 - 浏览器断开连接后，无法仅通过流确定凭据提交是否完成；它会刷新已保存的记录状态，并报告中断。提供商使用凭据时检查令牌有效性。刷新后可看到其他浏览器中正在进行的登录；本包不会在浏览器之间转移问题。
 
 <a id="dev-note"></a>
-### 开发说明
+### 开发备注
 
 <details>
 <summary>维护者工作上下文 — 点击展开</summary>

@@ -5,13 +5,14 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Welcome } from '../src/client/WelcomePage.tsx'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveDesktopLocale } from '../src/locale.ts'
+import { brandDesktopLocale } from '../src/desktop-branding.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { WelcomeSaveResult, WelcomeNotice } from '../src/welcome-api.ts'
 
 const html = readFileSync(join(import.meta.dirname, '../renderer/welcome.html'), 'utf8')
 afterEach(cleanup)
 
-function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined)) {
+function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined), productName?: string) {
   cleanup()
   const stopAccount = vi.fn()
   const api = {
@@ -22,7 +23,8 @@ function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotic
     startSignIn: vi.fn(async (): Promise<AccountView> => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null })),
     cancelSignIn: vi.fn(async (): Promise<AccountView> => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null })),
     copySignInLink: vi.fn(async () => undefined),
-    ...resolveDesktopLocale(language),
+    ...brandDesktopLocale(resolveDesktopLocale(language), productName ?? 'DeepSeek Harness'),
+    ...(productName === undefined ? {} : { productName }),
     saveApiKey: vi.fn<(value: string) => Promise<WelcomeSaveResult>>().mockResolvedValue({ ok: true }),
     skip: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   }
@@ -48,6 +50,18 @@ function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotic
 }
 
 describe('desktop welcome presentation', () => {
+  it('opens the branded provider workspace without starting a DeepSeek account login', async () => {
+    const view = mount('en', undefined, 'Skeinlet')
+    expect(view.document.title).toBe('Skeinlet')
+    expect(view.document.querySelector('img')!.getAttribute('src')).toBe('assets/welcome-skeinlet.svg')
+    expect(view.document.querySelector('#welcome-description')!.textContent).toContain('Settings → Models')
+    expect(view.button('#api-key').hidden).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace' }))
+    await vi.waitFor(() => { expect(view.api.skip).toHaveBeenCalledExactlyOnceWith() })
+    expect(view.api.startSignIn).not.toHaveBeenCalled()
+    expect(view.api.saveApiKey).not.toHaveBeenCalled()
+  })
+
   it.each(['zh-CN', 'en'])('renders the %s entry and API-key step', async (language) => {
     const view = mount(language)
     expect(view.document.documentElement.lang).toBe(language)

@@ -1,4 +1,6 @@
-# DeepSeek Harness
+# Skeinlet
+
+Skeinlet 是基于 DeepSeek Harness 的独立本地 macOS 编程工作区，提供工作 Codex 登录、只读 Codex 聊天库、原创品牌和默认禁用的遥测。第三方许可与原作者署名保留。下面的上游文档介绍兼容的包和工作流；本地发布目标见[发布计划](docs/fork-release/plan.zh.md)。
 
 [English](README.md) | 中文
 

@@ -143,6 +143,12 @@
     - id: ui-account-notifications
       name: '@deepseek-ai/dsh-client-ui-account-notifications'
 
+    - id: codex-library-controller
+      name: '@deepseek-ai/dsh-api-codex-library-controller'
+
+    - id: codex-library
+      name: '@deepseek-ai/dsh-client-ui-codex-library'
+
     - id: authorization-controller
       name: '@deepseek-ai/dsh-api-authorization-controller'
 

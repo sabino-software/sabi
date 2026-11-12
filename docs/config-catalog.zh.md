@@ -218,6 +218,22 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-agent-tool-presentation -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-api-codex-library-controller -->
+<a id="deepseek-aidsh-api-codex-library-controller"></a>
+
+## `@deepseek-ai/dsh-api-codex-library-controller`
+
+- `source`: [`packages/api/codex-library-controller/src/index.ts:11`](../packages/api/codex-library-controller/src/index.ts)
+
+```ts config-catalog
+/** Work source selection, independent of CODEX_HOME and the app's storage home. */
+export interface Config {
+  /** Absolute work Codex home containing the source catalog and history databases. */
+  readonly sourceHome: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-api-codex-library-controller -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-api-gateway -->
 <a id="deepseek-aidsh-api-gateway"></a>
 
@@ -5097,6 +5113,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-attachment` | — | [`packages/client/ui-attachment/src/index.ts`](../packages/client/ui-attachment/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-brand-official` | — | [`packages/client/ui-brand-official/src/index.ts`](../packages/client/ui-brand-official/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-chat` | — | [`packages/client/ui-chat/src/index.ts`](../packages/client/ui-chat/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-codex-library` | — | [`packages/client/ui-codex-library/src/index.ts`](../packages/client/ui-codex-library/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-commands` | — | [`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-context-menu` | — | [`packages/client/ui-context-menu/src/index.ts`](../packages/client/ui-context-menu/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |

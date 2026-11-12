@@ -170,6 +170,15 @@ describe('client build environment', () => {
     })
   })
 
+  it('embeds the isolated fork identity while retaining source metadata', () => {
+    expect(resolveClientBuildEnvironment({
+      DSH_CLIENT_COMMIT_HASH: COMMIT_HASH, DSH_CLIENT_VERSION: '1.2.3', DSH_CLIENT_TITLE: 'ignored',
+    }, 'skeinlet')).toEqual({
+      DSH_CLIENT_BUILD_PROFILE: 'skeinlet', DSH_CLIENT_TITLE: 'Skeinlet',
+      DSH_CLIENT_COMMIT_HASH: COMMIT_HASH, DSH_CLIENT_VERSION: '1.2.3',
+    })
+  })
+
   it('requires source metadata for an explicit local build', () => {
     expect(() => { resolveClientBuildEnvironment({}, 'local') }).toThrow(/DSH_CLIENT_COMMIT_HASH/)
     expect(() => {

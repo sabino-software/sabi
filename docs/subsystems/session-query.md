@@ -372,6 +372,31 @@ type SessionQueryErrorCode =
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxcodexlibrary--codexlibrarycontroller"></a>
+
+### `ctx.codexLibrary` — `CodexLibraryController`
+
+Provides only catalog and transcript reads; never starts a Codex process.
+
+```ts cordis-catalog
+/**
+ * List existing source chats with literal title search.
+ * @param request - Query, archive selection, and optional paging cursor.
+ * @returns A bounded page labeled with its source home.
+ */
+@Remote list(request: CodexListRequest): CodexChatPage
+
+/**
+ * Read a page of visible authored text, without resuming its source chat.
+ * @param id - Existing catalog identity.
+ * @param cursor - Cursor for older messages, or null for the latest page.
+ * @returns Text and timestamps without tool output, reasoning, auth, or configuration.
+ */
+@Remote read(id: CodexChatId, cursor: string | null): CodexTranscriptPage
+```
+
+Source: [`packages/api/codex-library-controller/src/index.ts`](../../packages/api/codex-library-controller/src/index.ts)
+
 <a id="ctxsessionquery--sessionqueryengine-abstract-seam"></a>
 
 ### `ctx.sessionQuery` — `SessionQueryEngine` (abstract seam)
