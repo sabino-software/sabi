@@ -26,7 +26,7 @@ async function fixture(issuer: string, config: Config = {}) {
   await ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
     kind: 'grant', payload: { version: 1, token: 'fixture-token', issuer },
   }))
-  await ctx.plugin(DeepSeekAccount, config)
+  await ctx.plugin(DeepSeekAccount, { reportNotificationEvents: true, ...config })
   return ctx.deepseekAccount
 }
 

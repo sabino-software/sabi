@@ -9,7 +9,7 @@ import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
 import type { AccountNotificationBatch, AccountNotificationId, AccountClientMetadata } from '@deepseek-ai/dsh-deepseek-account'
-import { DeepSeekAccount } from '../src/index.ts'
+import { DeepSeekAccount, type Config } from '../src/index.ts'
 
 const cleanups: Array<() => Promise<unknown>> = []
 afterEach(async () => { while (cleanups.length) await cleanups.pop()!() })
@@ -51,7 +51,7 @@ function wire(id: string, fields: Record<string, unknown> = {}) {
     title: 'Product news', body: 'New features are available.', actions: [], ...fields }
 }
 
-async function fixture() {
+async function fixture(reporting: Pick<Config, 'reportNotificationEvents'> = { reportNotificationEvents: true }) {
   const home = await mkdtemp(join(tmpdir(), 'dsh-bonus-'))
   cleanups.push(() => rm(home, { recursive: true, force: true }))
   const requests: Recorded[] = []
@@ -128,6 +128,7 @@ async function fixture() {
   // The composed client identity is this fixture's choice; `null` is the web profile's documented setting.
   const provider = ctx.plugin(DeepSeekAccount, {
     platformOrigin: origin, harnessOrigin: origin, allowLoopbackHttp: true, requestTimeoutMs: 5_000, desktopPlatform: null,
+    ...reporting,
   })
   await provider
   cleanups.push(async () => { await provider.dispose(); await authorization.dispose(); await credentials.dispose() })
@@ -627,4 +628,14 @@ it.each(['list', 'content', 'display'] as const)('discards a successful %s respo
     cleanup.mockRestore()
     if (body.locked) { await reader.cancel(); reader.releaseLock() }
   }
+})
+
+
+it.each([undefined, false])('keeps notification interactions local without a reporting opt-in: %s', async (enabled) => {
+  const f = await fixture({ reportNotificationEvents: enabled })
+  await f.grant('private-notification-grant')
+  for (const event of ['displayed', 'cta_clicked', 'dismissed'] as const) {
+    expect(await f.account.reportNotificationEvent(ORDER as AccountNotificationId, event, clientMetadata())).toBe(false)
+  }
+  expect(f.requests).toEqual([])
 })

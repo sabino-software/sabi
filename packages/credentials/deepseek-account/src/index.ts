@@ -42,6 +42,8 @@ export interface Config {
   platformOrigin?: string
   /** Harness API origin for account notifications. */
   harnessOrigin?: string
+  /** Opt into notification impression, action, and dismissal reports; disabled by default. */
+  reportNotificationEvents?: boolean
   /** Native desktop identity for Host API and embedded Platform requests; null identifies the client as web. */
   desktopPlatform?: 'darwin' | 'win32' | null
   /** Optional frontend deployment selector for embedded Usage and Top-up pages. */
@@ -73,6 +75,7 @@ export interface Config {
 const Config = Schema.object({
   platformOrigin: Schema.string().default('https://platform.deepseek.com'),
   harnessOrigin: Schema.string().default('https://harness.deepseek.com'),
+  reportNotificationEvents: Schema.boolean().default(false),
   desktopPlatform: Schema.union([Schema.const('darwin'), Schema.const('win32'), Schema.const(null)]).default(null),
   embeddedPageDist: Schema.string().default(''),
   inferenceOrigin: Schema.string().default('https://api.deepseek.com'),
@@ -108,6 +111,7 @@ export class DeepSeekAccount extends TypertRemoteService {
   static Config = Config
   private readonly origin: string
   private readonly harnessOrigin: string
+  private readonly reportNotificationEvents: boolean
   private readonly embeddedPageDist: string
   private readonly inferenceOrigin: string
   private readonly rewriteBrowserOrigin: boolean
@@ -136,6 +140,7 @@ export class DeepSeekAccount extends TypertRemoteService {
     super(ctx, 'deepseekAccount', { namespace: 'account' })
     installAccountTaskCancellation(ctx)
     const resolved = Config(config)
+    this.reportNotificationEvents = resolved.reportNotificationEvents
     this.embeddedPageDist = resolved.embeddedPageDist
     this.origin = platformOrigin(resolved.platformOrigin, resolved.allowLoopbackHttp, 'platformOrigin')
     this.harnessOrigin = platformOrigin(resolved.harnessOrigin, resolved.allowLoopbackHttp, 'harnessOrigin')
@@ -301,15 +306,16 @@ export class DeepSeekAccount extends TypertRemoteService {
   }
 
   /**
-   * Report a notification interaction; the backend decides consumption.
+   * Report a notification interaction only when explicitly enabled; the backend decides consumption.
    * @param id - notification the user interacted with.
    * @param event - displayed frame, non-dismiss action click, or explicit dismissal.
    * @param client - identity of the requesting UI for this call.
-   * @returns true once the server accepts the event; false if signed out or credentials changed during the call.
+   * @returns true once the server accepts the event; false if reporting is disabled, signed out, or credentials changed during the call.
    */
   @Remote
   async reportNotificationEvent(id: AccountNotificationId,
     event: AccountNotificationEvent, client: AccountClientMetadata): Promise<boolean> {
+    if (!this.reportNotificationEvents) return false
     const lifetime = this.detailsLifetime
     const headers = this.detailHeaders(client)
     const stored = await this.readCurrentGrant(lifetime)
