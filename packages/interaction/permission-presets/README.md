@@ -98,6 +98,8 @@ Mounting pins the Sessions of every live and future Agent: a genuinely fresh ses
 
 The service requires `ctx.sessionProjections` and awaits registration of `permissions`; its client view contains only `currentValue`. Its process-level `catalog()` Remote returns one complete selectable snapshot. Registering or removing Auto emits the payload-free `permission-presets/catalog-changed` notification, so clients subscribe first and then re-read the catalog without appending a Session event, publishing a Session projection frame, or changing Session sequence. The `/permission` command registers only when a `ctx.commands` registry is composed. Calls that derive the current preset or pin an initial selection use the retained projection handle.
 
+Explicit preset switches dispatch synchronous `permission-presets/selecting` admission before writing the preset or either knob. A throwing listener refuses the complete switch without partial events. Initial permission pinning does not dispatch this hook.
+
 </details>
 
 -----
@@ -115,8 +117,6 @@ Read these pages when the package-level contract is not enough. They move from t
 -----
 
 <a id="model-experience"></a>
-Explicit preset switches dispatch synchronous `permission-presets/selecting` admission before writing the preset or either knob. A throwing listener refuses the complete switch without partial events. Initial permission pinning does not dispatch this hook.
-
 ## Model Experience
 
 Indirectly, through `dsh-user-approval` and `dsh-tool-bash`, which render the approval-policy prompt, switch notice, and sandboxed tool outcomes selected by this service's knob events; `permission/preset` itself is log-only.

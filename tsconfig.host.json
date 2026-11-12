@@ -138,6 +138,7 @@
     "apps/web/tests/account-login.e2e.ts",
     "apps/web/tests/provider-authorization.e2e.ts",
     "apps/web/tests/skeinlet-library.e2e.ts",
+    "apps/web/tests/axiom-browser-extension.e2e.ts",
     "apps/web/tests/axiom-link.e2e.ts",
     "apps/web/tests/onboarding-usable-provider.e2e.ts",
     "apps/web/tests/remote-settings.e2e.ts",
@@ -289,7 +290,7 @@
   "references": [
     { "path": "./packages/api/codex-library-controller" },
     { "path": "./packages/host/codex-app-server" },
-    { "path": "./packages/experimental/native-conversations" },
+    { "path": "./packages/experimental/native-conversations/tsconfig.host.json" },
     { "path": "./packages/client/ui-codex-library/tsconfig.host.json" },
     { "path": "./packages/experimental/action-cards" },
     { "path": "./packages/experimental/creation-recommendations" },

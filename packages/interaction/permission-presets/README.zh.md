@@ -7,8 +7,6 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-显式切换预设时，在写入预设或任一权限设置前同步派发 `permission-presets/selecting` 准入事件。监听器抛出异常会拒绝整个切换，不产生部分事件。初始权限固定不派发此钩子。
-
 ## 概述
 
 提供具名权限模式，同时设置沙箱与审批，但各执行服务仍保留自己的值。配置预设提供未来会话默认值；显式加载的 Auto review integration 可以增加一个仅限当前会话的选项。客户端从进程目录读取可选项，从 Session 投影读取当前选择。不匹配任何预设的旋钮组合显示为 `custom`，用户可以离开该状态，但不能选择它。本包拥有选择与默认值；沙箱、审批和 Auto integration 拥有执行行为。
@@ -99,6 +97,8 @@ kind: "package-reference"
 ### 目录、投影与可选命令
 
 该服务要求 `ctx.sessionProjections`，并等待 `permissions` 注册完成；其客户端视图只含 `currentValue`。进程级 `catalog()` Remote 返回一份完整的可选快照。注册或移除 Auto 会发出无 payload 的 `permission-presets/catalog-changed` 通知，因此客户端先订阅再重新读取目录；该过程不会追加 Session 事件、发布 Session 投影帧或改变 Session 序列。`/permission` 命令仅在组合了 `ctx.commands` 注册表时注册。派生当前预设或固定初始选择的调用使用保留的投影句柄。
+
+显式切换预设时，在写入预设或任一权限设置前同步派发 `permission-presets/selecting` 准入事件。监听器抛出异常会拒绝整个切换，不产生部分事件。初始权限固定不派发此钩子。
 
 </details>
 

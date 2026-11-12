@@ -54,7 +54,7 @@
       "path": "../ui-settings/tsconfig.client.json"
     },
     {
-      "path": "../../experimental/native-conversations"
+      "path": "../../experimental/native-conversations/tsconfig.client.json"
     }
   ]
 }

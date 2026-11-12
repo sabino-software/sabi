@@ -60,7 +60,7 @@ it('renders and replaces genuine prose with shared Markdown while keeping HTML a
   expect(screen.getByText('Observed').tagName).toBe('STRONG')
   expect(view.container.querySelector('img')).toBeNull()
   expect(view.container.querySelector('script')).toBeNull()
-  view.rerender(<NativeAxiomMessageView {...{ ...props, node: { ...node, data: { ...node.data, text: 'Later **source** edit' } } } as Props} />)
+  view.rerender(<NativeAxiomMessageView {...{ ...props, node: { ...node, data: { ...node.data, text: 'Later **source** edit' } } }} />)
   expect(view.container.querySelectorAll('[data-native-axiom-message]')).toHaveLength(1)
   expect(view.container.textContent).toBe('Later source edit')
 })

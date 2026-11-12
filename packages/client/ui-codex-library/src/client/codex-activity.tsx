@@ -42,7 +42,7 @@ function activityOf(event: SessionEventLike): NativeCodexActivity | undefined {
 /** One id retains its earliest loaded anchor even when only completion is available in a paged window. */
 export const codexActivityDefinition: ConversationNodeDefinition<NativeCodexActivity> = {
   kind: 'native-codex-activity', target: 'chat',
-  match: event => {
+  match: (event) => {
     const activity = activityOf(event)
     // Every record may initialize a partial window; later starts update the same business id.
     return activity === undefined ? null : { id: activity.id, role: 'start', exclusive: true }
@@ -53,7 +53,7 @@ export const codexActivityDefinition: ConversationNodeDefinition<NativeCodexActi
     return activity
   },
   update: (context, match) => activityOf(match.event) ?? context.state,
-  buildViewNode: context => {
+  buildViewNode: (context) => {
     if (context.state === undefined || context.start === undefined) return null
     return { key: context.key, kind: 'native-codex-activity', id: context.id, target: 'chat',
       anchorSeq: context.start.event.seq, location: context.start.location, visibility: 'visible', data: context.state,
@@ -63,7 +63,7 @@ export const codexActivityDefinition: ConversationNodeDefinition<NativeCodexActi
 
 export type CodexActivityCardProps = PropsRuntime<'conversation.chat.node', 'native-codex-activity'> & PropsLocale<'nativeCodexActivity'>
 
-/** Show source provenance and lifecycle without claiming the native operation succeeded. */
+/** Show original source and lifecycle without claiming the native operation succeeded. */
 export function CodexActivityCard({ node, t }: CodexActivityCardProps) {
   const [open, setOpen] = useState(false)
   const { label, phase, detail, type } = node.data

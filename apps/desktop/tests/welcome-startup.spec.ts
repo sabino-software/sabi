@@ -147,7 +147,7 @@ vi.mock('../src/welcome-backend.ts', () => ({
     },
   }),
 }))
-vi.mock('node:fs', async importOriginal => {
+vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>()
   return {
     ...actual,

@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/host/codex-app-server/README.md
+/:
+  en: d10dca9e9fb838d1
+  zh: 00334241e7680d44
+/deepseek-ai-dsh-host-codex-app-server:
+  en: e57f1ddf8d95a5d6
+  zh: 4923bb843b761e80
+/deepseek-ai-dsh-host-codex-app-server/summary:
+  en: c1750cadea9f8091
+  zh: 438cbe212f7644c1
+/deepseek-ai-dsh-host-codex-app-server/table-of-contents:
+  en: 122f0d41696980b1
+  zh: 5423073f383f055d
+/deepseek-ai-dsh-host-codex-app-server/use-this-package:
+  en: 5a20970171c80ec6
+  zh: d8699c59a9831235
+/deepseek-ai-dsh-host-codex-app-server/understand-the-implementation:
+  en: 17d2423369918b9e
+  zh: 656c1c58709a56ff
+/deepseek-ai-dsh-host-codex-app-server/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-host-codex-app-server/model-experience/native-requests:
+  en: 222978c5d3883ea3
+  zh: 955accee5ac18536
+/deepseek-ai-dsh-host-codex-app-server/model-experience/native-requests/what-the-model-sees:
+  en: c808dd4a2cd3d3df
+  zh: d8572cf59c222600
+/deepseek-ai-dsh-host-codex-app-server/model-experience/native-requests/token-effect:
+  en: 9e0059b0b6f8d872
+  zh: 667993d19cf42135
+/deepseek-ai-dsh-host-codex-app-server/model-experience/native-requests/kv-cache-effect:
+  en: e288d5e3f011e34b
+  zh: 38514f454e136192
+/deepseek-ai-dsh-host-codex-app-server/known-limitations-and-deferred-work:
+  en: d3024c262383112a
+  zh: f9245b3e7719f912
+/deepseek-ai-dsh-host-codex-app-server/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: 25e979141fbe5501

@@ -40,13 +40,13 @@ export function readAxiomPage(): AxiomPageState {
       if (tag === 'BR') return '\n'
       if (tag === 'IMG') return escape(node.getAttribute('alt') ?? '')
       if (tag === 'PRE') {
-        const code = node.querySelector('code')?.textContent ?? node.textContent ?? ''
+        const code = node.querySelector('code')?.textContent ?? node.textContent
         const runs = code.match(/`+/gu) ?? []
         const fence = '`'.repeat(Math.max(3, ...runs.map(run => run.length + 1)))
         return `\n${fence}\n${code}\n${fence}\n`
       }
       if (tag === 'CODE') {
-        const text = node.textContent ?? ''
+        const text = node.textContent
         const fence = '`'.repeat(Math.max(1, ...(text.match(/`+/gu) ?? []).map(run => run.length + 1)))
         return `${fence} ${text} ${fence}`
       }

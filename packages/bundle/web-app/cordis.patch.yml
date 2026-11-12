@@ -636,5 +636,5 @@
         clientVersion: !!js process.env.DSH_CLIENT_VERSION
 
     - id: native-conversations
-      name: '@deepseek-ai/dsh-experimental-native-conversations'
+      name: '@deepseek-ai/dsh-native-conversations'
       disabled: !!js process.env.DSH_NATIVE_CONVERSATIONS !== '1'

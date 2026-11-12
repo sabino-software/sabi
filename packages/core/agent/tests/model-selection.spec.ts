@@ -27,7 +27,7 @@ async function harness(options: AgentOptions = INITIAL) {
   await ctx.plugin(SessionProjectionRegistry)
   const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
   const session = ctx.sessions.create(SessionId('model-selection'))
-  const model = new AgentModel(() => projection.stateOf(session), session, options, selection => {
+  const model = new AgentModel(() => projection.stateOf(session), session, options, (selection) => {
     ctx.emit(agentCarrier(agent), 'agent/model-selecting', { agent, selection })
   })
   const unused = (): never => { throw new Error('model-selection fixture does not drive the Agent') }
@@ -78,7 +78,7 @@ describe('Session model selection', () => {
       expect(agent).toBe(h.agent)
       if (selection.provider !== INITIAL.provider) throw new Error('selection refused')
     })
-    expect(() => h.record({ provider: 'different', model: 'other' })).toThrow('selection refused')
+    expect(() =>{  h.record({ provider: 'different', model: 'other' }) }).toThrow('selection refused')
     expect(h.session.snapshotEvents()).toEqual(before)
     expect(h.current()).toEqual(INITIAL)
     stop()

@@ -22,6 +22,19 @@ function openTurn(session: Session): void {
 }
 
 describe('plugin records', () => {
+  it('returns the canonical new write for persistence without reading history', () => {
+    const session = Session.create(SessionId('write-result'))
+    const data = { count: 1 }
+    const record = appendPluginRecord(session, 'plugin:test/state', data, { returnEvent: true })
+    data.count = 2
+    expect(record).toBe(session.eventAt(SessionSeq(0)))
+    expect(record).toEqual({ type: 'plugin:test/state', seq: 0, time: record.time, data: { count: 1 }, ignorable: true })
+    expect(Object.isFrozen(record)).toBe(true)
+    expect(Object.isFrozen(record.data)).toBe(true)
+    expect(appendPluginRecord(session, 'plugin:test/state', { count: 3 })).toBe(SessionSeq(1))
+    expect(session.deriveMessages()).toEqual([])
+  })
+
   it('commits an ignorable record outside the model-visible surface', () => {
     const session = Session.create(SessionId('record'))
     openTurn(session)

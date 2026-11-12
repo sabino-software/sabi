@@ -32,7 +32,7 @@ describe('completed-history maintenance', () => {
     await mountAgentLoopTestHarness(ctx)
     if (phase === 'created') {
       ctx.on('agent/created', async ({ agent }) => {
-        await agent.runMaintenance(async () => { appendCompletedHistory(agent, 0) })
+        appendCompletedHistory(agent, 1)
         return undefined
       })
     }
@@ -41,7 +41,7 @@ describe('completed-history maintenance', () => {
       await followup(agent, 'Initial live message')
       await agent.runMaintenance(async () => { appendCompletedHistory(agent, 2) })
     }
-    const importedMax = phase === 'created' ? 1 : 3
+    const importedMax = phase === 'created' ? 2 : 3
     await followup(agent, 'Continue the original conversation')
     const turns = agent.session.snapshotEvents().flatMap(event => event.type === 'turn/start' ? [event.data.turn] : [])
     expect(turns.at(-1)).toBe(importedMax + 1)

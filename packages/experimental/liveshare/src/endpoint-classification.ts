@@ -109,6 +109,9 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'nativeConversations/syncCodex': 'owner-only',
   'nativeConversations/connectAxiom': 'owner-only',
   'nativeConversations/showAxiomLogin': 'owner-only',
+  'nativeConversations/useCodex': 'owner-only',
+  'nativeConversations/startCodexLogin': 'owner-only',
+  'nativeConversations/cancelCodexLogin': 'owner-only',
   'authorization/list': 'owner-only', // provider sign-in and stored account presence
   'authorization/begin': 'owner-only',
   'authorization/answer': 'owner-only',

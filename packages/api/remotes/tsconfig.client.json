@@ -11,7 +11,7 @@
     "src/types.ts"
   ],
   "references": [
-    { "path": "../../experimental/native-conversations" },
+    { "path": "../../experimental/native-conversations/tsconfig.client.json" },
     {
       "path": "../../team/agent-team"
     },

@@ -73,7 +73,7 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
   const lifetime = new AbortController()
   const signal = AbortSignal.any([options.signal, lifetime.signal])
   const schemas = new Map(options.schemas.map(schema => [schema.name, schema]))
-  const tools: Tool[] = options.schemas.map(schema => {
+  const tools: Tool[] = options.schemas.map((schema) => {
     if (schema.parameters.type !== 'object') throw new HarnessError('Native MCP tools require object input schemas.', 'NATIVE_MCP_SCHEMA')
     return { name: schema.name, description: schema.description, inputSchema: schema.parameters as Tool['inputSchema'] }
   })
@@ -196,7 +196,7 @@ export async function startHarnessMcp(options: HarnessMcpOptions): Promise<Harne
       lifetime.abort(new HarnessError('The native model turn has ended.', 'NATIVE_MCP_CLOSED'))
       options.signal.removeEventListener('abort', cancelled)
       const stopped = new Promise<void>((resolve, reject) => {
-        server.close(error => { if (error === undefined) resolve(); else reject(error) })
+        server.close((error) => { if (error === undefined) resolve(); else reject(error) })
       })
       server.closeIdleConnections()
       try {

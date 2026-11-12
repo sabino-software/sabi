@@ -1,6 +1,6 @@
 /** Original-page adapter fixtures: observed text only, confirmed sends, and no mutation on auxiliary calls. */
 import { expect, it, vi } from 'vitest'
-import { createAssistantMessage, createUserMessage, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createUserMessage, type GenerateOptions, type RequestMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { AxiomAdapter, readAxiomHistory, type AxiomAdapterDependencies } from '../src/axiom.ts'
 import type { AxiomMessage, AxiomSendResult, AxiomSnapshot, AxiomTransport } from '../src/axiom-types.ts'
@@ -27,12 +27,12 @@ function fixture(result?: AxiomSendResult, overrides: Partial<AxiomAdapterDepend
   const release = vi.fn()
   const sent: AxiomMessage = { id: 'new-user', role: 'user', text: 'Continue the real conversation.', timestamp: null, truncated: false }
   const assistant: AxiomMessage = { id: 'new-answer', role: 'assistant', text: 'Observed original answer.', timestamp: null, truncated: false }
-  const transport: AxiomTransport = {
+  const transport = {
     acquire: vi.fn(async () => release), connect: vi.fn(async () => snapshot()),
     snapshot: vi.fn(async () => snapshot([...old, sent, assistant])),
-    send: vi.fn(async () => result ?? { status: 'confirmed', messageId: sent.id, snapshot: snapshot([...old, sent]) }),
+    send: vi.fn(async (): Promise<AxiomSendResult> => result ?? { status: 'confirmed', messageId: sent.id, snapshot: snapshot([...old, sent]) }),
     showLogin: vi.fn(async () => {}), disconnect: vi.fn(async () => {}),
-  }
+  } satisfies AxiomTransport
   const committed = vi.fn()
   const adapter = new AxiomAdapter({
     bindingOf: () => ({ sourceId, url }), transport: () => transport,
@@ -96,8 +96,10 @@ it('ignores synthetic Harness user context after the fresh human message', async
 })
 
 it('refuses synthetic-only turns when the owner supplies an empty fresh-input set', async () => {
-  const source = fixture(undefined, { userInput: () => [] })
+  const userInput = vi.fn((_id: SessionId, _messages: readonly RequestMessage[]) => [])
+  const source = fixture(undefined, { userInput })
   expect((await chunks(source.adapter, source.options)).at(-1)).toMatchObject({ reason: { kind: 'error', failure: { code: 'AXIOM_TEXT_REQUIRED' } } })
+  expect(userInput).toHaveBeenCalledExactlyOnceWith(sessionId, source.options.messages)
   expect(source.transport.send).not.toHaveBeenCalled()
 })
 
@@ -110,6 +112,13 @@ it('source-owned rendering publishes real snapshots and closes only the confirme
   expect(source.transport.snapshot).not.toHaveBeenCalled()
   expect(source.committed).toHaveBeenCalledTimes(1)
   expect(source.committed).toHaveBeenCalledWith(sessionId, expect.any(Object), 'new-user', [])
+})
+
+it('lets the original enabled composer admit a queued message while the Dot is working', async () => {
+  const source = fixture(undefined, { renderObserved: true, onSnapshot: () => {} })
+  vi.mocked(source.transport.connect).mockResolvedValue({ ...snapshot(), siteStatus: 'Working' })
+  expect((await chunks(source.adapter, source.options)).at(-1)).toEqual({ type: 'finish', reason: { kind: 'stop' } })
+  expect(source.transport.send).toHaveBeenCalledOnce()
 })
 
 it('never checkpoints partially emitted assistant ids when later source text fails', async () => {

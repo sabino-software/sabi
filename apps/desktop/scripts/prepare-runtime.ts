@@ -12,6 +12,7 @@ import { desktopTargetPlatform, resolveDesktopBuildTarget, resolveDesktopTargetB
 import { packagingStep } from './packaging-step.mjs'
 import { preparePrimaryRuntime } from './prepare-primary-runtime.ts'
 import { prepareDesktopCli } from './prepare-cli.ts'
+import { prepareAxiomBrowserBridge } from './prepare-axiom-browser.ts'
 import { prepareCommandLink } from './prepare-command-link.ts'
 
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
@@ -38,6 +39,9 @@ function prepareCli({ platform, arch }: DesktopTarget): void {
   chmodSync(join(RUNTIME_ROOT, 'bin', 'node'), 0o755)
   const cli = join(RUNTIME_ROOT, 'cli')
   prepareDesktopCli(cli, platform)
+  if (platform === 'darwin' && process.env.DSH_DESKTOP_LOCAL_FORK === '1') {
+    prepareAxiomBrowserBridge(join(RUNTIME_ROOT, 'axiom-browser'))
+  }
   if (platform === 'darwin') {
     const minimumVersion = execFileSync('/usr/libexec/PlistBuddy', [
       '-c', 'Print LSMinimumSystemVersion', join(BUILD_PATHS.electron, 'Electron.app', 'Contents', 'Info.plist'),

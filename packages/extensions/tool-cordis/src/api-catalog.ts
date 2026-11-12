@@ -676,6 +676,51 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'codexAppServer',
+    summary: 'Preserves native IDs and events without creating Harness Sessions.',
+    description: 'Preserves native IDs and events without creating Harness Sessions. Consumers own projections, operation authorization, subscription restoration, and bridges into Harness tools or interaction.',
+    methods: [
+      {
+        signature: 'status(): CodexConnectionStatus',
+        description: 'Read current connection facts.',
+        parameters: [],
+        returns: 'Immutable status; ready does not establish model access.',
+      },
+      {
+        signature: 'async connect(signal?: AbortSignal): Promise<CodexConnectionStatus>',
+        description: 'Attach and initialize once. A future call after loss creates a new connection without replaying mutations.',
+        parameters: [{ name: 'signal', description: 'Optional caller abandonment; does not close a connection shared by other consumers.' }],
+        returns: 'The ready generation after the daemon\'s work home is verified.',
+      },
+      {
+        signature: 'async request(method: CodexMethod, params: CodexJsonObject, signal?: AbortSignal): Promise<CodexJsonObject>',
+        description: 'Invoke an allowlisted official operation exactly once, preserving its response fields.',
+        parameters: [{ name: 'method', description: 'Native operation; managed login is explicit, while filesystem and configuration writes are excluded.' }, { name: 'params', description: 'Official operation parameters; consumers own method-specific defaults and authorization.' }, { name: 'signal', description: 'Optional abandonment, never an implicit turn interruption.' }],
+        returns: 'The unprojected official response object.',
+        throws: ['CodexAppServerError; outcomeUnknown forbids blindly retrying a submitted mutation.'],
+      },
+      {
+        signature: 'onNotification(listener: (notification: CodexNotification) => void): () => void',
+        description: 'Receive validated native notifications, including turn, item, status, and request-resolution events.',
+        parameters: [{ name: 'listener', description: 'Synchronous observer; consumers re-read history after a generation change.' }],
+        returns: 'Effect-owned disposer.',
+      },
+      {
+        signature: 'onStatus(listener: (status: CodexConnectionStatus) => void): () => void',
+        description: 'Observe connection changes; registration immediately reports the current generation.',
+        parameters: [{ name: 'listener', description: 'Synchronous observer of immutable connection facts.' }],
+        returns: 'Effect-owned disposer.',
+      },
+      {
+        signature: 'setRequestHandler(method: CodexServerRequestMethod, handler: CodexServerRequestHandler): () => void',
+        description: 'Assign one owner for approvals, questions, elicitation, or dynamic tool calls.',
+        parameters: [{ name: 'method', description: 'Exact official server method.' }, { name: 'handler', description: 'Receives original request ID and an abort signal; return its official response object.' }],
+        returns: 'Effect-owned disposer; absent handlers decline, cancel, or report unavailable tools.',
+        throws: ['CodexAppServerError when a handler already owns this method.'],
+      },
+    ],
+  },
+  {
     key: 'codexLibrary',
     summary: 'Provides only catalog and transcript reads; never starts a Codex process.',
     description: 'Provides only catalog and transcript reads; never starts a Codex process.',
@@ -2348,6 +2393,58 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'nativeConversations',
+    summary: 'A source binding is a Session projection; connection state carries no credentials.',
+    description: 'A source binding is a Session projection; connection state carries no credentials.',
+    methods: [
+      {
+        signature: 'attachAxiomTransport(transport: AxiomTransport): () => void',
+        description: 'Attach only the desktop-owned original-page transport; credentials stay in its browser session.',
+        parameters: [{ name: 'transport', description: 'Original-page operations owned by this desktop Host.' }],
+        returns: 'Disposer that detaches only this transport.',
+      },
+      {
+        signature: '@Remote async status(): Promise<NativeConversationStatus>',
+        description: 'Read connection state without starting or resuming a conversation.',
+        parameters: [],
+        returns: 'Credential-free connection status.',
+      },
+      {
+        signature: '@Remote async startCodexLogin(): Promise<{ authUrl: string }>',
+        description: 'Start managed login after an explicit owner action; Codex owns OAuth and the local callback.',
+        parameters: [],
+        returns: 'The ephemeral authorization link for the owner\'s regular browser, without credentials.',
+      },
+      {
+        signature: '@Remote async cancelCodexLogin(): Promise<void>',
+        description: 'Cancel only the pending login created by this service.',
+        parameters: [],
+      },
+      {
+        signature: '@Remote async useCodex(): Promise<void>',
+        description: 'Select the real work subscription for new Harness chats after the user\'s explicit welcome action.',
+        parameters: [],
+      },
+      {
+        signature: '@Remote syncCodex(): Promise<{ imported: number }>',
+        description: 'Refresh source metadata into ordinary workspace sidebar rows.',
+        parameters: [],
+        returns: 'Count of newly imported Sessions.',
+      },
+      {
+        signature: '@Remote async connectAxiom(url: string): Promise<{ sessionId: SessionId }>',
+        description: 'Connect the original selected Dot and open it as an ordinary Session.',
+        parameters: [{ name: 'url', description: 'Exact original ChatGPT Dot URL selected by the user.' }],
+        returns: 'The ordinary Session assigned to that original conversation.',
+      },
+      {
+        signature: '@Remote async showAxiomLogin(): Promise<void>',
+        description: 'Show the dedicated original-page login surface when authentication is required.',
+        parameters: [],
+      },
+    ],
+  },
+  {
     key: 'officeKit',
     summary: 'A provider lifetime owns all converters, queued calls, and temporary files.',
     description: 'A provider lifetime owns all converters, queued calls, and temporary files.',
@@ -2462,7 +2559,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'set(session: Session, name: string): void',
-        description: 'Record a changed preset, then update each changed knob through its own setter. Selecting the effective preset again appends nothing.',
+        description: 'Record a changed preset, then update each changed knob through its own setter. Synchronous admission runs before any preset or knob write; rejection leaves all unchanged. Selecting the effective preset again appends nothing.',
         parameters: [{ name: 'session', description: 'the session the switch belongs to.' }, { name: 'name', description: 'the preset to switch to; unknown names throw.' }],
       },
     ],
@@ -5095,6 +5192,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'payload', description: '.message - the inserted message. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
+    name: 'agent/model-selecting',
+    mode: 'emit',
+    signature: '\'agent/model-selecting\'(this: Scoped<Agent>, payload: { agent: Agent; selection: Readonly<ModelSelection> }): undefined',
+    summary: 'Synchronous admission before a changed model selection is recorded.',
+    description: 'Synchronous admission before a changed model selection is recorded. A throw rejects the switch before the Session log changes; listeners must not return promises. Unchanged recorded selections do not dispatch. The standard AgentLoop supplies this admission to AgentModel; custom drivers own equivalent wiring when they use AgentModel directly.',
+    parameters: [{ name: 'payload', description: '.selection - requested complete provider, model and explicit effort.' }],
+  },
+  {
     name: 'agent/pre-step',
     mode: 'waterfall',
     signature: '\'agent/pre-step\'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; modelSelection: Readonly<ModelSelection> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>',
@@ -5149,6 +5254,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'One Agent failed outside a durable turn position.',
     description: 'One Agent failed outside a durable turn position.',
     parameters: [{ name: 'sessionId', description: 'Agent and Session identity.' }, { name: 'message', description: 'user-safe failure chain.' }],
+  },
+  {
+    name: 'api-session/has-content',
+    mode: 'bail',
+    signature: '\'api-session/has-content\'(event: SessionEvent): true | void',
+    summary: 'A source integration may witness real external conversation content in its own committed record.',
+    description: 'A source integration may witness real external conversation content in its own committed record. Return true only for that record; this never creates a local turn or a model response.',
+    parameters: [{ name: 'event', description: 'committed record being folded into list metadata.' }],
   },
   {
     name: 'api-session/removed',
@@ -5437,6 +5550,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'The selectable process catalog changed.',
     description: 'The selectable process catalog changed. Payload-free by design: consumers subscribe first, then re-read the complete catalog.',
     parameters: [],
+  },
+  {
+    name: 'permission-presets/selecting',
+    mode: 'emit',
+    signature: '\'permission-presets/selecting\'(session: Session, name: string): undefined',
+    summary: 'Synchronous admission before an explicit preset switch writes its preset or knobs.',
+    description: 'Synchronous admission before an explicit preset switch writes its preset or knobs. A throw rejects the complete switch with no durable writes. Initialization pinning does not dispatch.',
+    parameters: [{ name: 'session', description: 'Session whose explicit permission selection is being changed.' }, { name: 'name', description: 'validated configured or live Auto preset name.' }],
   },
   {
     name: 'plugin-manager/changed',
@@ -6147,6 +6268,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AuthorizationStatus = \'authorized\' | \'cancelled\';',
   },
   {
+    name: 'AxiomMessage',
+    declaration: 'export interface AxiomMessage {\n    readonly id: string;\n    readonly role: \'user\' | \'assistant\';\n    readonly text: string;\n    readonly timestamp: string | null;\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'AxiomSendRequest',
+    declaration: 'export interface AxiomSendRequest {\n    readonly requestId: string;\n    readonly revision: number;\n    readonly text: string;\n}',
+  },
+  {
+    name: 'AxiomSendResult',
+    declaration: 'export interface AxiomSendResult {\n    readonly status: \'confirmed\' | \'unknown\' | \'refused\';\n    readonly snapshot: AxiomSnapshot;\n    readonly messageId?: string;\n}',
+  },
+  {
+    name: 'AxiomSnapshot',
+    declaration: 'export interface AxiomSnapshot {\n    readonly source: \'chatgpt-web\';\n    readonly url: string | null;\n    readonly title: string;\n    readonly revision: number;\n    readonly phase: \'disconnected\' | \'loading\' | \'login-required\' | \'ready\' | \'unavailable\';\n    readonly messages: readonly AxiomMessage[];\n    readonly canSend: boolean;\n    readonly draftPresent: boolean;\n    readonly siteStatus: string | null;\n    readonly limited: boolean;\n    readonly errorCode?: \'page-unavailable\' | \'unsupported-page\';\n}',
+  },
+  {
+    name: 'AxiomTransport',
+    declaration: 'export interface AxiomTransport {\n    acquire(signal?: AbortSignal): Promise<() => void>;\n    connect(url: string, signal?: AbortSignal): Promise<AxiomSnapshot>;\n    snapshot(signal?: AbortSignal): Promise<AxiomSnapshot>;\n    send(request: AxiomSendRequest, signal?: AbortSignal): Promise<AxiomSendResult>;\n    showLogin(signal?: AbortSignal): Promise<void>;\n    disconnect(signal?: AbortSignal): Promise<void>;\n}',
+  },
+  {
     name: 'BackendRegistry',
     declaration: 'export class BackendRegistry {\n    register(name: string, backend: StorageBackend): () => void;\n    get(name: string): StorageBackend;\n    names(): string[];\n}',
   },
@@ -6275,12 +6416,44 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CodexChatSummary {\n    readonly id: CodexChatId;\n    readonly title: string;\n    readonly cwd: string;\n    readonly updatedAt: number;\n    readonly archived: boolean;\n}',
   },
   {
+    name: 'CodexConnectionStatus',
+    declaration: 'export interface CodexConnectionStatus {\n    readonly state: \'disconnected\' | \'connecting\' | \'ready\' | \'disposed\';\n    readonly generation: number;\n    readonly sourceHome: string;\n    readonly reason: \'unavailable\' | \'lost\' | \'protocol\' | null;\n}',
+  },
+  {
+    name: 'CodexJsonObject',
+    declaration: 'export type CodexJsonObject = {\n    [key: string]: JsonValue;\n};',
+  },
+  {
     name: 'CodexListRequest',
     declaration: 'export interface CodexListRequest {\n    readonly query: string;\n    readonly archived: boolean;\n    readonly cursor: string | null;\n}',
   },
   {
     name: 'CodexMessage',
     declaration: 'export interface CodexMessage {\n    readonly id: string;\n    readonly role: \'user\' | \'assistant\';\n    readonly text: string;\n    readonly timestamp: number | null;\n}',
+  },
+  {
+    name: 'CodexMethod',
+    declaration: 'export type CodexMethod = \'thread/list\' | \'thread/read\' | \'thread/turns/list\' | \'thread/items/list\' | \'thread/loaded/list\' | \'model/list\' | \'permissionProfile/list\' | \'mcpServerStatus/list\' | \'account/read\' | \'thread/start\' | \'thread/fork\' | \'thread/resume\' | \'thread/unsubscribe\' | \'thread/name/set\' | \'thread/archive\' | \'thread/unarchive\' | \'thread/settings/update\' | \'account/login/start\' | \'account/login/cancel\' | \'turn/start\' | \'turn/steer\' | \'turn/interrupt\';',
+  },
+  {
+    name: 'CodexNotification',
+    declaration: 'export interface CodexNotification {\n    readonly generation: number;\n    readonly method: string;\n    readonly params: CodexJsonObject;\n}',
+  },
+  {
+    name: 'CodexRequestId',
+    declaration: 'export type CodexRequestId = string | number;',
+  },
+  {
+    name: 'CodexServerRequestContext',
+    declaration: 'export interface CodexServerRequestContext {\n    readonly id: CodexRequestId;\n    readonly generation: number;\n    readonly method: CodexServerRequestMethod;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
+    name: 'CodexServerRequestHandler',
+    declaration: 'export type CodexServerRequestHandler = (params: CodexJsonObject, context: CodexServerRequestContext) => Promise<CodexJsonObject>;',
+  },
+  {
+    name: 'CodexServerRequestMethod',
+    declaration: 'export type CodexServerRequestMethod = \'item/commandExecution/requestApproval\' | \'item/fileChange/requestApproval\' | \'item/permissions/requestApproval\' | \'item/tool/requestUserInput\' | \'mcpServer/elicitation/request\' | \'item/tool/call\' | \'applyPatchApproval\' | \'execCommandApproval\' | \'currentTime/read\';',
   },
   {
     name: 'CodexTranscriptPage',
@@ -7917,6 +8090,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ModTier',
     declaration: 'export type ModTier = \'prepend\' | \'user\' | \'append\' | \'builtin\' | \'core\';',
+  },
+  {
+    name: 'NativeCodexLoginStatus',
+    declaration: 'export interface NativeCodexLoginStatus {\n    readonly phase: \'idle\' | \'starting\' | \'awaiting-browser\' | \'verifying\' | \'cancelling\' | \'cancelled\' | \'succeeded\' | \'failed\';\n    readonly error: string | null;\n}',
+  },
+  {
+    name: 'NativeConversationStatus',
+    declaration: 'export interface NativeConversationStatus {\n    readonly codex: {\n        readonly login: NativeCodexLoginStatus;\n        readonly connected: boolean;\n        readonly authenticated: boolean;\n        readonly selected: boolean;\n        readonly error: string | null;\n    };\n    readonly axiom: {\n        readonly available: boolean;\n        readonly phase: string;\n    };\n    readonly syncing: boolean;\n}',
   },
   {
     name: 'NativeFileApplication',

@@ -50,7 +50,7 @@ it('keeps the next page lease queued until cancellation is acknowledged by the n
   expect(source.messages.at(-1)).toEqual({ type: 'axiom-cancel', requestId: id(source.messages[0]!) })
   release()
   let acquired = false
-  const next = source.transport.acquire().then(unlock => { acquired = true; return unlock })
+  const next = source.transport.acquire().then((unlock) => { acquired = true; return unlock })
   await Promise.resolve()
   await Promise.resolve()
   expect(acquired).toBe(false)

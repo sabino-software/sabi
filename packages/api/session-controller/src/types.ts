@@ -8,7 +8,7 @@ import type {
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { LlmModelBadge, TextBlock } from '@deepseek-ai/dsh-llm'
-import type { SessionId, SessionSeq, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq, SessionSeqCursor, SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap, SessionProjectionSummaryExcluded, SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -31,7 +31,7 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
 
 /** Persisted hints used to summarize a cold Session. */
 export interface SessionListMetadata {
-  /** Whether the folded prefix contains no turn. */
+  /** Whether the folded prefix contains neither a turn nor source-owned conversation content. */
   readonly blank: boolean
   /** Latest human-authored prompt time in the folded prefix. */
   readonly lastPromptAt: number | null
@@ -676,6 +676,13 @@ export type SessionProjectionFrame =
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
+    /**
+     * A source integration may witness real external conversation content in its own committed record.
+     * Return true only for that record; this never creates a local turn or a model response.
+     * @mode bail
+     * @param event - committed record being folded into list metadata.
+     */
+    'api-session/has-content'(event: SessionEvent): true | void
     /**
      * A Session became visible or its Agent was created or disposed.
      * Consumers upsert the summary and replace its current running and availability state.

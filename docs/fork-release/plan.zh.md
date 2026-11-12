@@ -13,7 +13,7 @@ description: "Skeinlet 本地发布范围、里程碑与验收证据。"
 ## 里程碑
 
 1. 品牌已完成：Skeinlet 原生应用、原创生成的位图图标、SVG 标记和字标、欢迎页及浏览器品牌、独立 bundle 标识与 URL scheme。保留 MIT 许可证和上游署名。名称是工作名称，不声称完成商标审查。
-2. Codex 聊天已完成：独立只读库提供标题搜索、归档筛选、消息分页和工作目录来源。读取私有 SQLite 快照，不恢复、改写或导入源聊天，不读取个人 Codex 或认证文件，不加载远端图片和原始 HTML。
+2. Codex 聊天已完成：独立只读库提供标题搜索、归档筛选、消息分页和工作主目录来源标记。读取私有 SQLite 快照，不恢复、改写或导入源聊天，不读取个人 Codex 或认证文件，不加载远端图片和原始 HTML。
 3. Axiom 插件已完成：可选 `@local/skeinlet-axiom-link` 0.1.1 通过桌面侧边栏浏览器打开用户选择的真实 ChatGPT Dot，并提供外部浏览器入口。插件基于 Creator 模板编写，在用户运行的 Creator 聊天中审查，并根据审查和原生视觉检查改进。不创建替代人格，不复制 Cookie，不使用私有 ChatGPT API。
 4. 本地发布已完成：独立 Apple Silicon 应用安装于 `~/Applications/Skeinlet.app`，保留现有本地配置，省略更新源，内嵌运行时，验证常规冷启动和界面注册，并在本地提交。它是临时签名的本地候选版，未经公证或对外分发。
 
@@ -35,7 +35,7 @@ description: "Skeinlet 本地发布范围、里程碑与验收证据。"
 
 ## 当前证据
 
-2026-11-12，Computer Use 展示了 `~/.codex` 中真实工作目录和已有聊天正文，提供只读来源、旧消息分页且不显示输入框。当前聊天使用 `thread_history_1.sqlite`，只扫描 JSONL 会遗漏它们。合成数据库测试验证源 DB/WAL 不变且不创建源 SHM。Codex 自身并发写入不属于此查看器的行为。
+2026-11-12，Computer Use 展示了 `~/.codex` 中真实工作目录和已有聊天正文，提供只读来源标记、旧消息分页且不显示输入框。当前聊天使用 `thread_history_1.sqlite`，只扫描 JSONL 会遗漏它们。合成数据库测试验证源 DB/WAL 不变且不创建源 SHM。Codex 自身并发写入不属于此查看器的行为。
 
 现有 Creator 聊天通过保存的工作 Codex 订阅完成只读插件审查。凭据文件在安装和重启后字节一致。最终冷启动识别提供方授权，直接进入保留的工作区。运行时元数据确认会话 OTel、产品 OTel 和客户端分析均禁用且未挂载。Axiom 链接在重启后保留在本地，私有 URL 不进入源码或发布产物。
 
@@ -49,4 +49,4 @@ description: "Skeinlet 本地发布范围、里程碑与验收证据。"
 
 原生壳有意保留 `~/Library/Application Support/DeepSeek Harness Local` 下的 Electron 与 Harness 数据。替换为其他 Skeinlet 构建时保留此配置。工作 Codex 源仍为 `~/.codex`，个人 Codex 独立。上游 Harness 更新不会替换此应用；未来源码合并仍需重复上述隐私和登录检查。
 
-原创图形和生成来源位于 `assets/branding/skeinlet/`：`app-icon.png`、`mark.svg`、`wordmark.svg` 和 `prompt.txt`。打包图标是内置 ImageGen 原始输出的 1024px 技术缩放版。
+原创图形和生成提示词位于 `assets/branding/skeinlet/`：`app-icon.png`、`mark.svg`、`wordmark.svg` 和 `prompt.txt`。打包图标是内置 ImageGen 原始输出的 1024px 技术缩放版。

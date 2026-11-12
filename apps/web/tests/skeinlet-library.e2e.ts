@@ -66,7 +66,9 @@ async function codexFixture(root: string) {
     clients.add(socket)
     socket.on('close', () => { clients.delete(socket) })
     socket.on('message', (bytes) => {
-      const frame = object(JSON.parse(String(bytes)))
+      const text = Array.isArray(bytes) ? Buffer.concat(bytes).toString('utf8')
+        : bytes instanceof ArrayBuffer ? new TextDecoder().decode(bytes) : bytes.toString('utf8')
+      const frame = object(JSON.parse(text))
       frames.push(frame)
       if (frame.id === undefined) return
       void (async () => {
@@ -231,9 +233,27 @@ it.skipIf(process.platform === 'win32')('continues original Codex and Axiom chat
     await page.getByRole('button', { name: 'Send message', exact: true }).click()
     await codexSettled
     await page.getByText('Continued original work answer.', { exact: true }).waitFor()
-    expect(daemon.frames.filter(frame => frame.method === 'turn/start').map(frame => frame.params)).toEqual([
-      expect.objectContaining({ threadId: 'existing-codex-thread', input: [{ type: 'text', text: 'Continue this exact work thread.', text_elements: [] }] }),
-    ])
+    const turns = daemon.frames.filter(frame => frame.method === 'turn/start').map(frame => object(frame.params))
+    expect(turns).toHaveLength(1)
+    const started = object(turns[0])
+    expect(started.threadId).toBe('existing-codex-thread')
+    const input = started.input
+    if (!Array.isArray(input)) throw new Error('Expected original Codex turn input')
+    expect(input[0]).toEqual({ type: 'text', text: 'Continue this exact work thread.', text_elements: [] })
+    const framework = input.slice(1).map((value) => {
+      const context = object(value)
+      expect(context.type).toBe('text')
+      expect(context.text_elements).toEqual([])
+      if (typeof context.text !== 'string') throw new Error('Expected attributed Harness context')
+      const envelope = object(JSON.parse(context.text))
+      expect(envelope.kind).toBe('harness-context')
+      const message = object(envelope.message)
+      expect(object(message.source).kind).not.toBe('user')
+      return envelope
+    })
+    expect(framework.some(envelope => object(object(envelope.message).source).kind === 'runtime-context')).toBe(true)
+    expect(JSON.stringify(input)).not.toContain('Original work question from the source.')
+    expect(JSON.stringify(input)).not.toContain('Original work answer from the source.')
     expect(daemon.frames.some(frame => frame.method === 'thread/start')).toBe(false)
     expect(daemon.catalog().length).toBeGreaterThan(0)
 

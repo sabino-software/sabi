@@ -21,6 +21,7 @@
     "apps/desktop/src/keybindings.ts",
     "apps/desktop/src/browser-guests.ts",
     "apps/desktop/src/ipc.ts",
+    "apps/desktop/src/axiom-protocol.ts",
     "apps/desktop/src/update-overlay.ts",
     "apps/desktop/src/windows-layout.ts",
     "apps/desktop/tests/**/*.client.spec.tsx",
@@ -57,6 +58,7 @@
     "packages/client/*/tests/**/*.host.ts"
   ],
   "references": [
+    { "path": "./packages/experimental/native-conversations/tsconfig.client.json" },
     { "path": "./packages/client/ui-codex-library/tsconfig.client.json" },
     { "path": "./packages/experimental/client-ui-action-cards" },
     { "path": "./packages/experimental/client-ui-creation-recommendations" },

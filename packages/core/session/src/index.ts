@@ -467,7 +467,7 @@ function assertPluginRecordEvent(value: unknown): asserts value is SessionEvent 
 }
 
 /** Module-private access to {@link Session}'s record commit, assigned once by its static block. */
-let commitPluginRecord: (session: Session, type: PluginRecordType, data: unknown) => SessionSeq
+let commitPluginRecord: (session: Session, type: PluginRecordType, data: unknown) => SessionEvent
 
 /**
  * Append one experimental plugin record: an event marked `ignorable` whose
@@ -499,8 +499,33 @@ export function appendPluginRecord<K extends Extract<keyof PluginRecordMap, Plug
   session: Session,
   type: K,
   data: NoInfer<PluginRecordMap[K]>,
-): SessionSeq {
-  return commitPluginRecord(session, type, data)
+): SessionSeq
+
+/**
+ * Append a typed plugin record and return its immutable committed event for persistence.
+ * Uses the same validation and publication boundary as {@link appendPluginRecord};
+ * this returns only the new write result and does not read historical events.
+ * @param session - the Session accepting this record.
+ * @param type - the declared plugin-owned record name.
+ * @param data - JSON payload snapshotted before commit.
+ * @param options - request the canonical event as the new write result.
+ * @returns the newly committed event with its canonical sequence, time, and data.
+ * @throws under the same admission and validation rules as {@link appendPluginRecord}.
+ */
+export function appendPluginRecord<K extends Extract<keyof PluginRecordMap, PluginRecordType>>(
+  session: Session,
+  type: K,
+  data: NoInfer<PluginRecordMap[K]>,
+  options: { returnEvent: true },
+): SessionEvent
+export function appendPluginRecord<K extends Extract<keyof PluginRecordMap, PluginRecordType>>(
+  session: Session,
+  type: K,
+  data: NoInfer<PluginRecordMap[K]>,
+  options?: { returnEvent: true },
+): SessionSeq | SessionEvent {
+  const event = commitPluginRecord(session, type, data)
+  return options?.returnEvent ? event : event.seq
 }
 
 /**
@@ -926,7 +951,7 @@ export class Session {
    * @param data - JSON payload, snapshotted before it enters the log.
    * @returns the record's sequence number.
    */
-  #appendRecord(type: PluginRecordType, data: unknown): SessionSeq {
+  #appendRecord(type: PluginRecordType, data: unknown): SessionEvent {
     this.publicationEntry()
     const dataSnapshot = snapshotJsonValue(data)
     if (dataSnapshot === undefined) {
@@ -942,7 +967,7 @@ export class Session {
     })
     assertPluginRecordEvent(record)
     this.commit(record, entry)
-    return record.seq
+    return record
   }
 
   /**

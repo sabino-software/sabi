@@ -1,0 +1,106 @@
+{
+  "name": "@deepseek-ai/dsh-native-conversations",
+  "description": "Original Codex and ChatGPT conversations in ordinary Harness Sessions",
+  "version": "0.2.2-rc.2",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    },
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    }
+  },
+  "files": [
+    "locale/*.json",
+    "lib/index.js",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "lib/typert.host.js",
+    "lib/typert.host.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.d.ts.map",
+    "src",
+    "lib/client.js"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/native-conversations"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:~",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
+    "@deepseek-ai/dsh-brand": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@modelcontextprotocol/server": "2.2.0",
+    "@modelcontextprotocol/node": "2.0.0",
+    "zod": "4.6.6"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence": "workspace:*",
+    "@deepseek-ai/dsh-session-projection": "workspace:*",
+    "@deepseek-ai/dsh-workspace": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-host-codex-app-server": "workspace:*",
+    "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
+    "@deepseek-ai/dsh-user-approval": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
+    "@deepseek-ai/dsh-attachment": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:*",
+    "@modelcontextprotocol/client": "2.2.0",
+    "@deepseek-ai/dsh-user-questions": "workspace:*",
+    "@deepseek-ai/dsh-session-title": "workspace:*",
+    "@deepseek-ai/dsh-permission-presets": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
+    "@deepseek-ai/dsh-storage": "workspace:*",
+    "@deepseek-ai/dsh-storage-domain": "workspace:*",
+    "ws": "^8.21.3",
+    "@types/ws": "^8.18.1",
+    "@deepseek-ai/dsh-api-gateway": "workspace:*",
+    "@deepseek-ai/dsh-agent-default-model": "workspace:*",
+    "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
+    "@deepseek-ai/dsh-api-session-controller": "workspace:*",
+    "@deepseek-ai/dsh-session-projection-cache": "workspace:*",
+    "@deepseek-ai/dsh-subagent": "workspace:*"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-gateway"
+      ],
+      "platform": "web"
+    }
+  }
+}

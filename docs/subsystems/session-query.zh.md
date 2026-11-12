@@ -372,6 +372,62 @@ type SessionQueryErrorCode =
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxcodexappserver--codexappserver"></a>
+
+### `ctx.codexAppServer` — `CodexAppServer`
+
+Preserves native IDs and events without creating Harness Sessions. Consumers own projections, operation authorization, subscription restoration, and bridges into Harness tools or interaction.
+
+```ts cordis-catalog
+/**
+ * Read current connection facts.
+ * @returns Immutable status; ready does not establish model access.
+ */
+status(): CodexConnectionStatus
+
+/**
+ * Attach and initialize once. A future call after loss creates a new connection without replaying mutations.
+ * @param signal - Optional caller abandonment; does not close a connection shared by other consumers.
+ * @returns The ready generation after the daemon's work home is verified.
+ */
+async connect(signal?: AbortSignal): Promise<CodexConnectionStatus>
+
+/**
+ * Invoke an allowlisted official operation exactly once, preserving its response fields.
+ * @param method - Native operation; managed login is explicit, while filesystem and configuration writes are excluded.
+ * @param params - Official operation parameters; consumers own method-specific defaults and authorization.
+ * @param signal - Optional abandonment, never an implicit turn interruption.
+ * @returns The unprojected official response object.
+ * @throws CodexAppServerError; outcomeUnknown forbids blindly retrying a submitted mutation.
+ */
+async request(method: CodexMethod, params: CodexJsonObject, signal?: AbortSignal): Promise<CodexJsonObject>
+
+/**
+ * Receive validated native notifications, including turn, item, status, and request-resolution events.
+ * @param listener - Synchronous observer; consumers re-read history after a generation change.
+ * @returns Effect-owned disposer.
+ */
+onNotification(listener: (notification: CodexNotification) => void): () => void
+
+/**
+ * Observe connection changes; registration immediately reports the current generation.
+ * @param listener - Synchronous observer of immutable connection facts.
+ * @returns Effect-owned disposer.
+ */
+onStatus(listener: (status: CodexConnectionStatus) => void): () => void
+
+/**
+ * Assign one owner for approvals, questions, elicitation, or dynamic tool calls.
+ * @param method - Exact official server method.
+ * @param handler - Receives original request ID and an abort signal; return its official response object.
+ * @returns Effect-owned disposer; absent handlers decline, cancel, or report unavailable tools.
+ * @throws CodexAppServerError when a handler already owns this method.
+ */
+setRequestHandler(method: CodexServerRequestMethod, handler: CodexServerRequestHandler): () => void
+```
+
+Source: [`packages/host/codex-app-server/src/index.ts`](../../packages/host/codex-app-server/src/index.ts)
+
 <a id="ctxcodexlibrary--codexlibrarycontroller"></a>
 
 ### `ctx.codexLibrary` — `CodexLibraryController`
@@ -396,6 +452,59 @@ Provides only catalog and transcript reads; never starts a Codex process.
 ```
 
 Source: [`packages/api/codex-library-controller/src/index.ts`](../../packages/api/codex-library-controller/src/index.ts)
+
+<a id="ctxnativeconversations--nativeconversations"></a>
+
+### `ctx.nativeConversations` — `NativeConversations`
+
+A source binding is a Session projection; connection state carries no credentials.
+
+```ts cordis-catalog
+/**
+ * Attach only the desktop-owned original-page transport; credentials stay in its browser session.
+ * @param transport Original-page operations owned by this desktop Host.
+ * @returns Disposer that detaches only this transport.
+ */
+attachAxiomTransport(transport: AxiomTransport): () => void
+
+/**
+ * Read connection state without starting or resuming a conversation.
+ * @returns Credential-free connection status.
+ */
+@Remote async status(): Promise<NativeConversationStatus>
+
+/**
+ * Start managed login after an explicit owner action; Codex owns OAuth and the local callback.
+ * @returns The ephemeral authorization link for the owner's regular browser, without credentials.
+ */
+@Remote async startCodexLogin(): Promise<{ authUrl: string }>
+
+/** Cancel only the pending login created by this service. */
+@Remote async cancelCodexLogin(): Promise<void>
+
+/** Select the real work subscription for new Harness chats after the user's explicit welcome action. */
+@Remote async useCodex(): Promise<void>
+
+/**
+ * Refresh source metadata into ordinary workspace sidebar rows.
+ * @returns Count of newly imported Sessions.
+ */
+@Remote syncCodex(): Promise<{ imported: number }>
+
+/**
+ * Connect the original selected Dot and open it as an ordinary Session.
+ * @param url Exact original ChatGPT Dot URL selected by the user.
+ * @returns The ordinary Session assigned to that original conversation.
+ */
+@Remote async connectAxiom(url: string): Promise<{ sessionId: SessionId }>
+
+/** Show the dedicated original-page login surface when authentication is required. */
+@Remote async showAxiomLogin(): Promise<void>
+```
+
+Types: [SessionId](core.zh.md)
+
+Source: [`packages/experimental/native-conversations/src/index.ts`](../../packages/experimental/native-conversations/src/index.ts)
 
 <a id="ctxsessionquery--sessionqueryengine-abstract-seam"></a>
 

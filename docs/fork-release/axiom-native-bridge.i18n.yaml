@@ -1,0 +1,7 @@
+# Bilingual-pair consistency record for axiom-native-bridge.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/fork-release/axiom-native-bridge.md
+/original-dot-page-adapter:
+  en: ae3eb0dd2bb91cc2
+  zh: 68e4fd60c28a4225

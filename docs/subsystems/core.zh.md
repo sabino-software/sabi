@@ -237,6 +237,7 @@ interface Model {
    * defaults without inheriting a previous effort or resolving defaults here.
    * An equal recorded choice is a no-op; an options-only fallback is
    * always recorded. Callers own model availability and capability validation.
+   * Driver admission runs synchronously before the append and may reject the switch.
    * The append uses the Session's existing persistence and failure guarantees.
    * @param selection - complete provider, model, and optional explicit effort.
    */
@@ -1018,6 +1019,29 @@ One message entered the live inbox.
 ```
 
 Types: [Scoped](scope.zh.md) · [UserMessage](session.zh.md)
+
+Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
+
+<a id="agentmodel-selecting--emit"></a>
+
+#### `agent/model-selecting` — emit
+
+Synchronous admission before a changed model selection is recorded. A throw rejects the switch before the Session log changes; listeners must not return promises. Unchanged recorded selections do not dispatch. The standard AgentLoop supplies this admission to AgentModel; custom drivers own equivalent wiring when they use AgentModel directly.
+
+```ts cordis-catalog
+/**
+ * Synchronous admission before a changed model selection is recorded.
+ * A throw rejects the switch before the Session log changes; listeners must not return promises.
+ * Unchanged recorded selections do not dispatch. The standard AgentLoop supplies this admission
+ * to AgentModel; custom drivers own equivalent wiring when they use AgentModel directly.
+ * @param payload.agent - the Agent whose next-step model is being selected.
+ * @param payload.selection - requested complete provider, model and explicit effort.
+ * @mode emit
+ */
+'agent/model-selecting'(this: Scoped<Agent>, payload: { agent: Agent; selection: Readonly<ModelSelection> }): undefined
+```
+
+Types: [Scoped](scope.zh.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 

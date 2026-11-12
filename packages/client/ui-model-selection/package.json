@@ -67,7 +67,7 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
     "clsx": "^2.1.1",
     "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
-    "@deepseek-ai/dsh-experimental-native-conversations": "workspace:*"
+    "@deepseek-ai/dsh-native-conversations": "workspace:*"
   },
   "files": [
     "locale/*.json",

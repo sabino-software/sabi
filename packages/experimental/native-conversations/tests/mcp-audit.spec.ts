@@ -75,7 +75,7 @@ function verify(events: readonly SessionEvent[], receipts: readonly unknown[]): 
 }
 
 describe('native MCP audited persistence', () => {
-  it.each(['none', 'zstd'] as const)('closes and reopens v4 JSONL after two MCP calls and one native final answer (%s)', async compression => {
+  it.each(['none', 'zstd'] as const)('closes and reopens v4 JSONL after two MCP calls and one native final answer (%s)', async (compression) => {
     const root = await mkdtemp(join(tmpdir(), 'native-mcp-audit-'))
     const ctx = new Context()
     const reopened = new Context()
@@ -109,7 +109,9 @@ describe('native MCP audited persistence', () => {
       try {
         const stored = await handle.read()
         const restored = Session.fromRestore(agent.id, stored.events, handle.header, handle.inheritedEventCount, stored.eventState)
-        expect(restored.snapshotEvents()).toEqual(original)
+        expect(restored.snapshotEvents().slice(0, original.length)).toEqual(original)
+        // The JSONL reader materializes the real end-of-seed boundary for the persisted unseeded header.
+        expect(restored.snapshotEvents().slice(original.length)).toMatchObject([{ type: 'session/end-seed', data: {} }])
         verify(stored.events, adapter.receipts)
       } finally { await handle.close() }
     }

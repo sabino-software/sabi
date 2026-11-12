@@ -7,9 +7,10 @@ export type CodexJsonObject = { [key: string]: JsonValue }
 /** The native operations currently consumed by the coding workspace. */
 export type CodexMethod =
   | 'thread/list' | 'thread/read' | 'thread/turns/list' | 'thread/items/list' | 'thread/loaded/list'
-  | 'model/list' | 'permissionProfile/list' | 'mcpServerStatus/list'
-  | 'thread/start' | 'thread/resume' | 'thread/unsubscribe'
+  | 'model/list' | 'permissionProfile/list' | 'mcpServerStatus/list' | 'account/read'
+  | 'thread/start' | 'thread/fork' | 'thread/resume' | 'thread/unsubscribe'
   | 'thread/name/set' | 'thread/archive' | 'thread/unarchive' | 'thread/settings/update'
+  | 'account/login/start' | 'account/login/cancel'
   | 'turn/start' | 'turn/steer' | 'turn/interrupt'
 
 /** Server requests that can be routed into Harness approvals, questions, and tools. */

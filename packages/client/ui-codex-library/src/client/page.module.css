@@ -9,6 +9,13 @@
 .connection h2 { margin: 0; font-size: 16px; font-weight: 500; }
 .form { display: grid; gap: 8px; max-width: 640px; }
 .form label { font-size: 13px; }
+.form select { min-width: 0; height: 32px; padding: 0 8px; font: inherit; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-md); }
+.form select:focus-visible { outline: 1px solid var(--dsw-alias-state-business-primary); }
+.form details { min-width: 0; font-size: 13px; }
+.form summary { cursor: pointer; }
+.form dl { min-width: 0; margin: 16px 0 0; }
+.form dt { margin-top: 12px; color: var(--dsw-alias-label-secondary); }
+.form dd { margin: 4px 0 0; overflow-wrap: anywhere; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .sourceBadge { display: inline-flex; align-items: center; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; white-space: nowrap; }
 .headerBadge { display: inline-flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; white-space: nowrap; }

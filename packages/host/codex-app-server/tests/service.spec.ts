@@ -21,10 +21,11 @@ async function fixture(options: {
   const server = new WebSocketServer({ server: http })
   const received: CodexJsonObject[] = []
   const clients: WebSocket[] = []
-  server.on('connection', socket => {
+  server.on('connection', (socket) => {
     clients.push(socket)
-    socket.on('message', bytes => {
-      const frame = JSON.parse(String(bytes)) as CodexJsonObject
+    socket.on('message', (bytes) => {
+      const text = Buffer.isBuffer(bytes) ? bytes : Array.isArray(bytes) ? Buffer.concat(bytes) : Buffer.from(bytes)
+      const frame = JSON.parse(text.toString('utf8')) as CodexJsonObject
       received.push(frame)
       if (frame.method === 'initialize') {
         socket.send(JSON.stringify({ id: frame.id, result: { codexHome: options.expectedHome ?? home, userAgent: 'fixture', platformFamily: 'unix', platformOs: 'macos' } }))
@@ -42,21 +43,31 @@ async function fixture(options: {
   onTestFinished(async () => {
     await ctx.fiber.dispose()
     for (const socket of clients) socket.terminate()
-    await new Promise<void>(resolve => { server.close(() => { http.close(() => { resolve() }) }) })
+    await new Promise<void>((resolve) => { server.close(() => { http.close(() => { resolve() }) }) })
     rmSync(home, { recursive: true, force: true })
   })
   return { ctx, native: ctx.codexAppServer, received, clients, home }
 }
 
 describe('native work Codex connection', () => {
+  it('allowlists an explicit completed-turn fork and preserves its exact guarded cut', async () => {
+    const { native, received } = await fixture({ handle: (frame, socket) => {
+      socket.send(JSON.stringify({ id: frame.id, result: { thread: { id: 'independent-child' } } }))
+    } })
+    const params = { threadId: 'parent', lastTurnId: 'completed-source-turn', excludeTurns: true,
+      deferGoalContinuation: true, config: { mcp_servers: { skeinlet: { enabled: false } } } }
+    expect(await native.request('thread/fork', params)).toEqual({ thread: { id: 'independent-child' } })
+    expect(received.find(frame => frame.method === 'thread/fork')?.params).toEqual(params)
+  })
+
   it('attaches lazily, initializes once, preserves official fields, and registers disposable observers', async () => {
     const { native, received, clients } = await fixture()
     expect(native.status().state).toBe('disconnected')
     expect(clients).toHaveLength(0)
     const states: string[] = []
-    const disposeStatus = native.onStatus(status => { states.push(status.state) })
+    const disposeStatus = native.onStatus((status) => { states.push(status.state) })
     const notifications: string[] = []
-    const disposeNotifications = native.onNotification(notification => { notifications.push(notification.method) })
+    const disposeNotifications = native.onNotification((notification) => { notifications.push(notification.method) })
     expect(await native.request('thread/list', { limit: 10, useStateDbOnly: true })).toEqual({ data: [], nextCursor: null })
     await native.request('thread/read', { threadId: 'saved-thread', includeTurns: false })
     expect(received.filter(frame => frame.method === 'initialize')).toHaveLength(1)
@@ -67,7 +78,7 @@ describe('native work Codex connection', () => {
     disposeNotifications()
     disposeStatus()
     clients[0]?.send(JSON.stringify({ method: 'turn/completed', params: { threadId: 'saved-thread', turn: { id: 'turn-1' } } }))
-    await new Promise<void>(resolve => { setImmediate(resolve) })
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
     expect(notifications).toHaveLength(1)
   })
 
@@ -113,7 +124,7 @@ describe('native work Codex connection', () => {
     clients[0]?.send(JSON.stringify({ id: 'new-turn-question', method: 'item/tool/requestUserInput', params: { threadId: 'saved-thread', turnId: 'new-turn' } }))
     await vi.waitFor(() => { expect(signal).toBeDefined() })
     clients[0]?.send(JSON.stringify({ method: 'turn/completed', params: { threadId: 'saved-thread', turn: { id: 'old-turn' } } }))
-    await new Promise<void>(resolve => { setImmediate(resolve) })
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
     expect(signal?.aborted).toBe(false)
     answered.resolve({ answers: {} })
     await vi.waitFor(() => { expect(received.some(frame => frame.id === 'new-turn-question')).toBe(true) })
@@ -133,7 +144,7 @@ describe('native work Codex connection', () => {
     clients[0]?.send(JSON.stringify({ method: 'serverRequest/resolved', params: { threadId: 'saved-thread', requestId: 'question-1' } }))
     await vi.waitFor(() => { expect(requestSignal?.aborted).toBe(true) })
     answer.resolve({ answers: {} })
-    await new Promise<void>(resolve => { setImmediate(resolve) })
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
     expect(received.some(frame => frame.id === 'question-1')).toBe(false)
   })
 

@@ -147,7 +147,7 @@ export class ReactLoopAgent implements Agent {
     this.dispatch = agentEvents(loopCtx, this)
     this.scope = createScope(loopCtx, this)
     this.ctx = this.scope.ctx
-    this.model = new AgentModel(projections.modelSelection, session, options, selection => {
+    this.model = new AgentModel(projections.modelSelection, session, options, (selection) => {
       this.ctx.emit(agentCarrier(this), 'agent/model-selecting', { agent: this, selection })
     })
     this.inbox = new ReactLoopInbox(projections.inbox, session, this.dispatch)
@@ -218,7 +218,9 @@ export class ReactLoopAgent implements Agent {
       try {
         return await job(maintenance.abort.signal)
       } finally {
-        this.setPhase({ kind: 'idle', lastTurn: maintenance.lastTurn })
+        // Maintenance may ingest completed history before publication or while idle.
+        // The next driver turn must follow that committed Session boundary.
+        this.setPhase({ kind: 'idle', lastTurn: Math.max(maintenance.lastTurn, this.loopCtx.agents.turnBoundaryOf(this.session).lastTurn) })
         const cause = abortedCancelCause(maintenance.abort.signal)
         if (cause?.kind !== 'disposed' && maintenance.wakeRequested && this.inbox.hasPending) this.wakeDriver()
         done.resolve()

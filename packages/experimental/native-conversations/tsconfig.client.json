@@ -1,0 +1,31 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "files": [
+    "src/client/index.ts",
+    "src/types.ts",
+    "src/axiom-types.ts",
+    "src/codex-activity-types.ts"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../api/gateway/tsconfig.client.json"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../util/brand"
+    }
+  ]
+}

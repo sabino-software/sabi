@@ -1,11 +1,14 @@
 /** Origin-scoped native access to the user-selected original Dot page. */
 import { ipcRenderer } from 'electron'
 import { DESKTOP_IPC } from './ipc.ts'
-import type { AxiomSendResult, AxiomSnapshot, DesktopAxiomBridge } from './axiom-protocol.ts'
+import type { AxiomBrowserSetup, AxiomSendResult, AxiomSnapshot, AxiomTransportMode, DesktopAxiomBridge } from './axiom-protocol.ts'
 
 /** @returns Page operations without browser storage or general script execution access. */
 export function createDesktopAxiomBridge(): DesktopAxiomBridge {
   return {
+    transport: () => ipcRenderer.invoke(DESKTOP_IPC.axiomTransport) as Promise<AxiomTransportMode>,
+    selectTransport: mode => ipcRenderer.invoke(DESKTOP_IPC.axiomSelectTransport, mode) as Promise<void>,
+    browserSetup: () => ipcRenderer.invoke(DESKTOP_IPC.axiomBrowserSetup) as Promise<AxiomBrowserSetup>,
     connect: url => ipcRenderer.invoke(DESKTOP_IPC.axiomConnect, url) as Promise<AxiomSnapshot>,
     snapshot: () => ipcRenderer.invoke(DESKTOP_IPC.axiomSnapshot) as Promise<AxiomSnapshot>,
     send: request => ipcRenderer.invoke(DESKTOP_IPC.axiomSend, request) as Promise<AxiomSendResult>,

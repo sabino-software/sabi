@@ -60,7 +60,7 @@
       "path": "../product-analytics/tsconfig.client.json"
     },
     {
-      "path": "../../experimental/native-conversations"
+      "path": "../../experimental/native-conversations/tsconfig.client.json"
     }
   ]
 }

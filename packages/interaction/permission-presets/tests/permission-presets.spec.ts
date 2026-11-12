@@ -77,7 +77,7 @@ describe('permission preset fold', () => {
       expect(target).toBe(session)
       if (name === 'danger-full-access') throw new Error('permission selection refused')
     })
-    expect(() => ctx.permissionPresets.set(session, 'danger-full-access')).toThrow('permission selection refused')
+    expect(() =>{  ctx.permissionPresets.set(session, 'danger-full-access') }).toThrow('permission selection refused')
     expect(session.snapshotEvents()).toEqual(before)
     expect(ctx.permissionPresets.current(session)).toBe('workspace-write')
     stop()

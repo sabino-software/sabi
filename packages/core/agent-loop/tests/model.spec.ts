@@ -34,7 +34,7 @@ describe('Agent model ownership', () => {
       expect(selection).toEqual(SELECTED)
       throw new Error('model selection refused')
     })
-    expect(() => agent.model.select(SELECTED)).toThrow('model selection refused')
+    expect(() =>{  agent.model.select(SELECTED) }).toThrow('model selection refused')
     expect(agent.session.snapshotEvents()).toEqual([])
     expect(agent.model.current()).toEqual(INITIAL)
   })

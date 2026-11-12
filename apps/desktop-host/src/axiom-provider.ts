@@ -1,8 +1,8 @@
 /** Correlated, bounded original-page requests over the shell-owned child IPC channel. */
 import { z } from 'zod'
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-experimental-native-conversations'
-import type { AxiomSendRequest, AxiomSendResult, AxiomSnapshot, AxiomTransport } from '@deepseek-ai/dsh-experimental-native-conversations/types'
+import type {} from '@deepseek-ai/dsh-native-conversations'
+import type { AxiomSendRequest, AxiomSendResult, AxiomSnapshot, AxiomTransport } from '@deepseek-ai/dsh-native-conversations/types'
 
 const snapshotSchema = z.object({
   source: z.literal('chatgpt-web'), url: z.string().max(4096).nullable(), title: z.string().max(300),
@@ -44,7 +44,7 @@ interface Pending {
 function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
   return new Promise((resolve, reject) => {
-    const abort = (): void => { reject(signal.reason) }
+    const abort = (): void => { reject(signal.reason instanceof Error ? signal.reason : new Error('Axiom request cancelled')) }
     signal.addEventListener('abort', abort, { once: true })
     void operation.then(resolve, reject).finally(() => { signal.removeEventListener('abort', abort) })
   })
@@ -60,7 +60,7 @@ export class AxiomIpcTransport implements AxiomTransport {
 
   /** @param channel Owned parent IPC. @param options Validated maximum duration of one page operation. */
   constructor(private readonly channel: AxiomIpcChannel, private readonly options: { requestTimeoutMs: number }) {
-    this.listeners = [channel.onMessage(message => { this.receive(message) }), channel.onDisconnect(() => { this.dispose() })]
+    this.listeners = [channel.onMessage((message) => { this.receive(message) }), channel.onDisconnect(() => { this.dispose() })]
   }
 
   async acquire(signal?: AbortSignal): Promise<() => void> {
@@ -192,7 +192,7 @@ export function installDesktopAxiomProvider(ctx: Context, options: { requestTime
   const dispose = (): void => {
     if (disposed) return
     disposed = true
-    detach?.()
+    detach()
     transport.dispose()
   }
   ctx.effect(() => dispose, 'desktop: original Axiom page transport')

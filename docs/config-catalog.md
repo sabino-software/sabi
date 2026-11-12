@@ -1831,6 +1831,38 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-hooks-codex -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-codex-app-server -->
+<a id="deepseek-aidsh-host-codex-app-server"></a>
+
+## `@deepseek-ai/dsh-host-codex-app-server`
+
+- `source`: [`packages/host/codex-app-server/src/index.ts:20`](../packages/host/codex-app-server/src/index.ts)
+
+```ts config-catalog
+/** Work identity, Unix endpoint, and complete operation limits. No setting starts a daemon. */
+export interface Config {
+  /** Exact work Codex home expected in the daemon's initialize response. */
+  readonly sourceHome: string
+  /** Empty selects sourceHome/app-server-control/app-server-control.sock. */
+  readonly socketPath: string
+  /** Client identity advertised to the connected work daemon. */
+  readonly clientName: string
+  /** Client version advertised during initialization. */
+  readonly clientVersion: string
+  /** Maximum Unix connection and initialization lifetime in milliseconds. */
+  readonly connectTimeoutMs: number
+  /** Maximum lifetime of an outgoing request before an unknown-outcome refusal. */
+  readonly requestTimeoutMs: number
+  /** Maximum lifetime of an owned incoming approval or user-input request. */
+  readonly serverRequestTimeoutMs: number
+  /** Maximum accepted WebSocket message size in bytes. */
+  readonly maxFrameBytes: number
+  /** Maximum simultaneous outgoing requests per connection. */
+  readonly maxPendingRequests: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-codex-app-server -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-directory-picker-browse -->
 <a id="deepseek-aidsh-host-directory-picker-browse"></a>
 
@@ -2636,6 +2668,37 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-message-feedback -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-native-conversations -->
+<a id="deepseek-aidsh-native-conversations"></a>
+
+## `@deepseek-ai/dsh-native-conversations`
+
+- `inject`: `storageDomain` · `sessionProjections` · `sessionProjectionCache` · `sessionController` · `sessionTitle` · `sessionPersistence` · `sessions` · `workspaceRegistry` · `agents` · `llm` · `codexAppServer` · `tools` · `sandboxPolicy` · `approval` · `userQuestions`
+- `source`: [`packages/experimental/native-conversations/src/index.ts:39`](../packages/experimental/native-conversations/src/index.ts)
+
+```ts config-catalog
+/** Native bridges are enabled only in the isolated desktop fork. */
+export interface Config {
+  /** Directory created when the original conversation has no available workspace. */
+  readonly fallbackCwd: string
+  /** Interval between read-only completed-turn checks for idle open Codex chats. */
+  readonly codexPollIntervalMs: number
+  /** Maximum wait for the managed Codex browser callback in milliseconds. */
+  readonly codexLoginTimeoutMs: number
+  /** Deadline for cancelling this app's exact managed login in milliseconds. */
+  readonly codexLoginCancelTimeoutMs: number
+  /** Maximum desktop original-page request lifetime in milliseconds. */
+  readonly axiomRequestTimeoutMs: number
+  /** Interval between original Axiom page observations while its Session is idle. */
+  readonly axiomPollIntervalMs: number
+  /** Maximum original-page send and acknowledgement lifetime in milliseconds. */
+  readonly axiomResponseTimeoutMs: number
+  /** Fallback stream settling interval; source-owned desktop messages remain continuously observed. */
+  readonly axiomSettleMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-native-conversations -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-office-kit -->
 <a id="deepseek-aidsh-office-kit"></a>
 
@@ -2701,7 +2764,7 @@ export interface Config {
 
 - `inject`: `shell` · `approval` · `sessions` · `agents` · `sessionProjections`
 - `refs`: [`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/interaction/permission-presets/src/index.ts:153`](../packages/interaction/permission-presets/src/index.ts)
+- `source`: [`packages/interaction/permission-presets/src/index.ts:163`](../packages/interaction/permission-presets/src/index.ts)
 
 ```ts config-catalog
 /** The {@link PermissionPresetService} config: preset table and composition default. */

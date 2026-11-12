@@ -537,7 +537,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'useAccess: (action: RemoteEndpoint) => boolean',
       'useTrajectory: UseTrajectory',
     ],
-    keyDomain: 'fixed by the owner\'s key table { [Kind in ChatNodeKind]: { node: ChatNode<Kind> } }, already taken: assistant-step, command, command-input, compaction, context, manual-compaction, model-retry, question-reply, steering, system-prompt, tool-call, turn-error, turn-max-tokens, turn-process, turn-tail, turn-trigger, unknown, user, workflow-run',
+    keyDomain: 'fixed by the owner\'s key table { [Kind in ChatNodeKind]: { node: ChatNode<Kind> } }, already taken: assistant-step, command, command-input, compaction, context, manual-compaction, model-retry, native-codex-activity, question-reply, steering, system-prompt, tool-call, turn-error, turn-max-tokens, turn-process, turn-tail, turn-trigger, unknown, user, workflow-run',
     hookContext: 'ChatNodeHookContext',
     slotInject: 'ChatNodeInjected',
     declaredBy: 'an entry in \'conversation.chat.flow\' (client-ui-chat), so it exists while that entry is mounted',
@@ -557,6 +557,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-chat TurnProcessNodeView key \'turn-process\'',
       'client-ui-chat TurnTailNodeView key \'turn-tail\'',
       'client-ui-chat UnknownNodeView key \'unknown\'',
+      'client-ui-codex-library NativeAxiomMessageView',
+      'client-ui-codex-library CodexActivityCard key \'native-codex-activity\'',
       'client-ui-goal GoalCommandInputView key \'command-input\'',
       'client-ui-tool ToolCallTree key \'tool-call\'',
       'client-ui-user-questions QuestionReplyView key \'question-reply\'',
@@ -1570,7 +1572,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'conversation.composer.bar\' (client-ui-conversation), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-model-selection ModelSelect',
+      'client-ui-model-selection SourceModelSelect',
       'experimental-liveshare ViewerModelSeat',
     ],
     replaceRisk: 'shadows-shipped-ui',
@@ -2089,6 +2091,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'conversation.session.header\' (client-ui-conversation), so it exists while that entry is mounted',
     occupants: [
       'client-ui-agent-preset AgentPresetLabel id \'agent-preset\'',
+      'client-ui-codex-library NativeSourceHeader id \'native-conversation-source\'',
       'client-ui-jobs JobListAction id \'job-list\'',
       'client-ui-sidebar-terminal AgentTerminalOpener id \'agent-terminals\'',
       'client-ui-subagent SubagentCatalogAction id \'subagent-catalog\'',
@@ -5262,6 +5265,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'sidebar.workspaces\' (client-ui-workspace), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-codex-library NativeSourceRow id \'native-conversation-source\'',
       'experimental-client-ui-forge SessionRowForge id \'forge-panel.row\'',
     ],
     replaceRisk: 'none',

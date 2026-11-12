@@ -47,8 +47,9 @@ const imageLimitsSchema = z.object({
 export function applySessionListMetadata(
   state: SessionListMetadata,
   event: SessionEvent,
+  sourceContent = false,
 ): SessionListMetadata {
-  const blank = state.blank && event.type !== 'turn/start'
+  const blank = state.blank && event.type !== 'turn/start' && !sourceContent
   const lastPromptAt = event.type === 'user/message' && event.data.source.kind === 'user'
     ? event.time
     : state.lastPromptAt
@@ -93,9 +94,9 @@ export class ApiSessionList {
       key: 'sessionListMetadata',
       stateSchema: sessionListMetadataSchema,
       init: () => ({ blank: true, lastPromptAt: null }),
-      apply: applySessionListMetadata,
+      apply: (state, event) => applySessionListMetadata(state, event, this.ctx.bail('api-session/has-content', event) === true),
       wire: { viewSchema: sessionListMetadataSchema, view: state => state },
-      stateVersion: 1,
+      stateVersion: 2,
     })
     await this.ctx.sessionProjections.register<'imageLimits', null>({
       key: 'imageLimits',

@@ -1,6 +1,7 @@
 /** Real MCP HTTP requests use Agent-scoped admission, ordinary tool policies, and durable logs. */
 import { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
+import { request as httpRequest } from 'node:http'
 import { ServerResponse } from 'node:http'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -23,7 +24,9 @@ class ConditionalRuntime extends PtcRuntime {
   readonly language = 'typescript'
   readonly isolation = 'fixture'
   readonly admitted: string[][] = []
-  resolve(request: PtcRunRequest): PtcRunSpec { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 } }
+  resolve(request: PtcRunRequest): PtcRunSpec {
+    return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
+  }
   async run(request: PtcRunRequest) {
     const functions = request.bindings[0]!.functions
     this.admitted.push(Object.keys(functions))
@@ -100,7 +103,7 @@ describe('native Harness MCP tools', () => {
     expect(assembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
     const endpoint = await startHarnessMcp({ ctx, agent, schemas: assembly.tools, instructions: 'Stable PTC transport.', modelSelection,
       log: { turn: 1, step: 1 }, signal,
-      onBatch: batch => { for (const message of batch.additionalContexts) agent.session.append('user/message', message, { surfaceOp: 'append' }) },
+      onBatch: (batch) => { for (const message of batch.additionalContexts) agent.session.append('user/message', message, { surfaceOp: 'append' }) },
     })
     const client = new Client({ name: 'native-conditional-test', version: '1.0.0' })
     onTestFinished(async () => { await client.close(); await endpoint.close(); await ctx.fiber.dispose() })
@@ -142,7 +145,9 @@ describe('native Harness MCP tools', () => {
     })
     const client = await h.client()
     const listed = await client.listTools()
-    expect(listed.tools).toEqual(h.schemas.map(schema => ({ name: schema.name, description: schema.description, inputSchema: schema.parameters })))
+    expect(listed.tools).toEqual(h.schemas.map(schema => ({
+      name: schema.name, description: schema.description, inputSchema: schema.parameters,
+    })))
     expect(client.getInstructions()).toBe('Follow the committed Harness system guidance.')
     const result = await client.callTool({ name: 'echo', arguments: { text: 'saved output' } })
     expect(result).toMatchObject({ isError: false, content: [{ type: 'text', text: 'saved output' }] })
@@ -169,7 +174,11 @@ describe('native Harness MCP tools', () => {
     expect((await fetch(endpoint.url, { method: 'POST' })).status).toBe(401)
     expect((await fetch(endpoint.url, { method: 'POST', headers: { authorization: 'Bearer incorrect' } })).status).toBe(401)
     expect((await fetch(endpoint.url, { method: 'POST', headers: { authorization: `Bearer ${endpoint.token}`, origin: 'http://localhost' } })).status).toBe(403)
-    expect((await fetch(endpoint.url, { method: 'POST', headers: { authorization: `Bearer ${endpoint.token}`, host: 'external.invalid' } })).status).toBe(403)
+    const deniedHost = await new Promise<number | undefined>((resolve, reject) => {
+      const request = httpRequest(endpoint.url, { method: 'POST', headers: { authorization: `Bearer ${endpoint.token}`, host: 'external.invalid' } }, (response) => { response.resume(); resolve(response.statusCode) })
+      request.on('error', reject); request.end()
+    })
+    expect(deniedHost).toBe(403)
     expect((await fetch(`${endpoint.url}/other`, { method: 'POST', headers: { authorization: `Bearer ${endpoint.token}` } })).status).toBe(404)
   })
 
@@ -200,7 +209,7 @@ describe('native Harness MCP tools', () => {
         return [{ type: 'reasoning', text: 'Structured content' }]
       },
     })
-    const h = await fixture([tool], batch => { batches.push(batch) })
+    const h = await fixture([tool], (batch) => { batches.push(batch) })
     const result = await (await h.client()).callTool({ name: 'conclude', arguments: {} })
     expect(result.isError).toBe(false)
     expect(result.content[0]).toEqual({ type: 'text', text: '{"type":"reasoning","text":"Structured content"}' })
@@ -224,10 +233,10 @@ describe('native Harness MCP tools', () => {
       async execute(_args, exec) { exec.concludeTurn(); return [{ type: 'text', text: 'complete' }] },
     })], () => { batchCompleted = true; trace.push('batch') }, () => { trace.push('delivered') })
     const client = await h.client()
-    const originalEmit = ServerResponse.prototype.emit
-    const emitted = vi.spyOn(ServerResponse.prototype, 'emit').mockImplementation(function (this: ServerResponse, event, ...args) {
+    const originalEmit = Reflect.get(ServerResponse.prototype, 'emit')
+    const emitted = vi.spyOn(ServerResponse.prototype, 'emit').mockImplementation(function (this: ServerResponse, event, ...args: unknown[]) {
       if (batchCompleted && event === 'finish') trace.push('http-finish')
-      return originalEmit.call(this, event, ...args)
+      return Reflect.apply(originalEmit, this, [event, ...args])
     })
     try {
       expect((await client.callTool({ name: 'finish', arguments: {} })).isError).toBe(false)
@@ -238,8 +247,8 @@ describe('native Harness MCP tools', () => {
   })
 
   it('drains response-delivery callbacks during close and refuses calls after a concluded batch', async () => {
-    const entered = Promise.withResolvers<void>()
-    const release = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
     let laterCalls = 0
     const h = await fixture([
       defineContentToolFixture({ name: 'finish', description: 'Finish this turn.', parameters: {},
@@ -248,7 +257,7 @@ describe('native Harness MCP tools', () => {
       defineContentToolFixture({ name: 'later', description: 'Must not run after completion.', parameters: {},
         async execute() { laterCalls++; return [{ type: 'text', text: 'unexpected' }] },
       }),
-    ], () => {}, async () => { entered.resolve(); await release.promise })
+    ], () => {}, async () => { entered.resolve(undefined); await release.promise })
     const client = await h.client()
     await client.callTool({ name: 'finish', arguments: {} })
     await entered.promise
@@ -259,7 +268,7 @@ describe('native Harness MCP tools', () => {
     try {
       await Promise.resolve()
       expect(closed).toBe(false)
-    } finally { release.resolve() }
+    } finally { release.resolve(undefined) }
     await closing
     expect(closed).toBe(true)
   })
@@ -272,13 +281,13 @@ describe('native Harness MCP tools', () => {
   })
 
   it('aborts and drains a started tool before close resolves, with no endpoint left listening', async () => {
-    const entered = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<undefined>()
     let drained = false
     const h = await fixture([defineTool({ name: 'wait', description: 'Wait for cancellation.', parameters: {},
-      output: { schema: { type: 'string' } },
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
       async execute(_args, exec) {
-        entered.resolve()
-        await new Promise<void>(resolve => { exec.signal.addEventListener('abort', () => { setTimeout(() => { drained = true; resolve() }, 10) }, { once: true }) })
+        entered.resolve(undefined)
+        await new Promise<void>((resolve) => { exec.signal.addEventListener('abort', () => { setTimeout(() => { drained = true; resolve() }, 10) }, { once: true }) })
         return 'drained'
       },
     })])

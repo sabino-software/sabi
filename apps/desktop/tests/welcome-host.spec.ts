@@ -121,7 +121,8 @@ describe('desktop welcome Web operations', () => {
     const backend = connectDesktopWelcome(url, cookie, host.send)
     expect(await backend.read()).toMatchObject({ loggedIn: false, hasApiKey: true, writable: true })
     expect(host.keys.size).toBe(0)
-    const requests = host.send.mock.calls.map(([, init]) => JSON.parse(init!.body as string) as { method: string; payload: { args: object } })
+    const requests = host.send.mock.calls.map(([, init]) =>
+      JSON.parse(init!.body as string) as { method: string; payload: { args: object } })
     expect(requests.find(request => request.method === 'authorization/list')?.payload.args).toEqual({})
     expect(requests.map(request => request.method)).not.toContain('credentials/get')
     expect(requests.map(request => request.method)).not.toContain('authorization/begin')

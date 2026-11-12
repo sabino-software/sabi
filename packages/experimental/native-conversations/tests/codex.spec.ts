@@ -21,6 +21,8 @@ import CodexAppServer, { type CodexJsonObject, type CodexMethod, type CodexNotif
 import { CODEX_PROVIDER, CodexConversationAdapter } from '../src/codex.ts'
 import type { NativeConversationBinding, NativeConversationId } from '../src/types.ts'
 import type { NativeCodexActivity } from '../src/codex-activity-types.ts'
+import { createAgentMessage, createSettlementMessage } from '@deepseek-ai/dsh-subagent/src/continuation-messages.ts'
+import { admittedNativeInputIds, nativeStepInputProjection } from '../src/projection.ts'
 
 const THREAD = 'existing-source-thread'
 const TURN = 'owned-source-turn'
@@ -47,6 +49,8 @@ class FixtureImages extends AttachmentStore {
 interface FixtureInput {
   readonly content?: ContentBlock[]
   readonly history?: readonly UserMessage[]
+  readonly drive?: boolean
+  readonly frameworkInputs?: readonly UserMessage[]
 }
 
 const sourceModels = [
@@ -61,6 +65,7 @@ const sourceModels = [
 async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgement = false, inputOptions: FixtureInput = {}) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
+  const stepInputs = await ctx.sessionProjections.register(nativeStepInputProjection)
   ctx.llm.registerAdapter(['fixture'], new UnusedAdapter())
   await ctx.plugin(ApprovalService)
   await ctx.plugin(UserQuestionService)
@@ -77,11 +82,15 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
     agent.session.append('step/end', { turn: 1, step: 1 })
     agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
   }
-  const turn = history.length > 0 ? 2 : 1
-  agent.session.append('turn/start', { turn })
-  agent.session.append('step/start', { turn, step: 1 })
+  let turn = history.length > 0 ? 2 : 1
+  let step = 1
+  if (!inputOptions.drive) {
+    agent.session.append('turn/start', { turn })
+    agent.session.append('step/start', { turn, step })
+  }
   const input = createUserMessage({ source: { kind: 'user' }, content: inputOptions.content ?? [{ type: 'text', text: 'Continue this original chat.' }] })
-  agent.session.append('user/message', input, { surfaceOp: 'append' })
+  if (!inputOptions.drive) agent.session.append('user/message', input, { surfaceOp: 'append' })
+  for (const message of inputOptions.frameworkInputs ?? []) agent.session.append('user/message', message, { surfaceOp: 'append' })
   const admission = await ctx.tools.resolve({ agent, modelSelection: { provider: CODEX_PROVIDER, model: 'fixture' }, signal: new AbortController().signal })
   const schemas = ctx.tools.schemas(agent, admission)
   admission.dispose()
@@ -89,6 +98,8 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
   const handlers = new Map<CodexServerRequestMethod, CodexServerRequestHandler>()
   const requests: { method: CodexMethod; params: CodexJsonObject }[] = []
   const started = Promise.withResolvers<undefined>()
+  const secondStarted = Promise.withResolvers<undefined>()
+  let starts = 0
   const acknowledge = Promise.withResolvers<undefined>()
   const interrupted = Promise.withResolvers<undefined>()
   const controller = new AbortController()
@@ -124,7 +135,9 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
         tools: Object.fromEntries(schemas.map(schema => [schema.name, {}])), toolsError: null }] }
     }
     if (method === 'turn/start') {
+      starts++
       started.resolve(undefined)
+      if (starts === 2) secondStarted.resolve(undefined)
       if (holdAcknowledgement) await acknowledge.promise
       return { turn: { id: TURN } }
     }
@@ -134,7 +147,8 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
   })
   const adapter = new CodexConversationAdapter(ctx, { bindingOf: () => binding,
     async bindNew() { throw new Error('Existing-source fixture must not create a thread') },
-    requestLog: () => ({ turn, step: 1 }), observeOwnedMessages: observed,
+    requestLog: () => ({ turn, step }), observeOwnedMessages: observed,
+    admittedInputs: (owner, position) => admittedNativeInputIds(stepInputs.stateOf(owner.session), position),
     activity(owner, activity) {
       expect(owner).toBe(agent)
       activities.push(activity)
@@ -142,6 +156,14 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
       barriers.delete(activity.id)
     },
   })
+  if (inputOptions.drive) {
+    ctx.effect(() => ctx.llm.registerAdapter([CODEX_PROVIDER], adapter))
+    ctx.on('agent/request', ({ turn: requestedTurn, step: requestedStep }, next) => {
+      turn = requestedTurn
+      step = requestedStep
+      return next()
+    })
+  }
   const emit = (method: string, params: CodexJsonObject) => {
     for (const listener of notifications) listener({ generation: 1, method, params })
   }
@@ -164,7 +186,8 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
       { id: 'approval-fixture', generation: 1, method, signal: controller.signal })
   }
   const start = () => {
-    const options: GenerateOptions = { provider: CODEX_PROVIDER, model: 'fixture', sessionId: agent.id, messages: [...history, input], tools: [...schemas], signal: controller.signal }
+    const options: GenerateOptions = { provider: CODEX_PROVIDER, model: 'fixture', sessionId: agent.id,
+      messages: [...history, input, ...inputOptions.frameworkInputs ?? []], tools: [...schemas], signal: controller.signal }
     const pending = (async () => {
       const chunks: StreamChunk[] = []
       for await (const chunk of adapter.stream(options)) chunks.push(chunk)
@@ -190,7 +213,7 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
     for (const peer of clients) await peer.close()
     await ctx.fiber.dispose()
   })
-  return { ctx, agent, adapter, signal: controller.signal, requests,
+  return { ctx, agent, adapter, input, signal: controller.signal, requests, secondStarted: secondStarted.promise,
     started: started.promise, interrupted: interrupted.promise, acknowledge: () => { acknowledge.resolve(undefined) },
     observed, activities, emit, item, finish, barrier, sourceApproval, start, client }
 }
@@ -212,6 +235,60 @@ async function reopenRecordedEvents(session: Session): Promise<readonly SessionE
 }
 
 describe('original Codex adapter continuations', () => {
+  it('forwards fresh framework runtime and SDK context with its exact attribution', async () => {
+    const runtime = createUserMessage({ source: { kind: 'runtime-context', form: 'snapshot', sections: [] },
+      content: [{ type: 'text', text: 'Current working directory guidance.' }] })
+    const sdk = createUserMessage({ source: { kind: 'tool-registry' }, content: [{ type: 'text', text: 'New SDK declarations.' }] })
+    const h = await fixture([], false, { frameworkInputs: [runtime, sdk] })
+    const pending = h.start()
+    await h.started
+    const input = h.requests.find(request => request.method === 'turn/start')?.params.input
+    expect(input).toEqual([
+      { type: 'text', text: 'Continue this original chat.', text_elements: [] },
+      ...[runtime, sdk].map(message => ({ type: 'text', text: JSON.stringify({ kind: 'harness-context', message }), text_elements: [] })),
+    ])
+    h.finish()
+    await pending
+  })
+
+  it.each(['settlement', 'message'] as const)('queues an active parent %s until source terminal, then sends only the fresh admitted step', async (kind) => {
+    const h = await fixture([], false, { drive: true })
+    h.agent.model.select({ provider: CODEX_PROVIDER, model: 'text-model' })
+    h.agent.followup(h.input)
+    await h.started
+    const message = kind === 'settlement'
+      ? createSettlementMessage(SessionId('child'), 'worker', { stopReason: 'completed', output: [{ type: 'text', text: 'Child result.' }] })
+      : createAgentMessage(h.agent, 'worker', [{ type: 'text', text: 'Child relay.' }])
+    h.agent.steer(message)
+    expect(h.requests.filter(request => request.method === 'turn/start')).toHaveLength(1)
+    h.finish()
+    await h.secondStarted
+    const inputs = h.requests.filter(request => request.method === 'turn/start').map(request => request.params.input)
+    expect(inputs[1]).toContainEqual({ type: 'text', text: JSON.stringify({ kind: 'harness-context', message }), text_elements: [] })
+    expect(JSON.stringify(inputs[1])).not.toContain('Continue this original chat.')
+    expect(h.requests.filter(request => request.method === 'turn/steer')).toEqual([])
+    h.finish()
+    await h.agent.whenIdle()
+    expect(h.requests.filter(request => request.method === 'turn/start')).toHaveLength(2)
+  })
+
+  it('wakes an idle native parent using a child settlement without requiring another human message', async () => {
+    const h = await fixture([], false, { drive: true })
+    h.agent.model.select({ provider: CODEX_PROVIDER, model: 'text-model' })
+    h.agent.followup(h.input)
+    await h.started
+    h.finish()
+    await h.agent.whenIdle()
+    const message = createSettlementMessage(SessionId('child'), 'worker', { stopReason: 'completed', output: [{ type: 'text', text: 'Idle child result.' }] })
+    h.agent.followup(message)
+    await h.secondStarted
+    const input = h.requests.filter(request => request.method === 'turn/start')[1]?.params.input
+    expect(input).toContainEqual({ type: 'text', text: JSON.stringify({ kind: 'harness-context', message }), text_elements: [] })
+    expect(JSON.stringify(input)).not.toContain('Continue this original chat.')
+    h.finish()
+    await h.agent.whenIdle()
+  })
+
   it('reads only fresh owned image bytes and preserves text/image order in the exact source turn input', async () => {
     const data = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=', 'base64')
     const fresh: ImageAttachmentRef = { attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png', bytes: data.byteLength, width: 1, height: 1 }
@@ -272,7 +349,8 @@ describe('original Codex adapter continuations', () => {
     expect(result.isError).toBe(false)
     const contexts = result.content.flatMap((block) => {
       if (block.type !== 'text' || !block.text.includes('harness-deferred-context')) return []
-      return [JSON.parse(block.text)]
+      const context: unknown = JSON.parse(block.text)
+      return [context]
     })
     expect(contexts).toEqual([{ kind: 'harness-deferred-context', message: guidance }])
     const logged = h.agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.id === guidance.id)

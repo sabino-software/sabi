@@ -39,7 +39,8 @@
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-workspace",
-        "@deepseek-ai/dsh-client-ui-conversation"
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-api-session-controller"
       ],
       "platform": "web"
     }
@@ -67,9 +68,12 @@
     "@testing-library/react": "^16.3.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@deepseek-ai/dsh-experimental-native-conversations": "workspace:*",
+    "@deepseek-ai/dsh-native-conversations": "workspace:*",
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-conversation": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-chat": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-api-session-controller": "workspace:*"
   },
   "files": [
     "locale/*.json",
@@ -80,5 +84,7 @@
     "lib/**/*.js.map",
     "src"
   ],
-  "dependencies": {}
+  "dependencies": {
+    "zod": "4.6.6"
+  }
 }

@@ -23,12 +23,31 @@ describe('Axiom authentication navigation', () => {
     }
   })
 
-  it('rejects lookalikes, arbitrary OpenAI subdomains, external identity providers and unsafe URLs', () => {
+  it('rejects lookalikes, arbitrary OpenAI subdomains, hidden identity flows and unsafe URLs', () => {
     for (const destination of ['https://auth.openai.com.evil.test/login', 'https://auth-openai.com/login',
       'https://api.openai.com/login', 'https://accounts.google.com/login', 'https://login.microsoftonline.com/login',
+      'https://accounts.google.com.evil.test/login', 'https://appleid.apple.com.evil.test/auth',
+      'https://login.microsoftonline.com:8443/common', 'https://user:secret@login.live.com/oauth20_authorize.srf',
       'http://auth.openai.com/login', 'https://auth.openai.com:8443/login',
       'https://user:secret@auth.openai.com/login', 'file:///private/auth.json', 'javascript:alert(1)', 'invalid']) {
       expect(axiomNavigation(destination, selected, true)).toBe('blocked')
     }
   })
+  it('admits exact documented identity origins only during an explicitly revealed OpenAI authentication flow', () => {
+    for (const destination of ['https://accounts.google.com/o/oauth2/v2/auth?state=private',
+      'https://appleid.apple.com/auth/authorize?state=private',
+      'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?state=private',
+      'https://login.live.com/oauth20_authorize.srf?state=private']) {
+      expect(axiomNavigation(destination, selected, false, false)).toBe('blocked')
+      expect(axiomNavigation(destination, selected, true, false)).toBe('blocked')
+      expect(axiomNavigation(destination, selected, false, true)).toBe('blocked')
+      expect(axiomNavigation(destination, selected, true, true)).toBe('authentication')
+    }
+    for (const destination of ['https://accounts.google.com.evil.test/login',
+      'https://appleid.apple.com:8443/auth', 'https://login.microsoft.com/login', 'https://tenant.example.com/sso',
+      'https://user:secret@login.live.com/login', 'http://accounts.google.com/login']) {
+      expect(axiomNavigation(destination, selected, true, true)).toBe('blocked')
+    }
+  })
+
 })

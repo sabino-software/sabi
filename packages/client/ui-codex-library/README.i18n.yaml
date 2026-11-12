@@ -3,29 +3,29 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-codex-library/README.md
 /:
-  en: ffca8417f254bf12
-  zh: 06e84ce825cf4ea4
+  en: b4fdfcb4ab8905d8
+  zh: ff0c93f46794a36e
 /deepseek-ai-dsh-client-ui-codex-library:
   en: 1bacf381283cd992
-  zh: 621ea6a7011cc4fb
+  zh: 170f1ea278138210
 /deepseek-ai-dsh-client-ui-codex-library/summary:
-  en: daeefbe8f5250f90
-  zh: 2f461ffd3e731c3d
+  en: f41cea04c83d79ab
+  zh: 3394090e7f5c06b2
 /deepseek-ai-dsh-client-ui-codex-library/table-of-contents:
-  en: d4e9596852e22009
-  zh: 5b9aa0e046408356
+  en: dca43fc4c4defe34
+  zh: 419885861655dd47
 /deepseek-ai-dsh-client-ui-codex-library/use-this-package:
-  en: 824dd285f445dbe7
-  zh: 25f56af254882033
+  en: f331221f3b516b2d
+  zh: f693686c54226c38
 /deepseek-ai-dsh-client-ui-codex-library/model-experience:
-  en: 0a28c6af7db04a53
-  zh: 8d605e6a31393636
+  en: d6911fad5418b8d4
+  zh: 205665e076fa8a45
 /deepseek-ai-dsh-client-ui-codex-library/model-experience/kv-cache-effect:
-  en: 49c199f48e87009f
-  zh: 11d3042725c3d87e
+  en: 5255b2538fe640d0
+  zh: fbbc57b13c656f33
 /deepseek-ai-dsh-client-ui-codex-library/known-limitations-and-deferred-work:
-  en: 9b9006947bc85f38
-  zh: d61987dbfa50344c
+  en: eb916ac1b886a295
+  zh: af4ff5f99fc1e19a
 /deepseek-ai-dsh-client-ui-codex-library/known-limitations-and-deferred-work/dev-note:
-  en: 4f79aa1bb8c2cd84
-  zh: f0b907c717e77590
+  en: 21a78694fc1da5e2
+  zh: c7780916c140a59a

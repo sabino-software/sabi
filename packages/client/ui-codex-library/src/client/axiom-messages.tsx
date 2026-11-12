@@ -9,7 +9,7 @@ import type { ChatConversationViewNode } from '@deepseek-ai/dsh-client-ui-chat/c
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type { NativeAxiomMessage } from '@deepseek-ai/dsh-experimental-native-conversations/types'
+import type { NativeAxiomMessage } from '@deepseek-ai/dsh-native-conversations/types'
 import { en, zh, pt, type AxiomMessageKey } from './axiom-locales.ts'
 import css from './axiom-messages.module.css'
 
@@ -40,9 +40,9 @@ interface MessageState {
 }
 
 function messageOf(event: SessionEventLike): NativeAxiomMessage | undefined {
-  const type: string = event.type
-  if (type !== RECORD || !('ignorable' in event) || event.ignorable !== true) return undefined
-  const parsed = messageSchema.safeParse(event.data)
+  const envelope: { type: string; ignorable?: unknown; data: unknown } = event
+  if (envelope.type !== RECORD || envelope.ignorable !== true) return undefined
+  const parsed = messageSchema.safeParse(envelope.data)
   return parsed.success ? parsed.data : undefined
 }
 
@@ -50,7 +50,7 @@ function messageOf(event: SessionEventLike): NativeAxiomMessage | undefined {
 export const axiomMessageDefinition: ConversationNodeDefinition<MessageState> = {
   kind: KIND,
   target: 'chat',
-  match: event => {
+  match: (event) => {
     const message = messageOf(event)
     return message === undefined ? null : { id: message.id, role: 'start' }
   },
@@ -96,7 +96,7 @@ export function registerAxiomMessages(ctx: Context): void {
   ctx.effect(() => ctx.locale.register('nativeAxiom', { en, zh, pt, ja: en, es: en, fr: en, de: en, ru: en }), 'native-conversations.axiom-copy')
   ctx.uiConversation.events.register({
     ...axiomMessageDefinition,
-    match: { [RECORD]: axiomMessageDefinition.match },
+    match: { [RECORD]: event => axiomMessageDefinition.match(event) },
   })
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node', key: KIND, locale: 'nativeAxiom',

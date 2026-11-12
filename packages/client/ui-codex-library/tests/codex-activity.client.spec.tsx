@@ -67,7 +67,7 @@ describe('native Codex activity conversation cards', () => {
     expect(codexActivityDefinition.match(record(1, { ...started }).event)).toBeNull()
   })
 
-  it('shows native provenance and finished state with expandable source detail', () => {
+  it('shows original source and finished state with expandable source detail', () => {
     const props = { node: { id: started.id, data: { ...started, phase: 'completed' } }, t: makeTranslate(en, commonEn) } as CodexActivityCardProps
     render(<CodexActivityCard {...props} />)
     expect(screen.getByText('Codex · Finished')).toBeTruthy()

@@ -55,7 +55,9 @@ export class CodexRpcPeer {
     private readonly socket: WebSocket,
     private readonly options: PeerOptions,
     private readonly notified: (method: string, params: CodexJsonObject) => void,
-    private readonly requested: (id: CodexRequestId, method: string, params: CodexJsonObject, signal: AbortSignal) => Promise<CodexJsonObject>,
+    private readonly requested: (
+      id: CodexRequestId, method: string, params: CodexJsonObject, signal: AbortSignal,
+    ) => Promise<CodexJsonObject>,
     private readonly failed: (error: CodexAppServerError) => void,
   ) {
     this.closed = new Promise(resolve => socket.once('close', () => { resolve() }))
@@ -207,7 +209,7 @@ export class CodexRpcPeer {
     if (this.failure !== undefined) throw this.failure
     const text = JSON.stringify(frame)
     if (Buffer.byteLength(text) + this.socket.bufferedAmount > this.options.maxFrameBytes) throw new CodexAppServerError('CODEX_LIMIT')
-    this.socket.send(text, (error) => { if (error !== undefined) this.close(new CodexAppServerError('CODEX_DISCONNECTED')) })
+    this.socket.send(text, (error) => { if (error) this.close(new CodexAppServerError('CODEX_DISCONNECTED')) })
   }
 
   private respond(frame: object): void {

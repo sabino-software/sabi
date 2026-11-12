@@ -2,46 +2,57 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const fixture = vi.hoisted(() => ({ windows: [] as unknown[], browserSession: {
-  setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(),
-  setDisplayMediaRequestHandler: vi.fn(), on: vi.fn(),
-} }))
+const fixture = vi.hoisted(() => ({
+  warning: vi.fn(async (_window: object, _options: object) => ({ response: 0 })),
+  windows: [] as unknown[], browserSession: {
+    setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(),
+    setDisplayMediaRequestHandler: vi.fn(), on: vi.fn(),
+  },
+}))
 
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
-  return { session: { fromPartition: vi.fn(() => fixture.browserSession) }, BrowserWindow: class extends EventEmitter {
-    destroyed = false
-    visible = false
-    url = ''
-    openHandler: ((details: { url: string; postBody?: unknown }) => { action: string; overrideBrowserWindowOptions?: unknown }) | undefined
-    webContents = Object.assign(new EventEmitter(), {
-      getURL: () => this.url,
-      isLoading: () => false,
-      executeJavaScript: vi.fn(async () => ({ url: this.url, title: 'Axiom', messages: [], composer: true,
-        draft: '', sendPresent: true, sendEnabled: false, siteStatus: null, limited: false })),
-      setWindowOpenHandler: (handler: typeof this.openHandler) => { this.openHandler = handler },
-    })
-    constructor(readonly options: unknown) { super(); fixture.windows.push(this) }
-    loadURL = vi.fn(async (url: string) => { this.url = url })
-    isDestroyed(): boolean { return this.destroyed }
-    isVisible(): boolean { return this.visible }
-    show(): void { this.visible = true }
-    hide(): void { this.visible = false }
-    destroy(): void { this.destroyed = true; this.emit('closed') }
-  } }
+  return { dialog: { showMessageBox: fixture.warning }, session: { fromPartition: vi.fn(() => fixture.browserSession) },
+    BrowserWindow: class extends EventEmitter {
+      destroyed = false
+      visible = false
+      url = ''
+      openHandler: ((details: { url: string; postBody?: unknown }) => {
+        action: string
+        overrideBrowserWindowOptions?: unknown
+      }) | undefined
+      webContents = Object.assign(new EventEmitter(), {
+        getURL: () => this.url,
+        isLoading: () => false,
+        executeJavaScript: vi.fn(async () => ({ url: this.url, title: 'Axiom', messages: [], composer: true,
+          draft: '', sendPresent: true, sendEnabled: false, siteStatus: null, limited: false })),
+        setWindowOpenHandler: (handler: typeof this.openHandler) => { this.openHandler = handler },
+      })
+      constructor(readonly options: unknown) { super(); fixture.windows.push(this) }
+      loadURL = vi.fn(async (url: string) => { this.url = url })
+      isDestroyed(): boolean { return this.destroyed }
+      isVisible(): boolean { return this.visible }
+      show(): void { this.visible = true }
+      hide(): void { this.visible = false }
+      destroy(): void { this.destroyed = true; this.emit('closed') }
+    } }
 })
 
 import { BrowserWindow } from 'electron'
 import { DesktopAxiomPage } from '../src/axiom-bridge.ts'
 
 type WindowFixture = EventEmitter & {
-  url: string; destroyed: boolean; options: unknown; loadURL: ReturnType<typeof vi.fn>
+  url: string
+  destroyed: boolean
+  visible: boolean
+  options: unknown
+  loadURL: ReturnType<typeof vi.fn>
   webContents: EventEmitter & { executeJavaScript: ReturnType<typeof vi.fn> }
   openHandler: (details: { url: string; postBody?: unknown }) => { action: string; overrideBrowserWindowOptions?: unknown }
 }
 const selected = 'https://chatgpt.com/dots/selected~conversation'
 const owners: DesktopAxiomPage[] = []
-afterEach(() => { for (const owner of owners.splice(0)) owner.disconnect(); fixture.windows.length = 0 })
+afterEach(() => { for (const owner of owners.splice(0)) owner.disconnect(); fixture.windows.length = 0; fixture.warning.mockClear() })
 
 async function connect(): Promise<{ owner: DesktopAxiomPage; page: WindowFixture }> {
   const owner = new DesktopAxiomPage(() => {})
@@ -63,6 +74,7 @@ describe('Axiom login windows', () => {
     const blocked = { preventDefault: vi.fn() }
     page.webContents.emit('will-redirect', blocked, 'https://evil.test/callback', false, true)
     expect(blocked.preventDefault).toHaveBeenCalledOnce()
+    page.webContents.emit('will-redirect', { preventDefault: vi.fn() }, 'https://chatgpt.com/?auth=complete', false, true)
     page.url = 'https://chatgpt.com/?auth=complete'
     page.webContents.emit('did-finish-load')
     expect(page.loadURL).toHaveBeenLastCalledWith(selected)
@@ -104,4 +116,63 @@ describe('Axiom login windows', () => {
     expect(page.destroyed).toBe(true)
     expect(await owner.snapshot()).toMatchObject({ phase: 'disconnected', url: null })
   })
+  it('allows revealed social sign-in in the main window and one owned popup without reading identity pages', async () => {
+    const { owner, page } = await connect()
+    page.webContents.emit('will-redirect', { preventDefault: vi.fn() }, 'https://auth.openai.com/log-in', false, true)
+    page.url = 'https://auth.openai.com/log-in'
+    const hidden = { preventDefault: vi.fn() }
+    page.webContents.emit('will-redirect', hidden, 'https://accounts.google.com/o/oauth2/v2/auth', false, true)
+    expect(hidden.preventDefault).toHaveBeenCalledOnce()
+    expect(fixture.warning).not.toHaveBeenCalled()
+    owner.showLogin()
+    for (const target of ['https://accounts.google.com/o/oauth2/v2/auth', 'https://appleid.apple.com/auth/authorize',
+      'https://login.microsoftonline.com/common/oauth2/v2.0/authorize', 'https://login.live.com/oauth20_authorize.srf']) {
+      const event = { preventDefault: vi.fn() }
+      page.webContents.emit('will-redirect', event, target, false, true)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+    }
+    const target = 'https://accounts.google.com/o/oauth2/v2/auth?state=PRIVATE_STATE'
+    expect(page.openHandler({ url: target })).toMatchObject({ action: 'allow' })
+    const popup = new BrowserWindow({ show: true }) as unknown as WindowFixture
+    popup.visible = true
+    page.webContents.emit('did-create-window', popup)
+    popup.url = target
+    page.webContents.executeJavaScript.mockClear()
+    expect(await owner.snapshot()).toMatchObject({ phase: 'login-required', url: selected, messages: [] })
+    expect(page.webContents.executeJavaScript).not.toHaveBeenCalled()
+    expect(popup.webContents.executeJavaScript).not.toHaveBeenCalled()
+    expect(popup.openHandler({ url: 'https://appleid.apple.com/auth/authorize' })).toEqual({ action: 'deny' })
+    popup.url = selected
+    popup.webContents.emit('did-finish-load')
+    expect(popup.destroyed).toBe(true)
+    expect(page.loadURL).toHaveBeenLastCalledWith(selected)
+    // Returning to the conversation closes the identity-provider navigation allowance.
+    const after = { preventDefault: vi.fn() }
+    page.webContents.emit('will-redirect', after, target, false, true)
+    expect(after.preventDefault).toHaveBeenCalledOnce()
+  })
+
+  it('reports blocked sign-in safely and keeps POST, hidden and nested popups refused', async () => {
+    const publish = vi.fn()
+    const owner = new DesktopAxiomPage(publish)
+    owners.push(owner)
+    await owner.connect(selected)
+    const page = fixture.windows.at(-1) as WindowFixture
+    owner.showLogin()
+    page.webContents.emit('will-redirect', { preventDefault: vi.fn() }, 'https://auth.openai.com/log-in', false, true)
+    page.url = 'https://auth.openai.com/log-in?state=PRIVATE_AUTH'
+    const blocked = { preventDefault: vi.fn() }
+    page.webContents.emit('will-redirect', blocked, 'https://organization.example/sso?code=PRIVATE_CODE', false, true)
+    expect(blocked.preventDefault).toHaveBeenCalledOnce()
+    const state = await owner.snapshot()
+    expect(state).toMatchObject({ phase: 'login-required', url: selected, errorCode: 'unsupported-page', canSend: false })
+    expect(state.siteStatus).toContain('original sign-in method')
+    expect(fixture.warning).toHaveBeenCalledOnce()
+    expect(JSON.stringify([publish.mock.calls, fixture.warning.mock.calls.map(call => call[1])])).not.toContain('PRIVATE_')
+    expect(JSON.stringify([publish.mock.calls, fixture.warning.mock.calls.map(call => call[1])])).not.toContain('organization.example')
+    expect(page.openHandler({ url: 'https://accounts.google.com/o/oauth2/v2/auth', postBody: {} })).toEqual({ action: 'deny' })
+    page.visible = false
+    expect(page.openHandler({ url: 'https://accounts.google.com/o/oauth2/v2/auth' })).toEqual({ action: 'deny' })
+  })
+
 })

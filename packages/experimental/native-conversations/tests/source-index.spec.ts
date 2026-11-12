@@ -45,18 +45,19 @@ async function fixture() {
     try { for (const ctx of [...contexts].reverse()) await ctx.fiber.dispose() }
     finally {
       for (const client of clients) client.terminate()
-      await new Promise<void>(resolve => { server.close(() => { http.close(() => { resolve() }) }) })
+      await new Promise<void>((resolve) => { server.close(() => { http.close(() => { resolve() }) }) })
       await rm(root, { recursive: true, force: true })
     }
   })
   const thread = (id: string, name: string, canAcceptDirectInput: boolean | null): CodexJsonObject => ({
     id, name, preview: `Preview ${name}`, cwd: workspacePath, model: 'fixture-model', createdAt: 1000, canAcceptDirectInput,
   })
-  server.on('connection', socket => {
+  server.on('connection', (socket) => {
     clients.add(socket)
     socket.on('close', () => { clients.delete(socket) })
-    socket.on('message', async bytes => {
-      const frame = JSON.parse(String(bytes)) as CodexJsonObject
+    socket.on('message', (bytes) => {
+      const text = Buffer.isBuffer(bytes) ? bytes : Array.isArray(bytes) ? Buffer.concat(bytes) : Buffer.from(bytes)
+      const frame = JSON.parse(text.toString('utf8')) as CodexJsonObject
       frames.push(frame)
       if (frame.id === undefined) return
       const params = typeof frame.params === 'object' && frame.params !== null && !Array.isArray(frame.params) ? frame.params : {}
@@ -132,7 +133,7 @@ async function fixture() {
 }
 
 function authoredText(session: Session): string[] {
-  return session.snapshotEvents().flatMap(event => {
+  return session.snapshotEvents().flatMap((event) => {
     const message = event.type === 'user/message' ? event.data : event.type === 'assistant/message' ? event.data.message : undefined
     return message?.content.flatMap(block => block.type === 'text' ? [block.text] : []) ?? []
   })

@@ -37,6 +37,7 @@ describe('Native conversation registrations', () => {
     } as never)
     ctx.provide('remote', { nativeConversations: {} } as never)
     ctx.provide('remote.nativeConversations', {} as never)
+    ctx.provide('sessions', { refresh: async () => {} } as never)
     ctx.provide('uiWorkspace', { openSession: () => {} } as never)
     ctx.slots.register({ name: 'root', children: {
       main: { kind: 'keyed', scope: 'root' }, 'sidebar.panellist': { kind: 'list', scope: 'root' },

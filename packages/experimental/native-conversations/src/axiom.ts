@@ -1,7 +1,8 @@
 /** Native Axiom continuation through observed original-site messages, without model API calls. */
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { HarnessError, LlmAdapter, type GenerateOptions, type LlmModelInfo, type ResolvedRetryPolicy, type StreamChunk, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { HarnessError, LlmAdapter, type GenerateOptions, type LlmModelInfo, type RequestMessage,
+  type ResolvedRetryPolicy, type StreamChunk, type UserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { AxiomBinding, AxiomHistory, AxiomMessage, AxiomSnapshot, AxiomTransport } from './axiom-types.ts'
 
@@ -14,13 +15,27 @@ export interface AxiomAdapterDependencies {
   readonly pollIntervalMs: number
   readonly responseTimeoutMs: number
   readonly settleMs: number
-  /** @param sessionId Continued Session. @returns Fresh human-authored messages from the current admitted turn; empty refuses a synthetic-only continuation. */
-  userInput?(sessionId: SessionId): readonly UserMessage[]
+  /**
+   * @param sessionId Continued Session.
+   * @param messages Already projected messages for this exact request.
+   * @returns Fresh human-authored messages from the current admitted turn; empty refuses a synthetic-only continuation.
+   */
+  userInput?(sessionId: SessionId, messages: readonly RequestMessage[]): readonly UserMessage[]
   /** Source-owned message records render observations instead of ordinary LLM text blocks. */
   readonly renderObserved?: boolean
-  /** @param sessionId Continued Session. @param snapshot Actual observed source window. @returns After publishing original-source message updates. */
+  /**
+   * @param sessionId Continued Session.
+   * @param snapshot Actual observed source window.
+   * @returns After publishing original-source message updates.
+   */
   onSnapshot?(sessionId: SessionId, snapshot: AxiomSnapshot): void | Promise<void>
-  /** @param sessionId Continued Session. @param snapshot Latest observed page. @param sentMessageId Confirmed user message. @param assistantIds Original assistant ids already emitted. @returns After durable observation bookkeeping. */
+  /**
+   * @param sessionId Continued Session.
+   * @param snapshot Latest observed page.
+   * @param sentMessageId Confirmed user message.
+   * @param assistantIds Original assistant ids already emitted.
+   * @returns After durable observation bookkeeping.
+   */
   onCommitted?(sessionId: SessionId, snapshot: AxiomSnapshot, sentMessageId: string, assistantIds: readonly string[]): void | Promise<void>
 }
 
@@ -47,7 +62,7 @@ export async function readAxiomHistory(transport: AxiomTransport, binding: Axiom
   } finally { release() }
 }
 
-function userText(options: GenerateOptions, fresh: readonly UserMessage[] | undefined): string {
+function userText(options: GenerateOptions<string>, fresh: readonly UserMessage[] | undefined): string {
   if (fresh !== undefined) {
     if (fresh.length === 0 || fresh.some(message => message.source.kind !== 'user'
       || message.content.some(block => block.type !== 'text'))) {
@@ -58,11 +73,11 @@ function userText(options: GenerateOptions, fresh: readonly UserMessage[] | unde
     return text
   }
   const index = options.messages.findLastIndex(item => item.role === 'user'
-    && (!('source' in item) || item.source?.kind === 'user'))
+    && (!('source' in item) || item.source.kind === 'user'))
   const message = options.messages[index]
   if (message === undefined || message.content.some(block => block.type !== 'text')
     || options.messages.slice(index + 1).some(item => item.role === 'assistant' || item.role === 'tool'
-      || (item.role === 'user' && (!('source' in item) || item.source?.kind === 'user')))) {
+      || (item.role === 'user' && (!('source' in item) || item.source.kind === 'user')))) {
     throw new HarnessError('Axiom continuation requires a new text-only user message.', 'AXIOM_TEXT_REQUIRED')
   }
   const text = message.content.map(block => block.type === 'text' ? block.text : '').join('\n')
@@ -86,7 +101,7 @@ export class AxiomAdapter extends LlmAdapter {
     return Promise.resolve([{ provider, id: 'original-dot', name: 'Original Axiom conversation', inputModalities: ['text'] }])
   }
 
-  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+  override async *stream(options: GenerateOptions<string>): AsyncIterable<StreamChunk> {
     if (options.purpose !== undefined) {
       yield { type: 'finish', reason: { kind: 'error', failure: { code: 'AXIOM_AUXILIARY_UNSUPPORTED',
         message: 'Auxiliary model requests cannot submit to the original Axiom conversation.' } } }
@@ -109,13 +124,13 @@ export class AxiomAdapter extends LlmAdapter {
       if (this.deps.renderObserved && this.deps.onSnapshot === undefined) {
         throw new HarnessError('Source-owned Axiom rendering requires an observation publisher.', 'AXIOM_OBSERVER_REQUIRED')
       }
-      const text = userText(options, this.deps.userInput?.(sessionId))
+      const text = userText(options, this.deps.userInput?.(sessionId, options.messages))
       release = await transport.acquire(signal)
       signal.throwIfAborted()
       const before = await transport.connect(binding.url, signal)
       matchingPage(before, binding)
       await this.deps.onSnapshot?.(sessionId, before)
-      if (before.phase !== 'ready' || !before.canSend || before.draftPresent || before.siteStatus !== null) {
+      if (before.phase !== 'ready' || !before.canSend || before.draftPresent) {
         throw new HarnessError('The original Axiom page is not ready or contains an existing draft. Open it in ChatGPT.', 'AXIOM_NOT_READY')
       }
       const oldIds = new Set(before.messages.map(message => message.id))

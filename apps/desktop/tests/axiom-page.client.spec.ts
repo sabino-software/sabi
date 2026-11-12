@@ -1,6 +1,19 @@
+// @vitest-environment jsdom
 /** Original message DOM is projected without actions, hidden content, or active media. */
-import { describe, expect, it } from 'vitest'
+import { beforeAll, afterAll, describe, expect, it } from 'vitest'
 import { clickAxiomSend, findAxiomAcknowledgement, focusAxiomComposer, readAxiomPage } from '../src/axiom-page.ts'
+
+const nativeInnerText = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'innerText')
+beforeAll(() => {
+  // jsdom has no layout-backed innerText; this fixture's editable/status elements contain plain text.
+  Object.defineProperty(HTMLElement.prototype, 'innerText', { configurable: true,
+    get(this: HTMLElement) { return this.textContent }, set(this: HTMLElement, value: string) { this.textContent = value },
+  })
+})
+afterAll(() => {
+  if (nativeInnerText) Object.defineProperty(HTMLElement.prototype, 'innerText', nativeInnerText)
+  else Reflect.deleteProperty(HTMLElement.prototype, 'innerText')
+})
 
 function fixture(): void {
   document.title = 'Axiom'

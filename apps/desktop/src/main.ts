@@ -1,4 +1,9 @@
 import { DesktopAxiomPage } from './axiom-bridge.ts'
+import { BrowserAxiomPage } from './axiom-browser.ts'
+import { axiomBrowserCopy } from './axiom-browser-copy.ts'
+import { DesktopAxiomOwner } from './axiom-owner.ts'
+import { readAxiomTransport, saveAxiomTransport } from './axiom-transport-setting.ts'
+import { AXIOM_EXTENSION_ID, AXIOM_NATIVE_HOST } from './axiom-browser-protocol.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
 import { installFileActions } from './file-actions.ts'
@@ -9,7 +14,7 @@ import { isDesktopUpdateChannel } from './settings-file.ts'
 import type { ProductEventMap, ProductEvent } from '@deepseek-ai/dsh-client-product-analytics/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 import { access, readFile, writeFile } from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { configureLocalFork, brandDesktopLocale } from './local-fork.ts'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -503,10 +508,21 @@ async function main(): Promise<void> {
   let hostUrl: string | undefined
   let hostCookie: string | undefined
   const browserGuests = new DesktopBrowserGuests(() => hostUrl)
-  const axiomPage = new DesktopAxiomPage(snapshot => {
+  const publishAxiom = (snapshot: import('./axiom-protocol.ts').AxiomSnapshot): void => {
     if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.webContents.send(DESKTOP_IPC.axiomChanged, snapshot)
+  }
+  const browserAxiom = new BrowserAxiomPage({ directory: join(app.getPath('userData'), 'axiom-browser'),
+    publish: publishAxiom, openExternal: url => shell.openExternal(url), pairingNotice: () => axiomBrowserCopy(locale.id).pairingNotice,
+    confirm: async (pair) => {
+      const copy = axiomBrowserCopy(locale.id)
+      const result = await ordinaryMessageBox({ type: 'question', title: copy.title, message: copy.message,
+        detail: `${pair.url}\n\n${copy.detail}`, buttons: [copy.connect, copy.cancel], defaultId: 1, cancelId: 1 })
+      return result.response === 0
+    },
   })
-  app.on('will-quit', () => { axiomPage.disconnect() })
+  const axiomPage = new DesktopAxiomOwner({ browser: browserAxiom, embedded: new DesktopAxiomPage(publishAxiom) },
+    readAxiomTransport(app.getPath('userData')), (mode) => { saveAxiomTransport(app.getPath('userData'), mode) })
+  app.on('will-quit', () => { axiomPage.disconnect(); browserAxiom.dispose() })
   let injections: readonly unknown[] = []
   let welcomeBackend: DesktopWelcomeBackend | undefined
   let reportedLaunch = false
@@ -564,7 +580,7 @@ async function main(): Promise<void> {
           case 'axiom/connect': return axiomPage.connect(request.args.url, signal)
           case 'axiom/snapshot': return axiomPage.snapshot()
           case 'axiom/send': return axiomPage.send(request.args.request, signal)
-          case 'axiom/showLogin': axiomPage.showLogin(); return null
+          case 'axiom/showLogin': await axiomPage.showLogin(); return null
           case 'axiom/disconnect': axiomPage.disconnect(); return null
         }
       })
@@ -888,11 +904,26 @@ async function main(): Promise<void> {
       || !event.senderFrame.url.startsWith('dsh-app://app/')) throw new Error('Rejected Platform command')
     return owner
   }
+  ipcMain.handle(DESKTOP_IPC.axiomTransport, (event) => { assertMainApplication(event); return axiomPage.transport() })
+  ipcMain.handle(DESKTOP_IPC.axiomSelectTransport, (event, mode: unknown) => {
+    assertMainApplication(event)
+    if (mode === 'browser' && process.env.DSH_NATIVE_CONVERSATIONS !== '1') throw new Error('Original browser integration is disabled')
+    axiomPage.selectTransport(mode)
+  })
+  ipcMain.handle(DESKTOP_IPC.axiomBrowserSetup, (event) => {
+    assertMainApplication(event)
+    const directory = join(process.resourcesPath, 'runtime', 'axiom-browser')
+    const nodeExecutable = join(process.resourcesPath, 'runtime', 'primary-runtime', 'dependencies', 'node', 'bin', 'node')
+    return { protocolVersion: 1, extensionDirectory: join(directory, 'extension'), nativeHostScript: join(directory, 'native-host.sh'),
+      hostName: AXIOM_NATIVE_HOST, extensionId: AXIOM_EXTENSION_ID, registrationScript: join(directory, 'registration.mjs'),
+      available: existsSync(join(directory, 'extension', 'manifest.json')) && existsSync(join(directory, 'native-host.sh')) && existsSync(nodeExecutable),
+      nodeExecutable, permissions: ['activeTab', 'scripting', 'nativeMessaging'] }
+  })
   ipcMain.handle(DESKTOP_IPC.axiomConnect, (event, url: unknown) => { assertMainApplication(event); return axiomPage.connect(url) })
-  ipcMain.handle(DESKTOP_IPC.axiomSnapshot, event => { assertMainApplication(event); return axiomPage.snapshot() })
+  ipcMain.handle(DESKTOP_IPC.axiomSnapshot, (event) => { assertMainApplication(event); return axiomPage.snapshot() })
   ipcMain.handle(DESKTOP_IPC.axiomSend, (event, request: unknown) => { assertMainApplication(event); return axiomPage.send(request) })
-  ipcMain.handle(DESKTOP_IPC.axiomShowLogin, event => { assertMainApplication(event); axiomPage.showLogin() })
-  ipcMain.handle(DESKTOP_IPC.axiomDisconnect, event => { assertMainApplication(event); axiomPage.disconnect() })
+  ipcMain.handle(DESKTOP_IPC.axiomShowLogin, (event) => { assertMainApplication(event); return axiomPage.showLogin() })
+  ipcMain.handle(DESKTOP_IPC.axiomDisconnect, (event) => { assertMainApplication(event); axiomPage.disconnect() })
   installFileActions(assertMainApplication, () => hostUrl)
   ipcMain.on(PLATFORM_IPC.bootstrap, (event) => {
     try { event.returnValue = platformView.bootstrap(event) }
@@ -1550,13 +1581,13 @@ async function main(): Promise<void> {
     updateSchedule.dispose()
     updateDialog.dispose()
     mandatoryUI?.dispose()
+    axiomPage.disconnect()
     void Promise.all([stopOperationReports(), Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()),
       backend.close().then(async () => { await operationJournal?.drain(500) }, async (error: unknown) => {
         await operationJournal?.drain(500)
         throw error
       }),
       platformView.dispose(),
-      Promise.resolve(axiomPage.disconnect()),
       disposeFileDrag(),
     ].map(cleanup => cleanup.catch((error: unknown) => { console.error(error) })))
       .then(() => { app.quit() })

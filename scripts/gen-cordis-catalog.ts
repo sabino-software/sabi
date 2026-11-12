@@ -50,6 +50,8 @@ export { REGION_BEGIN, REGION_END }
  * errors, so the partition can never silently drift from the service API.
  */
 export const SERVICE_PAGE: Record<string, string> = {
+  codexAppServer: 'session-query.md',
+  nativeConversations: 'session-query.md',
   headlessStartup: 'boot.md',
   translator: 'translation.md',
   cotTranslation: 'translation.md',
@@ -1036,6 +1038,14 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  CodexConnectionStatus: 'packages/host/codex-app-server/README.md',
+  CodexJsonObject: 'packages/host/codex-app-server/README.md',
+  CodexMethod: 'packages/host/codex-app-server/README.md',
+  CodexNotification: 'packages/host/codex-app-server/README.md',
+  CodexServerRequestHandler: 'packages/host/codex-app-server/README.md',
+  CodexServerRequestMethod: 'packages/host/codex-app-server/README.md',
+  AxiomTransport: 'packages/experimental/native-conversations/README.md',
+  NativeConversationStatus: 'packages/experimental/native-conversations/README.md',
   ActionCardDecision: 'packages/experimental/action-cards/README.md',
   ActionCardKind: 'packages/experimental/action-cards/README.md',
   ActionCardResult: 'packages/experimental/action-cards/README.md',

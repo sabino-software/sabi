@@ -1,7 +1,6 @@
 /** Only directly selected original Dot routes are admitted to the native page owner. */
-import { expect, it, vi } from 'vitest'
-vi.mock('electron', () => ({ BrowserWindow: class {}, session: {} }))
-import { axiomConversationUrl } from '../src/axiom-bridge.ts'
+import { expect, it } from 'vitest'
+import { axiomConversationUrl } from '../src/axiom-navigation.ts'
 
 it('admits an exact Dot URL without auth or query decorations', () => {
   expect(axiomConversationUrl('https://chatgpt.com/dots/opaque-id~opaque/')).toBe('https://chatgpt.com/dots/opaque-id~opaque')

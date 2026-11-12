@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for axiom-browser-bridge.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/fork-release/axiom-browser-bridge.md
+/original-chatgpt-browser-bridge:
+  en: f3b7c37a9f44fce1
+  zh: 5f36b05e10e96211
+/original-chatgpt-browser-bridge/review-the-prepared-artifacts:
+  en: 44c0381f6871220a
+  zh: 0ec0f0452e5b414e
+/original-chatgpt-browser-bridge/explicit-local-setup:
+  en: e2d2e82ddcc6691e
+  zh: ab65846da2e9c7a1
+/original-chatgpt-browser-bridge/data-and-input-limits:
+  en: 3446b50a8f46a0e0
+  zh: 420dd1d2ef84bf9c

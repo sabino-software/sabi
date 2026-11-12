@@ -15,7 +15,7 @@ import type { ModelSelection } from '@deepseek-ai/dsh-api-session-controller/typ
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { createElement, type ComponentProps } from 'react'
-import type {} from '@deepseek-ai/dsh-experimental-native-conversations/types'
+import type {} from '@deepseek-ai/dsh-native-conversations/types'
 import type { CommandUiContract, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.model seat).
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'

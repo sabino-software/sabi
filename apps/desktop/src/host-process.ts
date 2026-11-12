@@ -403,7 +403,10 @@ export class DesktopHostProcess {
     }
     const controller = new AbortController()
     this.axiomRequests.set(requestId, controller)
-    void Promise.resolve().then(() => { controller.signal.throwIfAborted(); return handler(parsed.data, controller.signal) }).then(value => {
+    void Promise.resolve().then(() => {
+      controller.signal.throwIfAborted()
+      return handler(parsed.data, controller.signal)
+    }).then((value) => {
       reply(controller.signal.aborted ? { ok: false, error: { code: 'cancelled' } } : { ok: true, value })
     }, (_nativePageFailure: unknown) => {
       reply({ ok: false, error: { code: controller.signal.aborted ? 'cancelled' : 'unavailable' } })

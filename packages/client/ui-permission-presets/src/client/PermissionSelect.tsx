@@ -13,7 +13,7 @@ import type { PresetOption } from '@deepseek-ai/dsh-permission-presets/client'
 // Type-only: pulls the conversation-owned permission slot declaration and
 // the standard session projection hook into this package's Client face.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type {} from '@deepseek-ai/dsh-experimental-native-conversations/types'
+import type {} from '@deepseek-ai/dsh-native-conversations/types'
 import type { PermissionCatalogState } from './catalog.ts'
 import { PERMISSION_ACCESS_NS } from './locales.ts'
 import {

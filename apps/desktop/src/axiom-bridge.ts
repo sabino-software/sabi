@@ -1,5 +1,5 @@
 /** Persistent original-site page ownership; Harness renders only bounded DOM projections. */
-import { BrowserWindow, session } from 'electron'
+import { BrowserWindow, dialog, session } from 'electron'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { AxiomSendRequest, AxiomSendResult, AxiomSnapshot } from './axiom-protocol.ts'
@@ -35,6 +35,9 @@ export class DesktopAxiomPage {
   private closing = false
   private sessionConfigured = false
   private authenticating = false
+  private loginRevealed = false
+  private navigationIssue: string | null = null
+  private warningPending = false
   private readonly loginPopups = new Set<BrowserWindow>()
   private readonly submissions = new Map<string, { digest: string; pending?: Promise<AxiomSendResult>; outcome?: Pick<AxiomSendResult, 'status' | 'messageId'> }>()
 
@@ -60,7 +63,7 @@ export class DesktopAxiomPage {
       browserSession.setPermissionCheckHandler(() => false)
       browserSession.setDevicePermissionHandler(() => false)
       browserSession.setDisplayMediaRequestHandler((_request, callback) => { callback({}) })
-      browserSession.on('will-download', event => { event.preventDefault() })
+      browserSession.on('will-download', (event) => { event.preventDefault() })
       this.sessionConfigured = true
     }
     const page = new BrowserWindow({ show: false, width: 1100, height: 800,
@@ -70,16 +73,22 @@ export class DesktopAxiomPage {
         backgroundThrottling: false, spellcheck: false },
     })
     this.page = page
-    const admit = (target: string): boolean => {
-      const category = axiomNavigation(target, url, this.authenticating)
+    const admit = (target: string, window: BrowserWindow): boolean => {
+      const category = axiomNavigation(target, url, this.authenticating, this.loginRevealed && window.isVisible())
       if (category === 'authentication') this.authenticating = true
-      return category !== 'blocked'
+      if (category === 'blocked') { this.blockedNavigation(window); return false }
+      this.navigationIssue = null
+      return true
     }
-    page.webContents.setWindowOpenHandler(details => {
+    page.webContents.setWindowOpenHandler((details) => {
       if (this.page !== page || generation !== this.generation || !page.isVisible()
         || this.loginPopups.size > 0 || details.postBody !== undefined
-        || axiomNavigation(details.url, url, this.authenticating) !== 'authentication') return { action: 'deny' }
+        || axiomNavigation(details.url, url, this.authenticating, this.loginRevealed && page.isVisible()) !== 'authentication') {
+        this.blockedNavigation(page)
+        return { action: 'deny' }
+      }
       this.authenticating = true
+      this.navigationIssue = null
       return { action: 'allow', overrideBrowserWindowOptions: { show: true, width: 600, height: 800,
         webPreferences: { session: browserSession, nodeIntegration: false, nodeIntegrationInWorker: false,
           nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: true, webSecurity: true,
@@ -87,30 +96,38 @@ export class DesktopAxiomPage {
       } }
     })
     const guardNavigation = (window: BrowserWindow): void => {
-      window.webContents.on('will-frame-navigate', event => {
-        if (event.isMainFrame && !admit(event.url)) event.preventDefault()
+      window.webContents.on('will-frame-navigate', (event) => {
+        if (event.isMainFrame && !admit(event.url, window)) event.preventDefault()
       })
       window.webContents.on('will-redirect', (event, target, _inPlace, mainFrame) => {
-        if (mainFrame && !admit(target)) event.preventDefault()
+        if (mainFrame && !admit(target, window)) event.preventDefault()
       })
     }
     guardNavigation(page)
     const returnToSelected = (window: BrowserWindow): void => {
       if (this.page !== page || generation !== this.generation || window.isDestroyed()) return
-      const category = axiomNavigation(window.webContents.getURL(), url, this.authenticating)
+      const category = axiomNavigation(window.webContents.getURL(), url, this.authenticating, this.loginRevealed && window.isVisible())
+      if (window === page && category === 'conversation') {
+        this.authenticating = false
+        this.loginRevealed = false
+        this.navigationIssue = null
+        return
+      }
       if (category !== 'return' && !(window !== page && category === 'conversation')) return
       this.authenticating = false
+      this.loginRevealed = false
+      this.navigationIssue = null
       if (window !== page) window.destroy()
       void page.loadURL(url).catch((_loginReturnFailure: unknown) => {
         if (this.page === page) this.unavailable('page-unavailable')
       })
     }
-    page.webContents.on('did-create-window', popup => {
+    page.webContents.on('did-create-window', (popup) => {
       if (this.page !== page || generation !== this.generation) { popup.destroy(); return }
       this.loginPopups.add(popup)
       guardNavigation(popup)
-      popup.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-      popup.webContents.on('will-attach-webview', event => { event.preventDefault() })
+      popup.webContents.setWindowOpenHandler(() => { this.blockedNavigation(popup); return { action: 'deny' } })
+      popup.webContents.on('will-attach-webview', (event) => { event.preventDefault() })
       popup.webContents.on('did-finish-load', () => { returnToSelected(popup) })
       popup.once('closed', () => {
         this.loginPopups.delete(popup)
@@ -118,9 +135,9 @@ export class DesktopAxiomPage {
       })
     })
     page.webContents.on('did-finish-load', () => { returnToSelected(page) })
-    page.webContents.on('will-attach-webview', event => { event.preventDefault() })
+    page.webContents.on('will-attach-webview', (event) => { event.preventDefault() })
     page.webContents.on('render-process-gone', () => { if (this.page === page) this.unavailable('page-unavailable') })
-    page.on('close', event => { if (!this.closing) { event.preventDefault(); page.hide() } })
+    page.on('close', (event) => { if (!this.closing) { event.preventDefault(); page.hide() } })
     page.webContents.on('did-finish-load', () => { if (this.page === page) void this.snapshot() })
     this.update({ ...initialSnapshot(), url, phase: 'loading' })
     try { await page.loadURL(url) }
@@ -143,6 +160,8 @@ export class DesktopAxiomPage {
   /** Show the original page for direct OpenAI authentication; any approved login popup shares its isolated session. */
   showLogin(): void {
     if (this.page === undefined || this.page.isDestroyed()) throw new Error('Connect an original conversation first')
+    this.loginRevealed = true
+    this.navigationIssue = null
     this.page.show()
   }
 
@@ -155,6 +174,8 @@ export class DesktopAxiomPage {
     const page = this.page
     this.page = undefined
     this.authenticating = false
+    this.loginRevealed = false
+    this.navigationIssue = null
     for (const popup of this.loginPopups) if (!popup.isDestroyed()) popup.destroy()
     this.loginPopups.clear()
     this.selected = null
@@ -186,7 +207,7 @@ export class DesktopAxiomPage {
     const result = this.submit(request, signal)
     entry.pending = result
     this.submissions.set(request.requestId, entry)
-    void result.then(outcome => {
+    void result.then((outcome) => {
       entry.outcome = { status: outcome.status, ...outcome.messageId === undefined ? {} : { messageId: outcome.messageId } }
       delete entry.pending
     })
@@ -218,11 +239,12 @@ export class DesktopAxiomPage {
         `location.href.replace(/\\/$/, '') === ${JSON.stringify(selected)} && (${clickAxiomSend.toString()})(${JSON.stringify(request.text)})`, true)
       if (accepted !== true) return { status: 'refused', snapshot: await this.snapshot() }
       const deadline = Date.now() + 12000
-      while (!signal?.aborted && generation === this.generation && !page.isDestroyed() && this.matches(page.webContents.getURL()) && Date.now() < deadline) {
+      while (!signal?.aborted && generation === this.generation && !page.isDestroyed()
+        && this.matches(page.webContents.getURL()) && Date.now() < deadline) {
         const id: unknown = await page.webContents.executeJavaScript(
           `(${findAxiomAcknowledgement.toString()})(${JSON.stringify(request.text)},${JSON.stringify(before)})`)
         if (typeof id === 'string') return { status: 'confirmed', messageId: id, snapshot: await this.snapshot() }
-        await new Promise<void>(resolve => { setTimeout(resolve, 250) })
+        await new Promise<void>((resolve) => { setTimeout(resolve, 250) })
       }
       return { status: 'unknown', snapshot: await this.snapshot() }
     } catch (_pageSubmissionFailure) {
@@ -237,10 +259,15 @@ export class DesktopAxiomPage {
   private async read(generation: number): Promise<AxiomSnapshot> {
     const page = this.page
     if (page === undefined || page.isDestroyed()) return this.current
+    if (this.navigationIssue !== null) {
+      this.update({ ...initialSnapshot(), url: this.selected, phase: 'login-required',
+        siteStatus: this.navigationIssue, errorCode: 'unsupported-page' })
+      return this.current
+    }
     if (this.loginPopups.size > 0 || !this.matches(page.webContents.getURL())) {
       const currentUrl = page.webContents.getURL()
       if (currentUrl === '' || currentUrl === 'about:blank') return this.current
-      const category = this.selected === null ? 'blocked' : axiomNavigation(currentUrl, this.selected, this.authenticating)
+      const category = this.selected === null ? 'blocked' : axiomNavigation(currentUrl, this.selected, this.authenticating, this.loginRevealed && page.isVisible())
       const loginPage = this.loginPopups.size > 0 || category === 'authentication' || category === 'return'
       this.update({ ...initialSnapshot(), url: this.selected, phase: loginPage ? 'login-required' : 'unavailable',
         ...loginPage ? {} : { errorCode: 'unsupported-page' as const } })
@@ -256,6 +283,19 @@ export class DesktopAxiomPage {
         siteStatus: state.siteStatus, limited: state.limited })
     } catch (_unsupportedPage) { if (generation === this.generation) this.unavailable('unsupported-page') }
     return this.current
+  }
+
+  private blockedNavigation(window: BrowserWindow): void {
+    if (window.isDestroyed()) return
+    const issue = 'This sign-in destination is not supported. Use your account’s original sign-in method; '
+      + 'organization-specific sign-in may need support from your app administrator.'
+    this.navigationIssue = issue
+    this.update({ ...initialSnapshot(), url: this.selected, phase: 'login-required', siteStatus: issue, errorCode: 'unsupported-page' })
+    if (!window.isVisible() || this.warningPending) return
+    this.warningPending = true
+    void Promise.resolve().then(() => dialog.showMessageBox(window, { type: 'warning', title: 'Sign-in navigation blocked',
+      message: 'This sign-in destination is not supported by the app.', detail: issue, buttons: ['OK'],
+    })).catch(() => {}).finally(() => { this.warningPending = false })
   }
 
   private unavailable(errorCode: 'page-unavailable' | 'unsupported-page'): void {

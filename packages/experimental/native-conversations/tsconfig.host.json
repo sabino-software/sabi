@@ -1,0 +1,85 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+  },
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-persistence"
+    },
+    {
+      "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../workspace/workspace"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../host/codex-app-server"
+    },
+    {
+      "path": "../../sandbox/sandbox-policy"
+    },
+    {
+      "path": "../../interaction/user-approval"
+    },
+    {
+      "path": "../../attachment/attachment"
+    },
+    {
+      "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../../session/session-title"
+    },
+    {
+      "path": "../../interaction/permission-presets"
+    },
+    {
+      "path": "../../core/agent-default-model"
+    },
+    {
+      "path": "../../api/session-controller/tsconfig.host.json"
+    },
+    {
+      "path": "../../session/session-projection-cache"
+    },
+    {
+      "path": "../../subagent/subagent"
+    }
+  ],
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/client"
+  ]
+}

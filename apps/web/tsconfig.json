@@ -157,6 +157,7 @@
     "tests/account-login.e2e.ts",
     "tests/provider-authorization.e2e.ts",
     "tests/skeinlet-library.e2e.ts",
+    "tests/axiom-browser-extension.e2e.ts",
     "tests/axiom-link.e2e.ts",
     "tests/onboarding-usable-provider.e2e.ts",
     "tests/remote-settings.e2e.ts",

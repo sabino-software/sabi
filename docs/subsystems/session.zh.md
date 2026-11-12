@@ -1316,6 +1316,24 @@ Types: [SessionId](core.zh.md)
 
 Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)
 
+<a id="api-sessionhas-content--bail"></a>
+
+#### `api-session/has-content` — bail
+
+A source integration may witness real external conversation content in its own committed record. Return true only for that record; this never creates a local turn or a model response.
+
+```ts cordis-catalog
+/**
+ * A source integration may witness real external conversation content in its own committed record.
+ * Return true only for that record; this never creates a local turn or a model response.
+ * @mode bail
+ * @param event - committed record being folded into list metadata.
+ */
+'api-session/has-content'(event: SessionEvent): true | void
+```
+
+Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)
+
 <a id="api-sessionremoved--emit"></a>
 
 #### `api-session/removed` — emit

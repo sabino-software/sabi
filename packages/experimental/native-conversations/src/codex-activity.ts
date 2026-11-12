@@ -41,7 +41,11 @@ const projection = {
 
 /** A session-scoped writer whose ready projection handle remains private. */
 export interface CodexActivityRecorder {
-  /** @param session - Ordinary owning Harness Session. @param activity - Original operation facts. @returns New record sequence, or undefined when unchanged. */
+  /**
+   * @param session - Ordinary owning Harness Session.
+   * @param activity - Original operation facts.
+   * @returns New record sequence, or undefined when unchanged.
+   */
   append(session: Session, activity: NativeCodexActivity): SessionSeq | undefined
 }
 

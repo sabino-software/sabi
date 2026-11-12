@@ -75,7 +75,11 @@ export interface AxiomTransport {
   connect(url: string, signal?: AbortSignal): Promise<AxiomSnapshot>
   /** @param signal Cancels this read. @returns Currently rendered source-page window. */
   snapshot(signal?: AbortSignal): Promise<AxiomSnapshot>
-  /** @param request Original user text and observed revision. @param signal Cancels observation, never clicks Stop. @returns Confirmed, refused, or uncertain original-site acknowledgement. */
+  /**
+   * @param request Original user text and observed revision.
+   * @param signal Cancels observation, never clicks Stop.
+   * @returns Confirmed, refused, or uncertain original-site acknowledgement.
+   */
   send(request: AxiomSendRequest, signal?: AbortSignal): Promise<AxiomSendResult>
   /** @param signal Cancels the reveal request. @returns After the original page is revealed for direct login. */
   showLogin(signal?: AbortSignal): Promise<void>

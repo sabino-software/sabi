@@ -133,7 +133,8 @@ optionOf(name: string): PresetOption
 
 /**
  * Record a changed preset, then update each changed knob through its own
- * setter. Selecting the effective preset again appends nothing.
+ * setter. Synchronous admission runs before any preset or knob write; rejection leaves all unchanged.
+ * Selecting the effective preset again appends nothing.
  * @param session - the session the switch belongs to.
  * @param name - the preset to switch to; unknown names throw.
  */
@@ -164,4 +165,25 @@ The selectable process catalog changed. Payload-free by design: consumers subscr
 ```
 
 Source: [`packages/interaction/permission-presets/src/types.ts`](../../packages/interaction/permission-presets/src/types.ts)
+
+<a id="permission-presetsselecting--emit"></a>
+
+#### `permission-presets/selecting` — emit
+
+Synchronous admission before an explicit preset switch writes its preset or knobs. A throw rejects the complete switch with no durable writes. Initialization pinning does not dispatch.
+
+```ts cordis-catalog
+/**
+ * Synchronous admission before an explicit preset switch writes its preset or knobs.
+ * A throw rejects the complete switch with no durable writes. Initialization pinning does not dispatch.
+ * @param session - Session whose explicit permission selection is being changed.
+ * @param name - validated configured or live Auto preset name.
+ * @mode emit
+ */
+'permission-presets/selecting'(session: Session, name: string): undefined
+```
+
+Types: [Session](session.zh.md)
+
+Source: [`packages/interaction/permission-presets/src/index.ts`](../../packages/interaction/permission-presets/src/index.ts)
 <!-- END GENERATED cordis-surface -->

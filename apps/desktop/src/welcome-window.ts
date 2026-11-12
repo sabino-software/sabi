@@ -79,8 +79,14 @@ export async function openWelcomeWindow(locale: DesktopLocale, operations: Welco
       throw new Error('desktop welcome: rejected action from an unowned frame')
     }
   }
-  ipcMain.handle(WELCOME_IPC.nativeProvider, async event => { assertSender(event); return operations.nativeProvider?.() ?? Promise.resolve(null) })
-  ipcMain.handle(WELCOME_IPC.useWorkCodex, async event => { assertSender(event); return operations.useWorkCodex?.() ?? Promise.resolve({ ok: false }) })
+  ipcMain.handle(WELCOME_IPC.nativeProvider, async (event) => {
+    assertSender(event)
+    return operations.nativeProvider?.() ?? Promise.resolve(null)
+  })
+  ipcMain.handle(WELCOME_IPC.useWorkCodex, async (event) => {
+    assertSender(event)
+    return operations.useWorkCodex?.() ?? Promise.resolve({ ok: false })
+  })
   ipcMain.handle(WELCOME_IPC.analyticsEnabled, (event) => {
     assertSender(event)
     return operations.analyticsEnabled()

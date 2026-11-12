@@ -18,27 +18,36 @@ export type * from './types.ts'
 
 /** Work identity, Unix endpoint, and complete operation limits. No setting starts a daemon. */
 export interface Config {
+  /** Exact work Codex home expected in the daemon's initialize response. */
   readonly sourceHome: string
   /** Empty selects sourceHome/app-server-control/app-server-control.sock. */
   readonly socketPath: string
+  /** Client identity advertised to the connected work daemon. */
   readonly clientName: string
+  /** Client version advertised during initialization. */
   readonly clientVersion: string
+  /** Maximum Unix connection and initialization lifetime in milliseconds. */
   readonly connectTimeoutMs: number
+  /** Maximum lifetime of an outgoing request before an unknown-outcome refusal. */
   readonly requestTimeoutMs: number
+  /** Maximum lifetime of an owned incoming approval or user-input request. */
   readonly serverRequestTimeoutMs: number
+  /** Maximum accepted WebSocket message size in bytes. */
   readonly maxFrameBytes: number
+  /** Maximum simultaneous outgoing requests per connection. */
   readonly maxPendingRequests: number
 }
 
 const METHODS = new Set<CodexMethod>([
   'thread/list', 'thread/read', 'thread/turns/list', 'thread/items/list', 'thread/loaded/list',
-  'model/list', 'permissionProfile/list', 'mcpServerStatus/list', 'thread/start', 'thread/resume', 'thread/unsubscribe',
+  'model/list', 'permissionProfile/list', 'mcpServerStatus/list', 'account/read', 'thread/start', 'thread/fork', 'thread/resume', 'thread/unsubscribe',
   'thread/name/set', 'thread/archive', 'thread/unarchive', 'thread/settings/update',
+  'account/login/start', 'account/login/cancel',
   'turn/start', 'turn/steer', 'turn/interrupt',
 ])
 const READS = new Set<CodexMethod>([
   'thread/list', 'thread/read', 'thread/turns/list', 'thread/items/list', 'thread/loaded/list',
-  'model/list', 'permissionProfile/list', 'mcpServerStatus/list',
+  'model/list', 'permissionProfile/list', 'mcpServerStatus/list', 'account/read',
 ])
 const SERVER_METHODS = new Set<CodexServerRequestMethod>([
   'item/commandExecution/requestApproval', 'item/fileChange/requestApproval',
@@ -159,7 +168,10 @@ export default class CodexAppServer extends Service {
     }, 'codex-app-server.connection')
   }
 
-  /** @returns The current immutable connection facts; ready does not establish model access. */
+  /**
+   * Read current connection facts.
+   * @returns Immutable status; ready does not establish model access.
+   */
   status(): CodexConnectionStatus { return this.snapshot }
 
   /**
@@ -174,7 +186,7 @@ export default class CodexAppServer extends Service {
 
   /**
    * Invoke an allowlisted official operation exactly once, preserving its response fields.
-   * @param method - Native operation; filesystem, authentication, and configuration writes are excluded.
+   * @param method - Native operation; managed login is explicit, while filesystem and configuration writes are excluded.
    * @param params - Official operation parameters; consumers own method-specific defaults and authorization.
    * @param signal - Optional abandonment, never an implicit turn interruption.
    * @returns The unprojected official response object.
@@ -289,7 +301,9 @@ export default class CodexAppServer extends Service {
     return connection
   }
 
-  private async serverRequest(id: CodexRequestId, generation: number, method: string, params: CodexJsonObject, signal: AbortSignal): Promise<CodexJsonObject> {
+  private async serverRequest(
+    id: CodexRequestId, generation: number, method: string, params: CodexJsonObject, signal: AbortSignal,
+  ): Promise<CodexJsonObject> {
     const owner = SERVER_METHODS.has(method as CodexServerRequestMethod) ? method as CodexServerRequestMethod : undefined
     const handler = owner === undefined ? undefined : this.handlers.get(owner)
     if (handler === undefined || owner === undefined) return refused(method, params)

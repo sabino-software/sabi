@@ -14,7 +14,10 @@ const questionSchema = z.object({ id: z.string().min(1).max(200), header: text, 
 const questionsSchema = z.object({ questions: z.array(questionSchema).min(1).max(3) })
 const permissionSchema = z.object({
   network: z.object({ enabled: z.boolean().nullable() }).strict().nullable(),
-  fileSystem: z.object({ read: z.array(text.refine(isAbsolute)).max(100).nullable(), write: z.array(text.refine(isAbsolute)).max(100).nullable() }).strict().nullable(),
+  fileSystem: z.object({
+    read: z.array(text.refine(isAbsolute)).max(100).nullable(),
+    write: z.array(text.refine(isAbsolute)).max(100).nullable(),
+  }).strict().nullable(),
 }).strict()
 const fieldSchema = z.object({ type: z.enum(['string', 'boolean']), title: text.optional(), description: text.optional(),
   enum: z.array(text).min(1).max(20).optional() }).strict()
@@ -31,7 +34,7 @@ function cancelled(method: CodexServerRequestMethod, params?: CodexJsonObject): 
 }
 
 function detail(params: CodexJsonObject): string {
-  return ['reason', 'command', 'cwd'].flatMap(key => {
+  return ['reason', 'command', 'cwd'].flatMap((key) => {
     const value = params[key]
     if (typeof value === 'string') return [`${key}: ${value.slice(0, 16000)}`]
     if (key === 'command' && Array.isArray(value) && value.every(item => typeof item === 'string')) return [`command: ${JSON.stringify(value).slice(0, 16000)}`]
@@ -39,7 +42,9 @@ function detail(params: CodexJsonObject): string {
   }).join('\n\n') || 'Allow this specific Codex operation once?'
 }
 
-async function approval(ctx: Context, agent: Agent, method: CodexServerRequestMethod, params: CodexJsonObject, signal: AbortSignal): Promise<CodexJsonObject> {
+async function approval(
+  ctx: Context, agent: Agent, method: CodexServerRequestMethod, params: CodexJsonObject, signal: AbortSignal,
+): Promise<CodexJsonObject> {
   // A one-action answer cannot safely grant a persistent file-write root or policy amendment.
   if (params.grantRoot !== undefined && params.grantRoot !== null) return cancelled(method, params)
   const legacy = method === 'applyPatchApproval' || method === 'execCommandApproval'
@@ -90,34 +95,35 @@ async function userInput(ctx: Context, agent: Agent, params: CodexJsonObject, si
 async function elicitation(ctx: Context, agent: Agent, params: CodexJsonObject, signal: AbortSignal): Promise<CodexJsonObject> {
   const fallback = cancelled('mcpServer/elicitation/request')
   if (typeof params.message !== 'string') return fallback
+  const message = params.message
   if (params.mode === 'url') {
     if (typeof params.url !== 'string') return fallback
     let url: URL
     try { url = new URL(params.url) } catch (_invalidUrl: unknown) { return fallback }
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return fallback
     const answer = await ctx.userQuestions.ask({ agent, signal, questions: [{ id: 'elicitation', header: 'Codex verification',
-      question: 'Have you completed this requested flow?', detail: `${params.message}\n\n${url.href}`,
+      question: 'Have you completed this requested flow?', detail: `${message}\n\n${url.href}`,
       options: [{ label: 'Completed' }, { label: 'Cancel' }],
     }] })
     signal.throwIfAborted()
     return answer.answers.some(value => value.id === 'elicitation' && value.selected.length === 1 && value.selected[0] === 'Completed' && !value.custom)
       ? { action: 'accept', content: null, _meta: null } : fallback
   }
-  if (!['form', 'openai/form', 'openaiForm'].includes(String(params.mode))) return fallback
+  if (typeof params.mode !== 'string' || !['form', 'openai/form', 'openaiForm'].includes(params.mode)) return fallback
   const parsed = formSchema.safeParse(params.requestedSchema)
   if (!parsed.success) return fallback
   const properties = Object.entries(parsed.data.properties)
   const required = new Set(parsed.data.required ?? [])
   if (properties.length > 3 || [...required].some(name => !(name in parsed.data.properties))) return fallback
   if (properties.length === 0) {
-    const outcome = await ctx.approval.request({ agent, toolName: 'Codex MCP action', reason: params.message, signal })
+    const outcome = await ctx.approval.request({ agent, toolName: 'Codex MCP action', reason: message, signal })
     signal.throwIfAborted()
     return outcome === 'allowed-once' ? { action: 'accept', content: {}, _meta: null } : fallback
   }
   if (properties.some(([name, field]) => /password|secret|token|credential|api.?key|challenge/i.test(`${name} ${field.title ?? ''}`)
     || field.type === 'boolean' && field.enum !== undefined || field.enum?.includes('Omit this optional field'))) return fallback
   const questions: AskUserQuestionItem[] = properties.map(([name, field]) => ({
-    id: name, question: field.title ?? name, detail: [params.message, field.description].filter(Boolean).join('\n\n'),
+    id: name, question: field.title ?? name, detail: [message, field.description].filter(Boolean).join('\n\n'),
     ...(field.type === 'boolean' || field.enum !== undefined || !required.has(name) ? { options: [
       ...(field.type === 'boolean' ? ['True', 'False'] : field.enum ?? []).map(label => ({ label })),
       ...required.has(name) ? [] : [{ label: 'Omit this optional field' }],
@@ -151,7 +157,9 @@ async function elicitation(ctx: Context, agent: Agent, params: CodexJsonObject, 
  * @param ctx - Owner context with native transport, approvals, and user questions.
  * @param ownerOf - Await the exact turn/start acknowledgement and reject other clients' requests.
  */
-export function registerCodexRequests(ctx: Context, ownerOf: (params: CodexJsonObject, signal: AbortSignal) => Promise<Agent | undefined>): void {
+export function registerCodexRequests(
+  ctx: Context, ownerOf: (params: CodexJsonObject, signal: AbortSignal) => Promise<Agent | undefined>,
+): void {
   const lifetime = new AbortController()
   const queues = new Map<Agent, Promise<void>>()
   ctx.effect(() => async () => { lifetime.abort(); await Promise.allSettled([...queues.values()]) })

@@ -43,9 +43,9 @@ async function fixture() {
 }
 
 describe('native empty-form MCP consent', () => {
-  it.each<ApprovalOutcome>(['allowed-once', 'rejected', 'cancelled', 'unavailable'])('returns only the one-shot %s decision', async outcome => {
+  it.each<ApprovalOutcome>(['allowed-once', 'rejected', 'cancelled', 'unavailable'])('returns only the one-shot %s decision', async (outcome) => {
     const { ctx, agent, request } = await fixture()
-    ctx.on('approval/request', async approval => {
+    ctx.on('approval/request', async (approval) => {
       expect(approval.agent).toBe(agent)
       expect(ctx.agents.requireInitiator()).toBe(agent)
       return outcome
@@ -58,9 +58,9 @@ describe('native empty-form MCP consent', () => {
 
   it('cancels when the owning request expires while approval is pending', async () => {
     const { ctx, request } = await fixture()
-    const entered = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<ApprovalOutcome>()
-    ctx.on('approval/request', async () => { entered.resolve(); return release.promise })
+    ctx.on('approval/request', async () => { entered.resolve(undefined); return release.promise })
     const controller = new AbortController()
     const pending = request(controller.signal)
     await entered.promise

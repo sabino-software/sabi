@@ -133,6 +133,8 @@ Each driver runs its complete lifetime inside `ctx.agents.withInitiator(agent, .
 
 The `AgentHandle` disposer is a capability: among consumers, only its holder can tear the agent down. The registered factory provider is a structural co-owner, because scoped agents depend on that provider's service API; provider unload stops and drains every live handle it made. `ctx.agents.get(id)` still returns a bare `Agent` — the handle is exposed only to the consumer that created it.
 
+The standard driver dispatches synchronous `agent/model-selecting` admission before recording a changed selection; a throwing listener refuses it without changing the Session. Custom drivers using `AgentModel` supply equivalent admission through its optional constructor callback.
+
 </details>
 
 -----
@@ -151,8 +153,6 @@ The package-level contract is enough for most consumers; read these when you nee
 -----
 
 <a id="model-experience"></a>
-The standard driver dispatches synchronous `agent/model-selecting` admission before recording a changed selection; a throwing listener refuses it without changing the Session. Custom drivers using `AgentModel` supply equivalent admission through its optional constructor callback.
-
 ## Model Experience
 
 ### User, steering, and injected messages
