@@ -54,9 +54,15 @@ interface Connection {
 }
 
 /** Fail closed when no owning Harness bridge is mounted for a server request. */
-function refused(method: string): CodexJsonObject {
+function refused(method: string, params: CodexJsonObject): CodexJsonObject {
   switch (method) {
-    case 'item/commandExecution/requestApproval':
+    case 'item/commandExecution/requestApproval': {
+      if (Array.isArray(params.availableDecisions) && !params.availableDecisions.includes('cancel')) {
+        if (params.availableDecisions.includes('decline')) return { decision: 'decline' }
+        throw new CodexAppServerError('CODEX_METHOD_UNSUPPORTED')
+      }
+      return { decision: 'cancel' }
+    }
     case 'item/fileChange/requestApproval': return { decision: 'cancel' }
     case 'applyPatchApproval':
     case 'execCommandApproval': return { decision: 'abort' }
@@ -286,7 +292,7 @@ export default class CodexAppServer extends Service {
   private async serverRequest(id: CodexRequestId, generation: number, method: string, params: CodexJsonObject, signal: AbortSignal): Promise<CodexJsonObject> {
     const owner = SERVER_METHODS.has(method as CodexServerRequestMethod) ? method as CodexServerRequestMethod : undefined
     const handler = owner === undefined ? undefined : this.handlers.get(owner)
-    if (handler === undefined || owner === undefined) return refused(method)
+    if (handler === undefined || owner === undefined) return refused(method, params)
     return handler(params, { id, generation, method: owner, signal })
   }
 

@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import CodexAppServer, { CodexAppServerError } from '../src/index.ts'
-import type { CodexJsonObject, CodexMethod } from '../src/types.ts'
+import type { CodexJsonObject, CodexMethod, CodexServerRequestContext } from '../src/types.ts'
 
 async function fixture(options: {
   readonly handle?: (frame: CodexJsonObject, socket: WebSocket) => void
@@ -88,7 +88,7 @@ describe('native work Codex connection', () => {
     await native.connect()
     clients[0]?.send(JSON.stringify({ id: 'approval-1', method: 'item/commandExecution/requestApproval', params: { threadId: 'saved-thread', turnId: 'turn-1' } }))
     await vi.waitFor(() => { expect(received.find(frame => frame.id === 'approval-1')?.result).toEqual({ decision: 'cancel' }) })
-    const handler = vi.fn(async (_params, context) => {
+    const handler = vi.fn(async (_params: CodexJsonObject, context: CodexServerRequestContext) => {
       expect(context.id).toBe(42)
       return { success: true, contentItems: [{ type: 'inputText', text: 'Harness result' }] }
     })
@@ -97,6 +97,26 @@ describe('native work Codex connection', () => {
     clients[0]?.send(JSON.stringify({ id: 42, method: 'item/tool/call', params: { threadId: 'saved-thread', turnId: 'turn-1', tool: 'fixture_tool', arguments: {} } }))
     await vi.waitFor(() => { expect(received.find(frame => frame.id === 42)?.result).toMatchObject({ success: true }) })
     dispose()
+  })
+
+  it('uses only an offered refusal decision and leaves requests from another turn pending', async () => {
+    const { native, clients, received } = await fixture()
+    let signal: AbortSignal | undefined
+    const answered = Promise.withResolvers<CodexJsonObject>()
+    native.setRequestHandler('item/tool/requestUserInput', async (_params, context) => {
+      signal = context.signal
+      return answered.promise
+    })
+    await native.connect()
+    clients[0]?.send(JSON.stringify({ id: 'approval-limited', method: 'item/commandExecution/requestApproval', params: { threadId: 'saved-thread', availableDecisions: ['accept', 'decline'] } }))
+    await vi.waitFor(() => { expect(received.find(frame => frame.id === 'approval-limited')?.result).toEqual({ decision: 'decline' }) })
+    clients[0]?.send(JSON.stringify({ id: 'new-turn-question', method: 'item/tool/requestUserInput', params: { threadId: 'saved-thread', turnId: 'new-turn' } }))
+    await vi.waitFor(() => { expect(signal).toBeDefined() })
+    clients[0]?.send(JSON.stringify({ method: 'turn/completed', params: { threadId: 'saved-thread', turn: { id: 'old-turn' } } }))
+    await new Promise<void>(resolve => { setImmediate(resolve) })
+    expect(signal?.aborted).toBe(false)
+    answered.resolve({ answers: {} })
+    await vi.waitFor(() => { expect(received.some(frame => frame.id === 'new-turn-question')).toBe(true) })
   })
 
   it('aborts resolved server requests and ignores late answers', async () => {

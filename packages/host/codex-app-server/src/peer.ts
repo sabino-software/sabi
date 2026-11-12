@@ -145,8 +145,12 @@ export class CodexRpcPeer {
         } else {
           if (frame.method === 'serverRequest/resolved' && requestId(params.requestId)) this.cancelIncoming(params.requestId)
           if (frame.method === 'turn/completed' || frame.method === 'thread/closed') {
+            const turn = params.turn !== null && typeof params.turn === 'object' && !Array.isArray(params.turn) ? params.turn : undefined
             for (const [id, incoming] of this.incoming) {
-              if (incoming.params.threadId === params.threadId) this.cancelIncoming(id)
+              if (incoming.params.threadId !== params.threadId) continue
+              if (frame.method === 'turn/completed' && typeof turn?.id === 'string'
+                && typeof incoming.params.turnId === 'string' && incoming.params.turnId !== turn.id) continue
+              this.cancelIncoming(id)
             }
           }
           this.notified(frame.method, params)
