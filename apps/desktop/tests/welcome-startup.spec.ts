@@ -351,7 +351,7 @@ it('cold-starts the local fork directly into workspace without a DeepSeek accoun
   vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', '/runtime/primary-runtime')
   vi.stubEnv('DSH_DESKTOP_OPEN_DEVTOOLS', '0')
   await import('../src/main.ts')
-  await vi.waitFor(() => expect(state.loadWorkspace).toHaveBeenCalled())
+  await vi.waitFor(() => { expect(state.loadWorkspace).toHaveBeenCalled() })
   expect(state.beforeWelcome).not.toHaveBeenCalled()
   expect(state.accountListener).toBeUndefined()
   expect(state.accountState).not.toHaveBeenCalled()

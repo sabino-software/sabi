@@ -26,6 +26,7 @@ import { createSessionTestController } from '../../../api/session-controller/tes
 import NativeConversations from '../src/index.ts'
 import { BINDING_RECORD, CODEX_CUT_RECORD } from '../src/projection.ts'
 import { sourceSessionId, appendSourceMessages } from '../src/history.ts'
+import type { SessionControlFrame } from '../../../api/session-controller/src/types.ts'
 import type { NativeConversationId } from '../src/types.ts'
 import type { AxiomSnapshot, AxiomTransport } from '../src/axiom-types.ts'
 
@@ -144,6 +145,8 @@ describe.skipIf(process.platform === 'win32')('native conversation service', () 
     first.ctx.nativeConversations.attachAxiomTransport(transport)
     const one = 'https://chatgpt.com/dots/fixture~one'
     const before = await first.ctx.sessionPersistence.list()
+    // The deprecated endpoint remains covered to prove it cannot create a Session.
+    // oxlint-disable-next-line typescript/no-deprecated
     expect(await first.ctx.nativeConversations.connectAxiom(one)).toEqual({ url: one, phase: 'ready' })
     expect(await first.ctx.sessionPersistence.list()).toEqual(before)
     expect((await first.ctx.nativeConversations.status()).axiom.preferredUrl).toBe(one)
@@ -152,6 +155,8 @@ describe.skipIf(process.platform === 'win32')('native conversation service', () 
     expect((await second.ctx.nativeConversations.status()).axiom.preferredUrl).toBeNull()
     second.ctx.nativeConversations.attachAxiomTransport(transport)
     const two = 'https://chatgpt.com/dots/fixture~two'
+    // Reconnecting through the compatibility endpoint must also leave history untouched.
+    // oxlint-disable-next-line typescript/no-deprecated
     await second.ctx.nativeConversations.connectAxiom(two)
     expect((await second.ctx.nativeConversations.status()).axiom.preferredUrl).toBe(two)
     await second.ctx.fiber.dispose()
@@ -312,7 +317,7 @@ it.skipIf(process.platform === 'win32')('hides cached and uncached legacy Dot mi
   for (const dot of dots) {
     expect(listed.items.some(item => item.sessionId === dot.id)).toBe(false)
     expect(await controller.presentation({ sessionId: dot.id }, signal)).toEqual({ visibility: 'hidden', route: { view: 'dot', params: { url } } })
-    await expect(controller.page({ address: { kind: 'session', sessionId: dot.id } }, signal)).rejects.toMatchObject({ code: 'session/not-found' })
+    await expect(controller.events({ address: { kind: 'session', sessionId: dot.id } }, signal)).rejects.toMatchObject({ code: 'session/not-found' })
     await expect(controller.state({ sessionId: dot.id }, signal)).rejects.toMatchObject({ code: 'session/not-found' })
     expect(await controller.resolveAgent(dot.id)).toMatchObject({ error: { code: 'session/not-found' } })
     expect(ctx.agents.get(dot.id)).toBeUndefined()
@@ -321,7 +326,7 @@ it.skipIf(process.platform === 'win32')('hides cached and uncached legacy Dot mi
   expect(await controller.presentation({ sessionId: dots[0]!.id }, signal)).toMatchObject({ visibility: 'hidden' })
   ctx.sessions.create(dots[0]!.id, { seed: dots[0]!.snapshotEvents(), meta: dots[0]!.header })
   const control = controller.control(signal)[Symbol.asyncIterator]()
-  const first = await control.next()
+  const first: IteratorResult<SessionControlFrame, undefined> = await control.next()
   expect(first.value).toMatchObject({ type: 'baseline' })
   if (first.value?.type !== 'baseline') throw new Error('Expected a control baseline')
   expect(first.value.value.projections).not.toHaveProperty(dots[0]!.id)
@@ -355,7 +360,10 @@ it.skipIf(process.platform === 'win32')('shares cold binding reads, memoizes ord
       entered.resolve(undefined)
       const signal = readOptions!.signal!
       await new Promise<void>((resolve, reject) => {
-        const abort = () => {reject(signal.reason)}
+        const abort = () => {
+          const reason: unknown = signal.reason
+          reject(reason instanceof Error ? reason : Object.assign(new Error('Fixture I/O was aborted.', { cause: reason }), { name: 'AbortError' }))
+        }
         signal.addEventListener('abort', abort, { once: true })
         void gate.promise.then(() => {signal.removeEventListener('abort', abort); resolve()})
         if (signal.aborted) abort()
@@ -365,13 +373,20 @@ it.skipIf(process.platform === 'win32')('shares cold binding reads, memoizes ord
     vi.spyOn(handle, 'close').mockImplementation(async () => {closes++; await close()})
     return handle
   })
-  onTestFinished(() => io.mockRestore())
+  onTestFinished(() => { io.mockRestore() })
   const first = new AbortController()
   const rejected = controller.presentation({ sessionId: id }, first.signal)
   await entered.promise
   const kept = controller.presentation({ sessionId: id }, new AbortController().signal)
-  first.abort(new Error('first metadata caller cancelled'))
-  await expect(rejected).rejects.toThrow('first metadata caller cancelled')
+  const failure = new Error('first metadata caller cancelled')
+  first.abort(failure)
+  await expect(rejected).rejects.toBe(failure)
+  const other = new AbortController()
+  const listening = vi.spyOn(other.signal, 'addEventListener')
+  const nonErrorRejection = controller.presentation({ sessionId: id }, other.signal)
+  await vi.waitFor(() => { expect(listening).toHaveBeenCalledWith('abort', expect.any(Function), { once: true }) })
+  other.abort('cancelled without Error')
+  await expect(nonErrorRejection).rejects.toMatchObject({ name: 'AbortError', cause: 'cancelled without Error' })
   gate.resolve(undefined)
   expect(await kept).toEqual({ visibility: 'visible' })
   expect(await controller.presentation({ sessionId: id }, new AbortController().signal)).toEqual({ visibility: 'visible' })
@@ -397,7 +412,7 @@ it.skipIf(process.platform === 'win32')('keeps known migration-cache Dot metadat
     const { eventCount: _count, ...rest } = value
     return { ...rest, formatStatus: 'migration-required' }
   })
-  onTestFinished(() => io.mockRestore())
+  onTestFinished(() => { io.mockRestore() })
   const signal = new AbortController().signal
   expect(await controller.presentation({ sessionId: id }, signal)).toMatchObject({ visibility: 'hidden', route: { view: 'dot' } })
   await expect(controller.projections({ sessionId: id }, signal)).rejects.toMatchObject({ code: 'session/not-found' })
@@ -416,13 +431,16 @@ it.skipIf(process.platform === 'win32')('cancels metadata stat I/O with the call
     const signal = options!.signal!
     try {
       return await new Promise<never>((_resolve, reject) => {
-        const abort = () => {reject(signal.reason)}
+        const abort = () => {
+          const reason: unknown = signal.reason
+          reject(reason instanceof Error ? reason : Object.assign(new Error('Fixture I/O was aborted.', { cause: reason }), { name: 'AbortError' }))
+        }
         signal.addEventListener('abort', abort, { once: true })
         if (signal.aborted) abort()
       })
     } finally {finished++}
   })
-  onTestFinished(() => io.mockRestore())
+  onTestFinished(() => { io.mockRestore() })
   const abort = new AbortController()
   const cancelled = controller.presentation({ sessionId: id }, abort.signal)
   await entered.promise
@@ -430,7 +448,7 @@ it.skipIf(process.platform === 'win32')('cancels metadata stat I/O with the call
   await expect(cancelled).rejects.toThrow('cancelled stat')
   const closing = controller.presentation({ sessionId: id }, new AbortController().signal)
   const settled = expect(closing).rejects.toMatchObject({ name: 'AbortError' })
-  await vi.waitFor(() => expect(io.mock.calls.filter(([target]) => target === id)).toHaveLength(2))
+  await vi.waitFor(() => { expect(io.mock.calls.filter(([target]) => target === id)).toHaveLength(2) })
   await ctx.fiber.dispose()
   await settled
   expect(finished).toBe(2)

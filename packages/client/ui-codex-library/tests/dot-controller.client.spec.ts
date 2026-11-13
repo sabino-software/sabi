@@ -8,11 +8,11 @@ const message = (id: string, role: 'user' | 'assistant' = 'assistant', text = id
 const snapshot: DotSnapshot = { source: 'chatgpt-web', url: 'https://chatgpt.com/dots/original~opaque', title: 'Axiom',
   phase: 'ready', revision: 1, messages: [message('u1', 'user'), message('a1')], canSend: true,
   draftPresent: false, siteStatus: null, limited: true }
-function fixture() {
+function fixture(enabled = true) {
   let listener = (_snapshot: DotSnapshot): void => {}
   const off = vi.fn()
   const companion: DesktopAxiomCompanion = {
-    preferences: vi.fn(async (): Promise<DotPreferences> => ({ enabled: true, showInSidebar: true, sidebarStyle: 'sameNewSession' })),
+    preferences: vi.fn(async (): Promise<DotPreferences> => ({ enabled, showInSidebar: true, sidebarStyle: 'sameNewSession' })),
     setPreferences: vi.fn(async () => {}), selection: vi.fn(async () => ({ url: snapshot.url!, title: 'Axiom' })),
     snapshot: vi.fn(async () => snapshot), choose: vi.fn(async () => snapshot),
     subscribe: (callback) => { listener = callback; return off },
@@ -30,7 +30,8 @@ it('reads the actual selected title without opening a page, then opens the conne
   const f = fixture()
   await vi.waitFor(() => { expect(f.controller.store.getSnapshot().selection?.title).toBe('Axiom') })
   expect(f.companion.choose).not.toHaveBeenCalled()
-  expect(f.companion.snapshot).not.toHaveBeenCalled()
+  expect(f.companion.snapshot).toHaveBeenCalledOnce()
+  expect(f.controller.store.getSnapshot().messages.map(value => value.id)).toEqual(['u1', 'a1'])
   await f.controller.open()
   expect(f.controller.store.getSnapshot().messages.map(value => value.id)).toEqual(['u1', 'a1'])
   expect(f.companion.choose).not.toHaveBeenCalled()
@@ -112,7 +113,7 @@ it('does not reconfigure or invalidate an outstanding original send when the top
   const sending = f.controller.send()
   await f.controller.open()
   await f.controller.configure()
-  expect(f.companion.snapshot).toHaveBeenCalledOnce()
+  expect(f.companion.snapshot).toHaveBeenCalledTimes(2)
   expect(f.companion.choose).not.toHaveBeenCalled()
   expect(f.controller.store.getSnapshot().sending).toBe(true)
   pending.resolve({ status: 'unknown', snapshot })
@@ -123,10 +124,11 @@ it('does not reconfigure or invalidate an outstanding original send when the top
 })
 it('keeps a newer ready source event emitted while an older snapshot request is pending', async () => {
   const f = fixture()
+  await vi.waitFor(() => { expect(f.controller.store.getSnapshot().snapshot?.phase).toBe('ready') })
   const pending = Promise.withResolvers<DotSnapshot>()
   vi.mocked(f.companion.snapshot).mockImplementation(() => pending.promise)
   const opening = f.controller.open()
-  await vi.waitFor(() => { expect(f.companion.snapshot).toHaveBeenCalledOnce() })
+  await vi.waitFor(() => { expect(f.companion.snapshot).toHaveBeenCalledTimes(2) })
   f.publish({ ...snapshot, revision: 3, messages: [...snapshot.messages, message('autonomous')] })
   pending.resolve({ ...snapshot, revision: 2 })
   await opening
@@ -144,5 +146,55 @@ it('does not let an old rejected history page overwrite a newly selected source 
   pending.reject(new Error('old source page failed'))
   await older
   expect(f.controller.store.getSnapshot()).toMatchObject({ selection: { title: 'Another' }, history: 'idle', hasMore: true })
+  f.controller.dispose()
+})
+
+it('hydrates a source already ready before subscription without choosing, sending, or opening anything', async () => {
+  const f = fixture()
+  await vi.waitFor(() => { expect(f.controller.store.getSnapshot().snapshot).toEqual(snapshot) })
+  expect(f.controller.store.getSnapshot().messages).toEqual(snapshot.messages)
+  expect(f.companion.snapshot).toHaveBeenCalledOnce()
+  expect(f.companion.choose).not.toHaveBeenCalled()
+  expect(f.companion.showLogin).not.toHaveBeenCalled()
+  expect(f.companion.send).not.toHaveBeenCalled()
+  f.controller.dispose()
+})
+it('preserves a newer subscription while the initial read-only snapshot is pending', async () => {
+  const f = fixture()
+  const pending = Promise.withResolvers<DotSnapshot>()
+  vi.mocked(f.companion.snapshot).mockImplementation(() => pending.promise)
+  await vi.waitFor(() => { expect(f.companion.snapshot).toHaveBeenCalledOnce() })
+  const newer = { ...snapshot, revision: 5, messages: [...snapshot.messages, message('warm-update')] }
+  f.publish(newer)
+  pending.resolve({ ...snapshot, revision: 2 })
+  await vi.waitFor(() => { expect(f.controller.store.getSnapshot().snapshot).toEqual(newer) })
+  expect(f.companion.choose).not.toHaveBeenCalled()
+  f.controller.dispose()
+})
+it('does not resurrect a source closed during the initial snapshot read or sample a disabled integration', async () => {
+  const f = fixture()
+  const pending = Promise.withResolvers<DotSnapshot>()
+  vi.mocked(f.companion.snapshot).mockImplementation(() => pending.promise)
+  await vi.waitFor(() => { expect(f.companion.snapshot).toHaveBeenCalledOnce() })
+  f.publish({ ...snapshot, phase: 'disconnected', url: null, messages: [], canSend: false, revision: 0 })
+  pending.resolve(snapshot)
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(f.controller.store.getSnapshot().snapshot?.phase).toBe('disconnected')
+  f.controller.dispose()
+  const disabled = fixture(false)
+  await vi.waitFor(() => { expect(disabled.controller.store.getSnapshot().preferences?.enabled).toBe(false) })
+  expect(disabled.companion.snapshot).not.toHaveBeenCalled()
+  disabled.controller.dispose()
+})
+it('reports an initial source-read failure separately from preferences and permits explicit top-button retry', async () => {
+  const f = fixture()
+  vi.mocked(f.companion.snapshot).mockRejectedValueOnce(new Error('source temporarily unavailable'))
+  await vi.waitFor(() => { expect(f.controller.store.getSnapshot().failed).toBe(true) })
+  expect(f.controller.store.getSnapshot()).toMatchObject({ preferencesFailed: false, preferences: { enabled: true } })
+  expect(f.companion.choose).not.toHaveBeenCalled()
+  await f.controller.open()
+  expect(f.controller.store.getSnapshot()).toMatchObject({ failed: false, snapshot: { phase: 'ready' } })
+  expect(f.companion.snapshot).toHaveBeenCalledTimes(2)
   f.controller.dispose()
 })

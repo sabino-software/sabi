@@ -116,7 +116,7 @@ export function CodexLibraryPage({
   }
   const disabled = busy !== null || transportBusy || status.value?.syncing === true
   const axiomDisabled = disabled || axiomCompanion === undefined || transportError
-    || (axiomCompanion !== undefined && transport === null)
+    || transport === null
     || (transport === 'browser' && setup?.available !== true)
   return <section className={css.page} aria-label={t('title')}>
     <header className={css.header}>

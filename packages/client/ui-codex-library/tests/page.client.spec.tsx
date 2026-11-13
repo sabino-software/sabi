@@ -6,6 +6,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { CodexLibraryPage } from '../src/client/page.tsx'
 import type { DesktopAxiomCompanion } from '../src/client/desktop-axiom.ts'
 import { en } from '../src/client/locales.ts'
+import { emptyDotState } from '../src/client/dot-controller.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async importOriginal => ({
   ...await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(),
@@ -54,8 +55,7 @@ function mount(options: {
   }) as PageProps['useResource']
   render(<CodexLibraryPage {...{
     ...options.axiomCompanion === undefined ? {} : { axiomCompanion: options.axiomCompanion },
-    useDot: selector => selector({ preferences: { enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' },
-      busy: false, pending: false, failed: false, preferencesFailed: false }),
+    useDot: selector => selector({ ...emptyDotState, preferences: { enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' } }),
     setDotPreferences: async () => {}, useResource, t: makeTranslate(en), syncCodex, chooseDot, showAxiomLogin,
     startCodexLogin, cancelCodexLogin, useCodex,
   } as PageProps} />)

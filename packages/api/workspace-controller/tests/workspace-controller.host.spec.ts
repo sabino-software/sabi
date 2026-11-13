@@ -627,7 +627,7 @@ it('filters dedicated-view memberships from active, archived and pinned API resu
   ctx.on('workspace/session-presentation', id => id === hidden || id === archived ? { visibility: 'hidden', route: { view: 'dedicated', params: {} } } : undefined)
   const abort = new AbortController()
   const follow = controller.follow(abort.signal)[Symbol.asyncIterator]()
-  const frame = await follow.next()
+  const frame: IteratorResult<WorkspaceFollowFrame, undefined> = await follow.next()
   if (frame.value?.type !== 'baseline') throw new Error('Expected workspace baseline')
   expect(frame.value.value.items[0]!.sessionIds).toEqual([creator])
   expect(frame.value.value.archivedSessionIds).toEqual([])

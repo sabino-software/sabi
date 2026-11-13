@@ -48,6 +48,7 @@ export function createDotController(companion: DesktopAxiomCompanion): DotContro
   let active = true
   let generation = 0
   let choosing = false
+  let observationSequence = 0
   let queuedSnapshot: DotSnapshot | null = null
   const queuedObservation = (): DotSnapshot | null => queuedSnapshot
   const currentAttempt = (attempt: number, url?: string | null): boolean =>
@@ -75,12 +76,27 @@ export function createDotController(companion: DesktopAxiomCompanion): DotContro
     })
   }
   const off = companion.subscribe((snapshot) => {
+    observationSequence++
     if (!choosing) { observe(snapshot); return }
     if (snapshot.phase === 'ready' && snapshot.url !== null
       && (queuedSnapshot?.url !== snapshot.url || queuedSnapshot.revision <= snapshot.revision)) queuedSnapshot = snapshot
   })
-  const ready = Promise.all([companion.preferences(), companion.selection()]).then(([preferences, selection]) => {
-    update({ preferences, selection })
+  const acceptsInitialRead = (): boolean => active && store.getSnapshot().preferences?.enabled === true
+  const ready = Promise.all([companion.preferences(), companion.selection()]).then(async ([preferences, selection]) => {
+    update({ preferences, selection: store.getSnapshot().selection ?? selection })
+    if (!acceptsInitialRead()) return
+    const sequence = observationSequence
+    try {
+      const snapshot = await companion.snapshot()
+      if (!acceptsInitialRead()) return
+      const observed = store.getSnapshot().snapshot
+      // A source event wins across identity or lifecycle changes; only a newer same-source read may replace it.
+      if (observationSequence !== sequence && observed !== null
+        && (observed.url !== snapshot.url || observed.revision >= snapshot.revision)) return
+      observe(snapshot)
+    } catch (_initialSnapshotFailed: unknown) {
+      if (acceptsInitialRead() && observationSequence === sequence) update({ failed: true })
+    }
   }).catch(() => { update({ preferencesFailed: true }) })
   const configure = async (reuse: boolean, fallbackUrl?: string): Promise<void> => {
     await ready

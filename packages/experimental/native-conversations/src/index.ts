@@ -201,7 +201,6 @@ export default class NativeConversations extends TypertRemoteService {
       const bindingSeq = this.bindingSequences.stateOf(agent.session)
       let forked = false
       if (binding && bindingSeq !== null && !agent.session.isOwnSeq(bindingSeq)) {
-        if (binding.source !== 'codex') throw new Error('Fork this original Axiom conversation in its original application before continuing the copied Session.')
         const cut = this.sourceCuts.stateOf(agent.session)
         if (!cut || cut.sourceId !== binding.sourceId || agent.session.isOwnSeq(cut.seq)) {
           throw new Error('This copied Codex Session has no verified complete original-turn cut. Fork it in Codex or complete a new turn before copying it.')
@@ -417,9 +416,12 @@ export default class NativeConversations extends TypertRemoteService {
     }
     if (!signal) return task
     return new Promise((resolve, reject) => {
-      const abort = () => { reject(signal.reason) }
+      const abort = () => {
+        const reason: unknown = signal.reason
+        reject(reason instanceof Error ? reason : Object.assign(new Error('The metadata request was aborted.', { cause: reason }), { name: 'AbortError' }))
+      }
       signal.addEventListener('abort', abort, { once: true })
-      void task.then((value) => {signal.removeEventListener('abort', abort); resolve(value)}, (error) => {signal.removeEventListener('abort', abort); reject(error)})
+      void task.then((value) => {signal.removeEventListener('abort', abort); resolve(value)}, (error: unknown) => {signal.removeEventListener('abort', abort); reject(error instanceof Error ? error : new Error('The metadata request failed.', { cause: error }))})
       if (signal.aborted) abort()
     })
   }
@@ -449,7 +451,7 @@ export default class NativeConversations extends TypertRemoteService {
     }
     if (assignment) throw new Error('The original conversation’s assigned local Session is missing. Restore its local data before synchronizing.')
     let model = binding.model
-    if (!model && binding.source === 'codex') {
+    if (!model) {
       const models = await this.ctx.llm.listModels(CODEX_PROVIDER)
       model = models[0]?.id ?? null
     }
@@ -460,7 +462,7 @@ export default class NativeConversations extends TypertRemoteService {
     const events = [appendPluginRecord(session, BINDING_RECORD, binding, { returnEvent: true })]
     events.push(session.append('session/title', { title: binding.title, messageSeqs: [], source: { kind: 'user' } }))
     if (model) events.push(session.append('model/selection', {
-      provider: binding.source === 'codex' ? CODEX_PROVIDER : 'axiom-original', model,
+      provider: CODEX_PROVIDER, model,
     }))
     const handle = await this.ctx.sessionPersistence.create(header)
     try { await handle.append(events); await handle.flush() } finally { await handle.close() }

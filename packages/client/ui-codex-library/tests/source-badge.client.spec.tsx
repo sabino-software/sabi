@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Source identity decorates ordinary Sessions without creating a second conversation surface. */
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -43,11 +43,9 @@ it('leaves legacy Axiom and ordinary Harness headers empty instead of adding ano
   expect(view.container.textContent).toBe('')
 })
 
-it('shows only the source badge for Codex and never invokes the original-page action', () => {
+it('shows only the source badge for Codex without another Dot entrypoint', () => {
   type HeaderProps = Parameters<typeof NativeSourceHeader>[0]
-  const showOriginal = vi.fn(async () => {})
-  render(<NativeSourceHeader {...{ t, showOriginal, useProjection: () => binding } as HeaderProps} />)
+  render(<NativeSourceHeader {...{ t, useProjection: () => binding } as HeaderProps} />)
   expect(screen.getByText('Codex').title).toBe('Continues the original Codex thread.')
   expect(screen.queryByRole('button')).toBeNull()
-  expect(showOriginal).not.toHaveBeenCalled()
 })
