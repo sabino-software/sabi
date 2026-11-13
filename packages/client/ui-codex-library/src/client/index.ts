@@ -35,7 +35,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Services needed for native connection controls and ordinary Session navigation. */
-export const inject = ['slots', 'locale', 'resources', 'remote', 'remote.nativeConversations', 'sessions', 'uiWorkspace', 'uiConversation', 'layout']
+export const inject = ['slots', 'locale', 'resources', 'remote', 'remote.session', 'remote.nativeConversations', 'sessions', 'uiWorkspace', 'uiConversation', 'layout']
 
 function valueOf<T>(result: RemoteResult<T>): T {
   if (!result.ok) throw result.error

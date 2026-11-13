@@ -1,6 +1,6 @@
 /** Feature teardown removes connection navigation, source badges, and its status reader. */
 import { Context, Service } from '@deepseek-ai/cordis'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { ConversationEventRegistry } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -37,6 +37,7 @@ describe('Native conversation registrations', () => {
     } as never)
     ctx.provide('remote', { nativeConversations: {} } as never)
     ctx.provide('remote.nativeConversations', {} as never)
+    ctx.provide('remote.session', {} as never)
     ctx.provide('layout', { selectPanel: () => {} } as never)
     ctx.provide('sessions', { refresh: async () => {} } as never)
     ctx.provide('uiWorkspace', { openSession: () => {} } as never)
@@ -71,4 +72,41 @@ describe('Native conversation registrations', () => {
     expect(providers.size).toBe(0)
     expect(dictionaries.size).toBe(0)
   })
+})
+
+/** Production Remote faces are Cordis services, so namespace access enforces its own injection edge. */
+class StrictRemote extends Service {
+  constructor(ctx: Context) { super(ctx, 'remote') }
+}
+class StrictSessionRemote extends Service {
+  readonly presentation = vi.fn(async (_request: { sessionId: string }) => ({ ok: true as const,
+    value: { visibility: 'visible' as const } }))
+  constructor(ctx: Context) { super(ctx, 'remote.session') }
+}
+
+it('waits for the required Session endpoint and accesses it through the real strict Cordis receiver', async () => {
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  new StrictRemote(ctx)
+  for (const service of inject) {
+    if (service !== 'remote' && service !== 'remote.session') ctx.provide(service, {})
+  }
+  const accessed = vi.fn()
+  const feature = ctx.plugin({ inject: [...inject], apply: async (scoped: Context) => {
+    accessed()
+    await scoped.remote.session.presentation({ sessionId: 'fixture-session' as never })
+  } })
+  await new Promise<void>((resolve) => { setTimeout(resolve, 0) })
+  expect(accessed).not.toHaveBeenCalled()
+  let session: StrictSessionRemote | undefined
+  const provider = ctx.plugin((scoped: Context) => { session = new StrictSessionRemote(scoped) })
+  await provider.await()
+  await feature.await()
+  expect(accessed).toHaveBeenCalledOnce()
+  expect(session?.presentation).toHaveBeenCalledExactlyOnceWith({ sessionId: 'fixture-session' })
+  // Control: this same service receiver rejects the old missing dependency instead of permitting a fake object read.
+  const withoutEndpoint = ctx.plugin({ inject: inject.filter(service => service !== 'remote.session'), apply: (scoped: Context) => {
+    expect(() => scoped.remote.session).toThrow('without inject')
+  } })
+  await withoutEndpoint.await()
 })

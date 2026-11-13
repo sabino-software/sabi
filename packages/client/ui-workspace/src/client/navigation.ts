@@ -300,17 +300,27 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   }
 
   registerSessionOpenInterceptor(handler: SessionOpenInterceptor): () => void {
-    const off = this.openInterceptors.register(handler)
-    const saved = this.selection.getSnapshot()
-    const target = saved.subagentAddress ?? saved.sessionId
-    if (target !== undefined) {
+    const lifetime = new AbortController()
+    const off = this.openInterceptors.register((target, signal) => {
+      if (lifetime.signal.aborted) return false
+      return handler(target, AbortSignal.any([signal, lifetime.signal]))
+    })
+    // Return ownership before inspecting saved addresses: a throwing feature cannot strand its registration.
+    void Promise.resolve().then(async () => {
+      if (lifetime.signal.aborted || this.lifetime.signal.aborted) return
+      const saved = this.selection.getSnapshot()
+      const target = saved.subagentAddress ?? saved.sessionId
+      if (target === undefined) return
       const sequence = this.openSequence
-      const signal = AbortSignal.any([this.lifetime.signal, this.ctx.layout.beginNavigation()])
-      void Promise.resolve(this.openInterceptors.inspect(target, signal)).then((consumed) => {
-        if (consumed && sequence === this.openSequence && !signal.aborted) this.releaseMainSelection()
-      }).catch((reason: unknown) => { this.notify({ kind: 'createFailed', message: creationFailureMessage(reason) }) })
-    }
-    return off
+      const signal = AbortSignal.any([lifetime.signal, this.lifetime.signal, this.ctx.layout.beginNavigation()])
+      const consumed = await this.openInterceptors.inspect(target, signal)
+      if (consumed && sequence === this.openSequence && !signal.aborted) this.releaseMainSelection()
+    }).catch((reason: unknown) => {
+      if (!lifetime.signal.aborted && !this.lifetime.signal.aborted) {
+        this.notify({ kind: 'createFailed', message: creationFailureMessage(reason) })
+      }
+    })
+    return () => { lifetime.abort(); off() }
   }
 
   openSession(target: SessionTarget): void {

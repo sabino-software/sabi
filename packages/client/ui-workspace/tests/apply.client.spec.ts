@@ -1023,3 +1023,42 @@ it('captures Workspace menu requests, rechecks mutable access, and withdraws reg
   await fiber.dispose()
   expect(pending.source.getSnapshot()).toEqual([])
 })
+
+it('returns a removable saved-selection interceptor before a feature can throw during inspection', async () => {
+  const b = await bench()
+  onTestFinished(() => b.ctx.fiber.dispose())
+  b.setSessions(sessionState([summary('existing', 1)]))
+  declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+  await b.ctx.plugin({ inject: [...inject], apply }).await()
+  b.ctx.uiWorkspace.openSession(sid('existing'))
+  const inspect = vi.fn(() => { throw new Error('feature inspection failed') })
+  let dispose: (() => void) | undefined
+  expect(() => { dispose = b.ctx.uiWorkspace.registerSessionOpenInterceptor(inspect) }).not.toThrow()
+  expect(inspect).not.toHaveBeenCalled()
+  const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+  await vi.waitFor(() => {
+    expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'createFailed', message: 'feature inspection failed' })
+  })
+  expect(dispose).toBeTypeOf('function')
+  dispose?.()
+  expect(() => { b.ctx.uiWorkspace.openSession(sid('after-disposal')) }).not.toThrow()
+  expect(inspect).toHaveBeenCalledOnce()
+  expect(b.retain.mock.calls.at(-1)?.[0]).toBe('after-disposal')
+})
+
+it('does not invoke a saved-selection callback disposed before deferred inspection', async () => {
+  const b = await bench()
+  onTestFinished(() => b.ctx.fiber.dispose())
+  b.setSessions(sessionState([summary('existing', 1)]))
+  declare(b.slots, 'sidebar.workspaces')
+  await b.ctx.plugin({ inject: [...inject], apply }).await()
+  b.ctx.uiWorkspace.openSession(sid('existing'))
+  const inspect = vi.fn(() => { throw new Error('inactive feature context must never be reached') })
+  const dispose = b.ctx.uiWorkspace.registerSessionOpenInterceptor(inspect)
+  dispose()
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(inspect).not.toHaveBeenCalled()
+  expect(() => { b.ctx.uiWorkspace.openSession(sid('still-ordinary')) }).not.toThrow()
+  expect(b.retain.mock.calls.at(-1)?.[0]).toBe('still-ordinary')
+})
