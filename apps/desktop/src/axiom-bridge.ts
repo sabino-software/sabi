@@ -46,7 +46,16 @@ export class DesktopAxiomPage {
   private returnAfterChoice = false
   private readyUntil = 0
   private documentEpoch = 0
-  private pageRead: { page: BrowserWindow; generation: number; documentEpoch: number; promise: Promise<unknown> } | undefined
+  private pageRead: {
+    page: BrowserWindow
+    generation: number
+    documentEpoch: number
+    purpose: 'snapshot' | 'history'
+    deadline: number
+    controller: AbortController | undefined
+    observed: Promise<unknown>
+    promise: Promise<unknown>
+  } | undefined
   private readonly websiteContents = new WeakMap<BrowserWindow, WebContents>()
   private sessionConfigured = false
   private authenticating = false
@@ -222,6 +231,7 @@ export class DesktopAxiomPage {
     this.contents(page).on('did-start-navigation', (event) => {
       if (this.page !== page || !event.isMainFrame || event.isSameDocument) return
       this.documentEpoch++
+      this.pageRead?.controller?.abort()
       this.pageRead = undefined
       this.refreshing = undefined
       this.readyUntil = Date.now() + 30000
@@ -263,11 +273,34 @@ export class DesktopAxiomPage {
   }
 
   /** @param beforeId Original cursor. @returns An earlier bounded page without moving or editing the live source page. */
-  historyBefore(beforeId: string): Promise<AxiomHistoryPage> {
-    if (this.selected === null || !this.page || this.closedByUser || this.current.phase !== 'ready') {
-      return Promise.resolve({ messages: [], hasMore: true, status: 'unavailable' })
+  async historyBefore(beforeId: string): Promise<AxiomHistoryPage> {
+    const unavailable: AxiomHistoryPage = { messages: [], hasMore: true, status: 'unavailable' }
+    const page = this.page
+    const selected = this.selected
+    const generation = this.generation
+    const documentEpoch = this.documentEpoch
+    if (typeof beforeId !== 'string' || beforeId.length === 0 || beforeId.length > 512
+      || selected === null || page === undefined) return unavailable
+    const valid = (): boolean => generation === this.generation && documentEpoch === this.documentEpoch
+      && this.page === page && !page.isDestroyed() && !this.closedByUser && this.current.phase === 'ready'
+      && !this.choosing && this.loginPopups.size === 0 && !this.contents(page).isLoading()
+      && this.matches(this.contents(page).getURL())
+    if (!valid()) return unavailable
+    const pending = this.pageRead
+    if (pending?.page === page && pending.generation === generation && pending.documentEpoch === documentEpoch) {
+      // Join a normal poll; an expired read still owns its renderer slot until its underlying JavaScript settles.
+      if (pending.purpose !== 'snapshot' || Date.now() >= pending.deadline) return unavailable
+      try { await pending.observed } catch (_unavailableSnapshot: unknown) { return unavailable }
+      if (this.pageRead !== undefined || !valid()) return unavailable
     }
-    return this.history.before(this.selected, beforeId)
+    try {
+      const state = pageSchema.parse(await this.observePage(page, generation, documentEpoch,
+        `location.href.replace(/\\/$/, '') === ${JSON.stringify(selected)} ? (${readAxiomPage.toString()})(${JSON.stringify(beforeId)}) : null`, 'history'))
+      if (!valid() || !this.matches(state.url)) return unavailable
+      if (state.messages.length > 0) return { messages: state.messages, hasMore: true, status: 'ready' }
+      // No older bodies are currently loaded. Only the separately owned page may scroll for more.
+      return await this.history.before(selected, beforeId)
+    } catch (_unavailableHistory: unknown) { return unavailable }
   }
 
   /** Show the original page for direct OpenAI authentication; any approved login popup shares its isolated session. */
@@ -302,6 +335,7 @@ export class DesktopAxiomPage {
     this.pendingChoice = false
     this.returnAfterChoice = false
     this.readyUntil = 0
+    this.pageRead?.controller?.abort()
     this.pageRead = undefined
     if (page !== undefined && !page.isDestroyed()) page.destroy()
     this.update(initialSnapshot())
@@ -417,15 +451,8 @@ export class DesktopAxiomPage {
     if (this.pageRead?.page === page && this.pageRead.generation === generation
       && this.pageRead.documentEpoch === documentEpoch) return this.current
     try {
-      const reading = { page, generation, documentEpoch, promise: this.contents(page).executeJavaScript(`location.href.replace(/\\/$/, '') === ${JSON.stringify(this.selected)} ? (${readAxiomPage.toString()})() : null`) }
-      this.pageRead = reading
-      const settled = (): void => { if (this.pageRead === reading) this.pageRead = undefined }
-      void reading.promise.then(settled, settled)
-      const deadline = Promise.withResolvers<never>()
-      const timer = setTimeout(() => { deadline.reject(new Error('Original page observation timed out')) }, 5000)
-      let raw: unknown
-      try { raw = await Promise.race([reading.promise, deadline.promise]) }
-      finally { clearTimeout(timer) }
+      const raw = await this.observePage(page, generation, documentEpoch,
+        `location.href.replace(/\\/$/, '') === ${JSON.stringify(this.selected)} ? (${readAxiomPage.toString()})() : null`)
       const state = pageSchema.parse(raw)
       if (generation !== this.generation || documentEpoch !== this.documentEpoch
         || !this.matches(state.url) || !this.matches(this.contents(page).getURL())) return this.current
@@ -438,6 +465,29 @@ export class DesktopAxiomPage {
       if (generation === this.generation && documentEpoch === this.documentEpoch) this.unavailable('unsupported-page')
     }
     return this.current
+  }
+
+  private observePage(page: BrowserWindow, generation: number, documentEpoch: number, script: string,
+    purpose: 'snapshot' | 'history' = 'snapshot'): Promise<unknown> {
+    const controller = purpose === 'history' ? new AbortController() : undefined
+    const promise = this.contents(page).executeJavaScript(script)
+    const deadline = Date.now() + 5000
+    const observed = new Promise<unknown>((resolve, reject) => {
+      const cleanup = (): void => { clearTimeout(timer); controller?.signal.removeEventListener('abort', abort) }
+      const fail = (error: unknown): void => {
+        cleanup()
+        reject(error instanceof Error ? error : new Error('Original page observation failed', { cause: error }))
+      }
+      const abort = (): void => { fail(new Error('Original page observation cancelled')) }
+      const timer = setTimeout(() => { fail(new Error('Original page observation timed out')) }, 5000)
+      controller?.signal.addEventListener('abort', abort, { once: true })
+      void promise.then((value) => { cleanup(); resolve(value) }, fail)
+    })
+    const reading = { page, generation, documentEpoch, purpose, deadline, controller, observed, promise }
+    this.pageRead = reading
+    const settled = (): void => { if (this.pageRead === reading) this.pageRead = undefined }
+    void promise.then(settled, settled)
+    return observed
   }
 
   private finishChoice(snapshot: AxiomSnapshot): void {
