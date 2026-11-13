@@ -62,6 +62,15 @@ describe('original Dot DOM projection', () => {
     expect(findAxiomAcknowledgement('Exact user text', [])).toBe('original/user~1')
   })
 
+  it('acknowledges a new source user body when background layout has no innerText', () => {
+    fixture()
+    const body = document.querySelector('article.self .message-text') as HTMLElement
+    Object.defineProperty(body, 'innerText', { configurable: true, get: () => '' })
+    expect(findAxiomAcknowledgement('Exact user text', [])).toBe('original/user~1')
+    expect(findAxiomAcknowledgement('Exact user text', ['original/user~1'])).toBeNull()
+    expect(findAxiomAcknowledgement('Different text', [])).toBeNull()
+  })
+
   it('retains the newest user and reply when older rendered bodies exceed the text budget', () => {
     const bodies = [...Array.from({ length: 5 }, () => 'a'.repeat(32768)), 'Exact new text', 'Newest original reply']
     document.body.replaceChildren(...bodies.map((text, index) => {

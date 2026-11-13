@@ -134,7 +134,7 @@ export function clickAxiomSend(text: string): boolean {
 }
 
 /**
- * Find original-page acknowledgement after one click, without exposing composer or unrelated page text.
+ * Find original-page acknowledgement after one click, including when background layout skips its text.
  * @param text Exact submitted user text.
  * @param before IDs present immediately before submission.
  * @returns The stable ID of a newly rendered matching user message, or null.
@@ -144,7 +144,8 @@ export function findAxiomAcknowledgement(text: string, before: readonly string[]
     const id = row.getAttribute('data-message-id')
     const body = row.querySelector('.message-body > .message-surface .message-bubble .message-text')
     if (id !== null && id.length <= 512 && !before.includes(id) && body instanceof HTMLElement
-      && body.innerText.replaceAll('\r\n', '\n').trim() === text.trim()) return id
+      && (body.textContent.replaceAll('\r\n', '\n').trim() === text.trim()
+        || body.innerText.replaceAll('\r\n', '\n').trim() === text.trim())) return id
   }
   return null
 }
