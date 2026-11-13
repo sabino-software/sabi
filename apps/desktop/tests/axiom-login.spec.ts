@@ -3,6 +3,9 @@ import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const fixture = vi.hoisted(() => ({
+  composer: true,
+  loading: false,
+  stalledLoad: false,
   warning: vi.fn(async (_window: object, _options: object) => ({ response: 0 })),
   windows: [] as unknown[], browserSession: {
     setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(),
@@ -23,13 +26,13 @@ vi.mock('electron', async () => {
       }) | undefined
       webContents = Object.assign(new EventEmitter(), {
         getURL: () => this.url,
-        isLoading: () => false,
-        executeJavaScript: vi.fn(async () => ({ url: this.url, title: 'Axiom', messages: [], composer: true,
+        isLoading: () => fixture.loading,
+        executeJavaScript: vi.fn(async () => ({ url: this.url, title: 'Axiom', messages: [], composer: fixture.composer,
           draft: '', sendPresent: true, sendEnabled: false, siteStatus: null, limited: false })),
         setWindowOpenHandler: (handler: typeof this.openHandler) => { this.openHandler = handler },
       })
       constructor(readonly options: unknown) { super(); fixture.windows.push(this) }
-      loadURL = vi.fn(async (url: string) => { this.url = url })
+      loadURL = vi.fn(async (url: string) => { this.url = url; if (fixture.stalledLoad) await new Promise<void>(() => {}) })
       isDestroyed(): boolean { return this.destroyed }
       isVisible(): boolean { return this.visible }
       isFocused(): boolean { return this.visible }
@@ -62,7 +65,15 @@ type WindowFixture = EventEmitter & {
 }
 const selected = 'https://chatgpt.com/dots/selected~conversation'
 const owners: DesktopAxiomPage[] = []
-afterEach(() => { for (const owner of owners.splice(0)) owner.disconnect(); fixture.windows.length = 0; fixture.warning.mockClear() })
+afterEach(() => {
+  for (const owner of owners.splice(0)) owner.disconnect()
+  fixture.windows.length = 0
+  fixture.warning.mockClear()
+  fixture.composer = true
+  fixture.loading = false
+  fixture.stalledLoad = false
+  vi.useRealTimers()
+})
 
 async function connect(): Promise<{ owner: DesktopAxiomPage; page: WindowFixture }> {
   const owner = new DesktopAxiomPage(() => {})
@@ -264,4 +275,66 @@ it('actually closes the original website and its popups, and waits for an explic
   expect(fixture.windows).toHaveLength(2)
   expect(await owner.choose(selected)).toMatchObject({ phase: 'ready', url: selected })
   expect(fixture.windows).toHaveLength(3)
+})
+
+
+it('waits for the original composer after document load and keeps observing the hidden connected page', async () => {
+  fixture.composer = false
+  const revealNative = vi.fn()
+  const owner = new DesktopAxiomPage(() => {}, () => 'en', revealNative)
+  owners.push(owner)
+  expect(await owner.choose(selected)).toMatchObject({ phase: 'loading', url: selected })
+  const page = fixture.windows.at(-1) as WindowFixture
+  expect(page.visible).toBe(true)
+  expect(page.options).toMatchObject({ webPreferences: { backgroundThrottling: false } })
+  fixture.composer = true
+  expect(await owner.snapshot()).toMatchObject({ phase: 'ready', url: selected })
+  expect(page.visible).toBe(false)
+  expect(page.destroyed).toBe(false)
+  expect(revealNative).toHaveBeenCalledOnce()
+  page.webContents.executeJavaScript.mockClear()
+  expect(await owner.snapshot()).toMatchObject({ phase: 'ready', url: selected })
+  expect(page.webContents.executeJavaScript).toHaveBeenCalledOnce()
+  expect(page.visible).toBe(false)
+})
+
+it('reports an unavailable original page if its composer never appears within the loading deadline', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(0)
+  fixture.composer = false
+  const owner = new DesktopAxiomPage(() => {})
+  owners.push(owner)
+  expect(await owner.choose(selected)).toMatchObject({ phase: 'loading' })
+  vi.setSystemTime(30001)
+  expect(await owner.snapshot()).toMatchObject({ phase: 'unavailable', canSend: false })
+})
+
+
+it('returns loading without waiting for network completion or reading a document still loading', async () => {
+  fixture.loading = true
+  fixture.stalledLoad = true
+  const owner = new DesktopAxiomPage(() => {})
+  owners.push(owner)
+  expect(await owner.choose(selected)).toMatchObject({ phase: 'loading', url: selected })
+  const page = fixture.windows.at(-1) as WindowFixture
+  expect(page.webContents.executeJavaScript).not.toHaveBeenCalled()
+  fixture.loading = false
+  expect(await owner.snapshot()).toMatchObject({ phase: 'ready', url: selected })
+  expect(page.visible).toBe(false)
+  expect(page.destroyed).toBe(false)
+})
+
+it('bounds an unresponsive read-only document without blocking later observations', async () => {
+  vi.useFakeTimers()
+  const { owner, page } = await connect()
+  const stalled = Promise.withResolvers<unknown>()
+  page.webContents.executeJavaScript.mockClear().mockReturnValueOnce(stalled.promise)
+  const pending = owner.snapshot()
+  await vi.advanceTimersByTimeAsync(5001)
+  expect(await pending).toMatchObject({ phase: 'unavailable', errorCode: 'unsupported-page' })
+  expect(await owner.snapshot()).toMatchObject({ phase: 'unavailable', canSend: false })
+  expect(page.webContents.executeJavaScript).toHaveBeenCalledOnce()
+  stalled.resolve(null)
+  await Promise.resolve()
+  expect(await owner.snapshot()).toMatchObject({ phase: 'ready', url: selected })
 })

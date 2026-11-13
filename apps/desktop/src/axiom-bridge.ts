@@ -37,6 +37,8 @@ export class DesktopAxiomPage {
   private sending = false
   private closedByUser = false
   private returnAfterChoice = false
+  private readyUntil = 0
+  private pageRead: { page: BrowserWindow; generation: number; promise: Promise<unknown> } | undefined
   private readonly websiteContents = new WeakMap<BrowserWindow, WebContents>()
   private sessionConfigured = false
   private authenticating = false
@@ -94,12 +96,13 @@ export class DesktopAxiomPage {
     return this.open(null, true)
   }
 
-  private async open(url: string | null, choosing: boolean, pendingChoice = false): Promise<AxiomSnapshot> {
+  private open(url: string | null, choosing: boolean, pendingChoice = false): Promise<AxiomSnapshot> {
     this.disconnect()
     this.selected = url
     this.choosing = choosing
     this.pendingChoice = pendingChoice
     this.returnAfterChoice = choosing || pendingChoice
+    this.readyUntil = Date.now() + 30000
     this.loginRevealed = choosing
     const generation = this.generation
     const browserSession = session.fromPartition('persist:skeinlet-axiom')
@@ -179,6 +182,7 @@ export class DesktopAxiomPage {
         this.pendingChoice = true
       }
       if (window === page && category === 'conversation') {
+        this.readyUntil = Date.now() + 30000
         this.authenticating = false
         this.loginRevealed = false
         this.navigationIssue = null
@@ -224,9 +228,10 @@ export class DesktopAxiomPage {
     this.contents(page).on('did-finish-load', () => { if (this.page === page) void this.snapshot() })
     this.update({ ...initialSnapshot(), url, phase: 'loading' })
     if (choosing) page.show()
-    try { await this.contents(page).loadURL(url ?? 'https://chatgpt.com/') }
-    catch (_pageLoadFailure) { if (generation === this.generation) this.unavailable('page-unavailable') }
-    if (generation !== this.generation) return this.current
+    void this.contents(page).loadURL(url ?? 'https://chatgpt.com/').catch((pageLoadFailure: unknown) => {
+      if (pageLoadFailure instanceof Error && 'code' in pageLoadFailure && pageLoadFailure.code === 'ERR_ABORTED') return
+      if (generation === this.generation) this.unavailable('page-unavailable')
+    })
     this.schedule(generation)
     return this.snapshot()
   }
@@ -271,6 +276,8 @@ export class DesktopAxiomPage {
     this.choosing = false
     this.pendingChoice = false
     this.returnAfterChoice = false
+    this.readyUntil = 0
+    this.pageRead = undefined
     if (page !== undefined && !page.isDestroyed()) page.destroy()
     this.update(initialSnapshot())
   }
@@ -377,12 +384,25 @@ export class DesktopAxiomPage {
         ...loginPage ? {} : { errorCode: 'unsupported-page' as const } })
       return this.current
     }
+    if (this.contents(page).isLoading()) {
+      this.update({ ...initialSnapshot(), url: this.selected, phase: 'loading' })
+      return this.current
+    }
+    if (this.pageRead?.page === page && this.pageRead.generation === generation) return this.current
     try {
-      const raw: unknown = await this.contents(page).executeJavaScript(`(${readAxiomPage.toString()})()`)
+      const reading = { page, generation, promise: this.contents(page).executeJavaScript(`(${readAxiomPage.toString()})()`) }
+      this.pageRead = reading
+      const settled = (): void => { if (this.pageRead === reading) this.pageRead = undefined }
+      void reading.promise.then(settled, settled)
+      const deadline = Promise.withResolvers<never>()
+      const timer = setTimeout(() => { deadline.reject(new Error('Original page observation timed out')) }, 5000)
+      let raw: unknown
+      try { raw = await Promise.race([reading.promise, deadline.promise]) }
+      finally { clearTimeout(timer) }
       const state = pageSchema.parse(raw)
       if (generation !== this.generation || !this.matches(state.url) || !this.matches(this.contents(page).getURL())) return this.current
       this.update({ source: 'chatgpt-web', url: this.selected, title: state.title, revision: this.current.revision,
-        phase: state.composer ? 'ready' : this.contents(page).isLoading() ? 'loading' : 'unavailable',
+        phase: state.composer ? 'ready' : this.contents(page).isLoading() || Date.now() < this.readyUntil ? 'loading' : 'unavailable',
         messages: state.messages, canSend: state.composer && state.sendPresent, draftPresent: state.draft.trim() !== '',
         siteStatus: state.siteStatus, limited: state.limited })
       this.finishChoice(this.current)
