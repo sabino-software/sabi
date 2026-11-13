@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { AxiomHistoryPage, AxiomSendRequest, AxiomSendResult, AxiomSnapshot } from './axiom-protocol.ts'
 import { readAxiomPage, focusAxiomComposer, clickAxiomSend, findAxiomAcknowledgement } from './axiom-page.ts'
 import { DesktopAxiomHistory } from './axiom-history.ts'
+import { AxiomConfirmedMessages } from './axiom-confirmed-messages.ts'
 import { createAxiomWebsiteWindow } from './axiom-window.ts'
 import { axiomChooserNavigation, axiomConversationUrl, axiomNavigation, type AxiomNavigation } from './axiom-navigation.ts'
 
@@ -37,6 +38,7 @@ export class DesktopAxiomPage {
   private timer: ReturnType<typeof setTimeout> | undefined
   private refreshing: Promise<AxiomSnapshot> | undefined
   private sending = false
+  private readonly confirmedMessages = new AxiomConfirmedMessages()
   private readonly history = new DesktopAxiomHistory(() => {
     // Hidden child views drop wheel input in Electron 44.7; this read-only page needs its own WebContents.
     const window = new BrowserWindow({ show: false, width: 1100, height: 800,
@@ -236,6 +238,7 @@ export class DesktopAxiomPage {
     this.contents(page).on('did-start-navigation', (event) => {
       if (this.page !== page || !event.isMainFrame || event.isSameDocument) return
       this.documentEpoch++
+      this.confirmedMessages.clear()
       this.pageRead?.controller?.abort()
       this.pageRead = undefined
       this.refreshing = undefined
@@ -250,7 +253,9 @@ export class DesktopAxiomPage {
       void this.snapshot()
     })
     this.contents(page).on('will-attach-webview', (event) => { event.preventDefault() })
-    this.contents(page).on('render-process-gone', () => { if (this.page === page) this.unavailable('page-unavailable') })
+    this.contents(page).on('render-process-gone', () => {
+      if (this.page === page) { this.documentEpoch++; this.confirmedMessages.clear(); this.unavailable('page-unavailable') }
+    })
     page.once('closed', () => {
       if (this.page !== page) return
       this.closedByUser = true
@@ -302,7 +307,8 @@ export class DesktopAxiomPage {
       const state = pageSchema.parse(await this.observePage(page, generation, documentEpoch,
         `location.href.replace(/\\/$/, '') === ${JSON.stringify(selected)} ? (${readAxiomPage.toString()})(${JSON.stringify(beforeId)}) : null`, 'history'))
       if (!valid() || !this.matches(state.url)) return unavailable
-      if (state.messages.length > 0) return { messages: state.messages,
+      const projection = this.confirmedMessages.project(state)
+      if (projection.messages.length > 0) return { messages: projection.messages,
         ...state.sourceOrder === undefined ? {} : { sourceOrder: state.sourceOrder }, hasMore: true, status: 'ready' }
       // No older bodies are currently loaded. Only the separately owned page may scroll for more.
       return await this.history.before(selected, beforeId)
@@ -324,6 +330,7 @@ export class DesktopAxiomPage {
 
   /** Stop observation and destroy the page; retain the session's website-owned login state. */
   disconnect(): void {
+    this.confirmedMessages.clear()
     this.history.disconnect()
     this.generation++
     clearTimeout(this.timer)
@@ -381,6 +388,7 @@ export class DesktopAxiomPage {
     const page = this.page
     const generation = this.generation
     const selected = this.selected
+    const documentEpoch = this.documentEpoch
     if (page === undefined || page.isDestroyed() || selected === null || !this.matches(this.contents(page).getURL())) {
       return { status: 'refused', snapshot: this.current }
     }
@@ -405,7 +413,14 @@ export class DesktopAxiomPage {
         && this.matches(this.contents(page).getURL()) && Date.now() < deadline) {
         const id: unknown = await this.contents(page).executeJavaScript(
           `(${findAxiomAcknowledgement.toString()})(${JSON.stringify(request.text)},${JSON.stringify(before)})`)
-        if (typeof id === 'string') return { status: 'confirmed', messageId: id, snapshot: await this.snapshot() }
+        if (typeof id === 'string') {
+          if (signal?.aborted || generation !== this.generation || documentEpoch !== this.documentEpoch
+            || this.page !== page || page.isDestroyed() || this.selected !== selected || !this.matches(this.contents(page).getURL())) {
+            return { status: 'unknown', snapshot: this.current }
+          }
+          this.confirmedMessages.record(id, request.text)
+          return { status: 'confirmed', messageId: id, snapshot: await this.snapshot() }
+        }
         await new Promise<void>((resolve) => { setTimeout(resolve, 250) })
       }
       return { status: 'unknown', snapshot: await this.snapshot() }
@@ -462,10 +477,11 @@ export class DesktopAxiomPage {
       const state = pageSchema.parse(raw)
       if (generation !== this.generation || documentEpoch !== this.documentEpoch
         || !this.matches(state.url) || !this.matches(this.contents(page).getURL())) return this.current
+      const projection = this.confirmedMessages.project(state)
       this.update({ source: 'chatgpt-web', url: this.selected, title: state.title, revision: this.current.revision,
         phase: state.composer ? 'ready' : this.contents(page).isLoading() || Date.now() < this.readyUntil ? 'loading' : 'unavailable',
-        messages: state.messages, ...state.sourceOrder === undefined ? {} : { sourceOrder: state.sourceOrder }, canSend: state.composer && state.sendPresent, draftPresent: state.draft.trim() !== '',
-        siteStatus: state.siteStatus, limited: state.limited })
+        messages: projection.messages, ...state.sourceOrder === undefined ? {} : { sourceOrder: state.sourceOrder }, canSend: state.composer && state.sendPresent, draftPresent: state.draft.trim() !== '',
+        siteStatus: state.siteStatus, limited: projection.limited })
       this.finishChoice(this.current)
     } catch (_unsupportedPage) {
       if (generation === this.generation && documentEpoch === this.documentEpoch) this.unavailable('unsupported-page')
