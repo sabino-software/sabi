@@ -237,29 +237,7 @@ it('retains exact bounded source row order before temporarily missing bodies are
 })
 
 
-it('collects only explicitly requested structural history diagnostics without exposing message data', () => {
-  fixture()
-  const scroller = document.createElement('section')
-  scroller.className = 'messages-scroll'
-  const list = document.createElement('div')
-  list.className = 'message-list'
-  list.append(...document.querySelectorAll('article.message-row'))
-  scroller.append(list)
-  document.body.prepend(scroller)
-  scroller.scrollTop = 7
-  Object.defineProperty(scroller, 'clientHeight', { value: 100 })
-  Object.defineProperty(scroller, 'scrollHeight', { value: 1000 })
-  const url = location.href.replace(/\/$/u, '')
-  expect(readAxiomHistoryPage(readAxiomPage, url, 'original/assistant~2', false).diagnostics).toBeUndefined()
-  const measured = readAxiomHistoryPage(readAxiomPage, url, 'original/assistant~2', true, true)
-  expect(measured.diagnostics).toMatchObject({ scrollerPresent: true, listPresent: true, rowCount: 2, bodyCount: 2,
-    scrollTop: 7, scrollTopAfter: 7, clientHeight: 100, scrollHeight: 1000, cursorPresent: true })
-  expect(measured.diagnostics?.visibility).toBe(document.visibilityState)
-  expect(JSON.stringify(measured.diagnostics)).not.toMatch(/https:|Exact user|original\//)
-})
-
-
-it('proposes validated native wheel geometry without scrolling or focusing, then reads the source-prepended body', () => {
+it('proposes a native top nudge then upward wheel without DOM scrolling or focus, and reads the source-prepended body', () => {
   document.body.innerHTML = '<div id="primary-scroll"></div><input aria-label="Keep focus">'
     + '<section class="messages-scroll"><div class="message-list">'
     + '<article class="message-row" data-message-id="committed~CalpicoMessage~Sentinel_cursor">'
@@ -280,10 +258,12 @@ it('proposes validated native wheel geometry without scrolling or focusing, then
   Object.defineProperty(document.documentElement, 'clientHeight', { configurable: true, value: 600 })
   Object.defineProperty(scroller, 'getBoundingClientRect', { configurable: true, value: () => new DOMRect(10, 20, 600, 500) })
   Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => list })
-  scroller.scrollTop = 250
+  scroller.scrollTop = 0
   scroller.addEventListener('wheel', (event) => {
-    if (!(event instanceof WheelEvent) || event.deltaY >= 0 || list.children.length > 1) return
-    scroller.scrollTop = Math.max(0, scroller.scrollTop + event.deltaY)
+    if (!(event instanceof WheelEvent)) return
+    const previous = scroller.scrollTop
+    scroller.scrollTop = Math.max(0, previous + event.deltaY)
+    if (previous <= 0 || scroller.scrollTop !== 0 || list.children.length > 1) return
     list.insertAdjacentHTML('afterbegin', '<article class="message-row self" data-message-id="committed~CalpicoMessage~Sentinel_older">'
       + '<div class="message-body"><div class="message-surface"><div class="message-bubble"><div class="message-text">Older source body</div>'
       + '</div></div></div></article>')
@@ -294,13 +274,25 @@ it('proposes validated native wheel geometry without scrolling or focusing, then
     return value as AxiomHistoryObservation
   }
   try {
+    expect(readAxiomHistoryPage(readAxiomPage, location.href.replace(/\/$/u, ''),
+      'committed~CalpicoMessage~Sentinel_cursor', false).wheel).toBeUndefined()
     const observed = observe()
     expect(observed.messages).toEqual([])
-    expect(observed.wheel).toEqual({ x: 310, y: 270, deltaY: 400, viewportWidth: 800, viewportHeight: 600 })
-    expect(scroller.scrollTop).toBe(250)
-    // Electron's positive upward wheel delta becomes a negative DOM WheelEvent delta.
+    expect(observed.wheel).toEqual({ x: 310, y: 270, deltaY: -1, viewportWidth: 800, viewportHeight: 600 })
+    expect(observed.seekProgress).toEqual({ rowCount: 1, scrollTop: 0 })
+    expect(scroller.scrollTop).toBe(0)
+    // Electron's upward-positive deltas have the opposite sign to DOM WheelEvent deltas.
     scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: -observed.wheel!.deltaY }))
+    expect(scroller.scrollTop).toBe(1)
+    const away = observe()
+    expect(away.messages).toEqual([])
+    expect(away.wheel).toEqual({ x: 310, y: 270, deltaY: 400, viewportWidth: 800, viewportHeight: 600 })
+    expect(away.seekProgress).toEqual({ rowCount: 1, scrollTop: 1 })
+    expect(scroller.scrollTop).toBe(1)
+    scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: -away.wheel!.deltaY }))
+    expect(scroller.scrollTop).toBe(0)
     const older = observe()
+    expect(older.seekProgress).toEqual({ rowCount: 2, scrollTop: 0 })
     expect(older.messages).toMatchObject([{ id: 'committed~CalpicoMessage~Sentinel_older', role: 'user', text: 'Older source body' }])
     expect(older.sourceOrder).toEqual(['committed~CalpicoMessage~Sentinel_older'])
     expect(primary.scrollTop).toBe(77)

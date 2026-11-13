@@ -10,7 +10,7 @@ const observation = { url, supported: true, anchorFound: true, hasEarlier: false
 const owners: DesktopAxiomHistory[] = []
 afterEach(() => {
   for (const owner of owners.splice(0)) owner.disconnect()
-  vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks()
+  vi.useRealTimers(); vi.restoreAllMocks()
 })
 
 function fixture() {
@@ -137,60 +137,149 @@ it('preserves optional source row order through secondary history without requir
 })
 
 
-const diagnostics = { scrollerPresent: true, listPresent: true, rowCount: 54, bodyCount: 51, skippedRowCount: 36,
-  scrollTop: 10439, scrollTopAfter: 0, clientHeight: 752, scrollHeight: 11670,
-  visibility: 'hidden', readyState: 'complete', cursorPresent: true } as const
-
-it.each([undefined, '0', 'true'])('keeps history diagnostics silent unless the local debug flag is exactly 1 (%s)', async (flag) => {
-  vi.stubEnv('SABI_DOT_HISTORY_DEBUG', flag)
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
-  const h = fixture()
-  h.contents.executeJavaScript.mockResolvedValue({ ...observation, diagnostics })
-  await h.owner.before(url, 'PRIVATE_CURSOR')
-  expect(log).not.toHaveBeenCalled()
-})
-
-it('logs only opt-in structural metrics and owned outcome labels, never source content, IDs, URLs, or drafts', async () => {
-  vi.stubEnv('SABI_DOT_HISTORY_DEBUG', '1')
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
-  const h = fixture()
-  const secret = { ...message, id: 'PRIVATE_MESSAGE_ID', text: 'PRIVATE_MESSAGE_BODY' }
-  h.contents.executeJavaScript.mockResolvedValue({ ...observation, messages: [secret], diagnostics })
-  expect(await h.owner.before(url, 'PRIVATE_CURSOR')).toEqual({ messages: [secret], hasMore: true, status: 'ready' })
-  expect(log).toHaveBeenLastCalledWith('[Dot history debug]', JSON.stringify({ status: 'ready', ...diagnostics }))
-  expect(JSON.stringify(log.mock.calls)).not.toMatch(/https:|PRIVATE_|Observed old answer|original-old/)
-})
-
-it('bounds diagnostic progress samples and still reports the terminal history deadline', async () => {
-  vi.useFakeTimers()
-  vi.stubEnv('SABI_DOT_HISTORY_DEBUG', '1')
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
-  const h = fixture()
-  let count = 0
-  h.contents.executeJavaScript.mockImplementation(async () => ({ ...observation, anchorFound: false, messages: [],
-    diagnostics: { ...diagnostics, rowCount: count++, cursorPresent: false } }))
-  const pending = h.owner.before(url, 'PRIVATE_CURSOR')
-  await vi.advanceTimersByTimeAsync(20250)
-  expect(await pending).toEqual({ messages: [], hasMore: true, status: 'unavailable' })
-  expect(log).toHaveBeenCalledTimes(20)
-  expect(log).toHaveBeenLastCalledWith('[Dot history debug]', JSON.stringify({ status: 'history-deadline' }))
-})
-
-it('reports a safe read-timeout status without printing the page error or queued source script', async () => {
-  vi.useFakeTimers()
-  vi.stubEnv('SABI_DOT_HISTORY_DEBUG', '1')
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
-  const h = fixture()
-  h.contents.executeJavaScript.mockReturnValue(new Promise(() => {}))
-  const pending = h.owner.before(url, 'PRIVATE_CURSOR')
-  await vi.advanceTimersByTimeAsync(5000)
-  expect(await pending).toEqual({ messages: [], hasMore: true, status: 'unavailable' })
-  expect(log).toHaveBeenLastCalledWith('[Dot history debug]', JSON.stringify({ status: 'read-timeout' }))
-  expect(JSON.stringify(log.mock.calls)).not.toMatch(/PRIVATE_|https:/)
-})
-
-
 const wheel = { x: 300, y: 200, deltaY: 320, viewportWidth: 800, viewportHeight: 600 }
+
+it('dispatches only a validated 1px downward top nudge followed by the ordinary upward input', async () => {
+  vi.useFakeTimers()
+  const h = fixture()
+  h.contents.executeJavaScript
+    .mockResolvedValueOnce({ ...observation, messages: [], wheel: { ...wheel, deltaY: -1 }, seekProgress: { rowCount: 52, scrollTop: 0 } })
+    .mockResolvedValueOnce({ ...observation, messages: [], wheel, seekProgress: { rowCount: 52, scrollTop: 1 } })
+  const pending = h.owner.before(url, 'cursor')
+  await vi.advanceTimersByTimeAsync(500)
+  expect(await pending).toMatchObject({ status: 'ready', messages: [message] })
+  expect(h.contents.sendInputEvent.mock.calls.map(([event]) => event.deltaY)).toEqual([-1, 320])
+  expect(h.contents.sendInputEvent.mock.calls[0]?.[0]).toEqual({ type: 'mouseWheel', x: 300, y: 200,
+    deltaX: 0, deltaY: -1, canScroll: true, hasPreciseScrollingDeltas: true })
+})
+
+it.each([
+  { name: 'missing progress', progress: undefined },
+  { name: 'nonzero position', progress: { rowCount: 52, scrollTop: 1 } },
+  { name: 'negative position', progress: { rowCount: 52, scrollTop: -1 } },
+  { name: 'unbounded position', progress: { rowCount: 52, scrollTop: 1000000001 } },
+  { name: 'unbounded row count', progress: { rowCount: 1000001, scrollTop: 0 } },
+])('refuses a downward nudge with $name', async ({ progress }) => {
+  const h = fixture()
+  h.contents.executeJavaScript.mockResolvedValue({ ...observation, messages: [], wheel: { ...wheel, deltaY: -1 }, seekProgress: progress })
+  expect(await h.owner.before(url, 'cursor')).toMatchObject({ status: 'unavailable' })
+  expect(h.contents.sendInputEvent).not.toHaveBeenCalled()
+})
+
+it.each(['row growth', 'cumulative upward movement'] as const)('keeps seeking past 20 seconds only with %s', async (kind) => {
+  vi.useFakeTimers()
+  const start = Date.now()
+  const h = fixture()
+  h.contents.executeJavaScript.mockImplementation(async () => {
+    const elapsed = Date.now() - start
+    return elapsed >= 25000 ? observation : { ...observation, anchorFound: false, messages: [], wheel,
+      seekProgress: kind === 'row growth'
+        ? { rowCount: 32 + Math.floor(elapsed / 5000) * 32, scrollTop: 10000 }
+        : { rowCount: 124, scrollTop: 10000 - Math.floor(elapsed / 250) * 8 } }
+  })
+  const pending = h.owner.before(url, 'far-cursor')
+  const finished = vi.fn()
+  void pending.then(finished)
+  await vi.advanceTimersByTimeAsync(20000)
+  expect(finished).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(await pending).toEqual({ messages: [message], hasMore: true, status: 'ready' })
+})
+
+it('stops a 0-to-1px nudge oscillation after 20 seconds without treating it as seek progress', async () => {
+  vi.useFakeTimers()
+  const h = fixture()
+  let scrollTop = 0
+  h.contents.executeJavaScript.mockImplementation(async () => ({ ...observation, anchorFound: false, messages: [],
+    seekProgress: { rowCount: 124, scrollTop }, wheel: { ...wheel, deltaY: scrollTop === 0 ? -1 : 320 } }))
+  h.contents.sendInputEvent.mockImplementation((event) => { scrollTop = event.deltaY === -1 ? 1 : 0 })
+  const pending = h.owner.before(url, 'far-cursor')
+  const finished = vi.fn()
+  void pending.then(finished)
+  await vi.advanceTimersByTimeAsync(19999)
+  expect(finished).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(await pending).toEqual({ messages: [], hasMore: true, status: 'unavailable' })
+  const count = h.contents.sendInputEvent.mock.calls.length
+  expect(count).toBeGreaterThan(1)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(h.contents.sendInputEvent).toHaveBeenCalledTimes(count)
+})
+
+it('caps the final pause to the stall deadline when DOM reads offset the polling cadence', async () => {
+  vi.useFakeTimers()
+  const h = fixture()
+  h.contents.executeJavaScript.mockImplementation(async () => {
+    await new Promise((resolve) => { setTimeout(resolve, 1) })
+    return { ...observation, anchorFound: false, messages: [] }
+  })
+  const pending = h.owner.before(url, 'far-cursor')
+  const finished = vi.fn()
+  void pending.then(finished)
+  await vi.advanceTimersByTimeAsync(19999)
+  expect(finished).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(await pending).toMatchObject({ status: 'unavailable' })
+})
+
+it('hard caps even continuously progressing seeks at 90 seconds', async () => {
+  vi.useFakeTimers()
+  const start = Date.now()
+  const h = fixture()
+  h.contents.executeJavaScript.mockImplementation(async () => ({ ...observation, anchorFound: false, messages: [], wheel,
+    seekProgress: { rowCount: 32 + Math.floor((Date.now() - start) / 1000), scrollTop: 1000 } }))
+  const pending = h.owner.before(url, 'far-cursor')
+  const finished = vi.fn()
+  void pending.then(finished)
+  await vi.advanceTimersByTimeAsync(89999)
+  expect(finished).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(await pending).toEqual({ messages: [], hasMore: true, status: 'unavailable' })
+  const count = h.contents.sendInputEvent.mock.calls.length
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(h.contents.sendInputEvent).toHaveBeenCalledTimes(count)
+})
+
+it.each([20000, 90000])('bounds a pending read to the remaining %ims seek deadline and refuses its late input', async (limit) => {
+  vi.useFakeTimers()
+  const start = Date.now()
+  const h = fixture()
+  const reading = Promise.withResolvers<unknown>()
+  h.contents.executeJavaScript.mockImplementation(async () => {
+    const elapsed = Date.now() - start
+    if (elapsed >= limit - 1000) return reading.promise
+    return { ...observation, anchorFound: false, messages: [], wheel,
+      seekProgress: { rowCount: limit === 90000 ? 32 + Math.floor(elapsed / 1000) : 32, scrollTop: 1000 } }
+  })
+  const pending = h.owner.before(url, 'far-cursor')
+  const finished = vi.fn()
+  void pending.then(finished)
+  await vi.advanceTimersByTimeAsync(limit - 1)
+  expect(finished).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(await pending).toMatchObject({ status: 'unavailable' })
+  const count = h.contents.sendInputEvent.mock.calls.length
+  expect(await h.owner.before(url, 'far-cursor')).toMatchObject({ status: 'unavailable' })
+  reading.resolve({ ...observation, wheel, seekProgress: { rowCount: 302, scrollTop: 0 } })
+  await reading.promise
+  expect(h.contents.sendInputEvent).toHaveBeenCalledTimes(count)
+})
+
+it('cancels a progress-extended seek immediately on teardown without further input', async () => {
+  vi.useFakeTimers()
+  const start = Date.now()
+  const h = fixture()
+  h.contents.executeJavaScript.mockImplementation(async () => ({ ...observation, anchorFound: false, messages: [], wheel,
+    seekProgress: { rowCount: 32 + Math.floor((Date.now() - start) / 1000), scrollTop: 1000 } }))
+  const pending = h.owner.before(url, 'far-cursor')
+  await vi.advanceTimersByTimeAsync(21000)
+  const count = h.contents.sendInputEvent.mock.calls.length
+  h.owner.disconnect()
+  expect(await pending).toMatchObject({ status: 'unavailable' })
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(h.contents.sendInputEvent).toHaveBeenCalledTimes(count)
+  expect(h.window.destroy).toHaveBeenCalledOnce()
+})
 
 it('dispatches one bounded upward native wheel only to the secondary owner, then returns observed older content', async () => {
   vi.useFakeTimers()
@@ -214,19 +303,21 @@ it.each([
   expect(h.contents.sendInputEvent).not.toHaveBeenCalled()
 })
 
-it.each(['close', 'navigation', 'wrong-url', 'loading'] as const)('does not dispatch late native input after %s', async (change) => {
-  const h = fixture()
-  const reading = Promise.withResolvers<unknown>()
-  h.contents.executeJavaScript.mockReturnValueOnce(reading.promise)
-  const pending = h.owner.before(url, 'cursor')
-  if (change === 'close') h.owner.disconnect()
-  else if (change === 'navigation') h.contents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
-  else if (change === 'wrong-url') h.contents.getURL.mockReturnValue('https://auth.openai.com/log-in')
-  else h.contents.isLoading.mockReturnValue(true)
-  reading.resolve({ ...observation, messages: [], wheel })
-  expect(await pending).toMatchObject({ status: 'unavailable' })
-  expect(h.contents.sendInputEvent).not.toHaveBeenCalled()
-})
+it.each(['close', 'navigation', 'wrong-url', 'loading'].flatMap(change => [320, -1].map(deltaY => ({ change, deltaY }))))(
+  'does not dispatch late native input $deltaY after $change', async ({ change, deltaY }) => {
+    const h = fixture()
+    const reading = Promise.withResolvers<unknown>()
+    h.contents.executeJavaScript.mockReturnValueOnce(reading.promise)
+    const pending = h.owner.before(url, 'cursor')
+    if (change === 'close') h.owner.disconnect()
+    else if (change === 'navigation') h.contents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+    else if (change === 'wrong-url') h.contents.getURL.mockReturnValue('https://auth.openai.com/log-in')
+    else h.contents.isLoading.mockReturnValue(true)
+    reading.resolve({ ...observation, messages: [], wheel: { ...wheel, deltaY }, seekProgress: { rowCount: 52, scrollTop: 0 } })
+    expect(await pending).toMatchObject({ status: 'unavailable' })
+    expect(h.contents.sendInputEvent).not.toHaveBeenCalled()
+  },
+)
 
 it('never dispatches native input from a read whose deadline expired', async () => {
   vi.useFakeTimers()

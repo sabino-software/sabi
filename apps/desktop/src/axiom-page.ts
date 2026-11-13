@@ -175,22 +175,6 @@ export function findAxiomAcknowledgement(text: string, before: readonly string[]
   return null
 }
 
-/** Opt-in structural source diagnostics; no message text, IDs, URL, title, or draft. */
-export interface AxiomHistoryDiagnostics {
-  readonly scrollerPresent: boolean
-  readonly listPresent: boolean
-  readonly rowCount: number
-  readonly bodyCount: number
-  readonly skippedRowCount: number
-  readonly scrollTop: number
-  readonly scrollTopAfter: number
-  readonly clientHeight: number
-  readonly scrollHeight: number
-  readonly visibility: 'visible' | 'hidden'
-  readonly readyState: 'loading' | 'interactive' | 'complete'
-  readonly cursorPresent: boolean
-}
-
 /** One bounded original history observation; absence of a start marker never means exhaustion. */
 export interface AxiomHistoryObservation {
   readonly url: string
@@ -204,7 +188,8 @@ export interface AxiomHistoryObservation {
     readonly viewportWidth: number
     readonly viewportHeight: number
   }
-  readonly diagnostics?: AxiomHistoryDiagnostics
+  /** Actual source growth and scroll position control the bounded older-cursor seek budget. */
+  readonly seekProgress?: { readonly rowCount: number; readonly scrollTop: number }
   readonly messages: readonly AxiomMessage[]
   readonly sourceOrder?: readonly string[]
   readonly hasEarlier: boolean
@@ -216,32 +201,18 @@ export interface AxiomHistoryObservation {
  * @param read Shared sanitized reader, serialized alongside this function.
  * @param url Exact selected canonical Dot; other documents are never read or scrolled.
  * @param beforeId Stable original message cursor.
- * @param scroll Whether to propose an upward native wheel event for the separately owned history page.
- * @param debug Explicit owner opt-in to structural diagnostics; defaults to no additional metrics.
+ * @param scroll Whether to propose native scrolling for the separately owned history page, including a 1px downward nudge at its top.
  * @returns A bounded chronological page and explicit source-boundary evidence.
  */
 export function readAxiomHistoryPage(
-  read: (beforeId?: string) => AxiomPageState, url: string, beforeId: string, scroll: boolean, debug = false,
+  read: (beforeId?: string) => AxiomPageState, url: string, beforeId: string, scroll: boolean,
 ): AxiomHistoryObservation {
   const empty: AxiomHistoryObservation = { url, supported: false, anchorFound: false, messages: [],
     hasEarlier: false, startVerified: false }
   if (location.href.replace(/\/$/u, '') !== url) return empty
   const scroller = document.querySelector('.messages-scroll')
   const list = scroller?.querySelector('.message-list')
-  const inspect = (rows: readonly Element[], cursor: number, scrollTop: number): AxiomHistoryDiagnostics | undefined => debug ? {
-    scrollerPresent: scroller instanceof HTMLElement, listPresent: list instanceof HTMLElement,
-    rowCount: rows.length, bodyCount: rows.filter(row => [...row.querySelectorAll('.message-body > .message-surface .message-bubble .message-text')]
-      .some(body => body.closest('article.message-row[data-message-id]') === row
-        && !body.closest('.quoted-reply,blockquote,[hidden],[aria-hidden="true"]'))).length,
-    skippedRowCount: rows.filter(row => row.hasAttribute('data-message-render-skipped')).length,
-    scrollTop, scrollTopAfter: scroller?.scrollTop ?? 0,
-    clientHeight: scroller?.clientHeight ?? 0, scrollHeight: scroller?.scrollHeight ?? 0,
-    visibility: document.visibilityState, readyState: document.readyState, cursorPresent: cursor >= 0,
-  } : undefined
-  if (!(scroller instanceof HTMLElement) || !(list instanceof HTMLElement)) {
-    const diagnostics = inspect([], -1, scroller?.scrollTop ?? 0)
-    return { ...empty, ...diagnostics === undefined ? {} : { diagnostics } }
-  }
+  if (!(scroller instanceof HTMLElement) || !(list instanceof HTMLElement)) return empty
   const temporaryId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
   const ids = new Set<string>()
   const rows = [...list.querySelectorAll('article.message-row[data-message-id]')].filter((row) => {
@@ -252,7 +223,7 @@ export function readAxiomHistoryPage(
     return true
   })
   const cursor = rows.findIndex(row => row.getAttribute('data-message-id') === beforeId)
-  const scrollTop = debug ? scroller.scrollTop : 0
+  const seekProgress = { rowCount: Math.min(1000000, rows.length), scrollTop: Math.min(1000000000, Math.max(0, scroller.scrollTop)) }
   let wheel: AxiomHistoryObservation['wheel']
   if (scroll && scroller.clientHeight > 0 && scroller.scrollHeight > scroller.clientHeight) {
     const rect = scroller.getBoundingClientRect()
@@ -264,16 +235,14 @@ export function readAxiomHistoryPage(
     if (right - left >= 2 && bottom - top >= 2 && x >= left && x < right && y >= top && y < bottom) {
       const hit = document.elementFromPoint(x, y)
       if (hit !== null && scroller.contains(hit)) wheel = { x, y, viewportWidth, viewportHeight,
-        deltaY: Math.max(1, Math.min(600, Math.floor((bottom - top) * 0.8))) }
+        deltaY: scroller.scrollTop <= 0 ? -1 : Math.max(1, Math.min(600, Math.floor((bottom - top) * 0.8))) }
     }
   }
-  const diagnostics = inspect(rows, cursor, scrollTop)
-  if (cursor < 0) return { ...empty, supported: true, ...wheel === undefined ? {} : { wheel },
-    ...diagnostics === undefined ? {} : { diagnostics } }
+  if (cursor < 0) return { ...empty, supported: true, seekProgress, ...wheel === undefined ? {} : { wheel } }
   const { messages, sourceOrder } = read(beforeId)
   const first = messages[0]
   const firstIndex = first === undefined ? cursor : rows.findIndex(row => row.getAttribute('data-message-id') === first.id)
   return { url, supported: true, anchorFound: true, messages, ...wheel === undefined ? {} : { wheel },
-    ...diagnostics === undefined ? {} : { diagnostics },
+    seekProgress,
     ...sourceOrder === undefined ? {} : { sourceOrder }, hasEarlier: firstIndex > 0, startVerified: false }
 }
