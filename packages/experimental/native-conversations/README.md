@@ -32,6 +32,8 @@ Codex uses the connected work daemon, independently of the personal Codex home. 
 
 Dot is a dedicated continuous view opened from the top Dot button, not a Harness Session or an LLM provider. Its trusted desktop page bridge owns selection, website authentication, snapshots and sends. Existing Axiom mirror logs and their persisted readers remain intact. Their presentation policy hides them from normal Session discovery and refuses ordinary opening; saved identities redirect to the dedicated Dot view. The deprecated `connectAxiom(url)` selects the original page and returns `{ url, phase }`, never a Session id.
 
+Unreadable cold Session bodies do not block sidebar or workspace discovery: unclassified histories retain their ordinary header listing without repair or activation. A known cached Dot identity stays hidden even when stale or corrupt. Failed body classification is memoized by revision; cancellation still propagates.
+
 <a id="configure-the-service"></a>
 ## Configure the service
 

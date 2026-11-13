@@ -366,6 +366,7 @@ export default class NativeConversations extends TypertRemoteService {
     await mkdir(this.config.fallbackCwd, { recursive: true })
     return this.config.fallbackCwd
   }
+  /** Unreadable cold bodies retain ordinary header discovery; known Dot metadata remains hidden and cancellation propagates. */
   private async readBinding(id: SessionId, signal?: AbortSignal): Promise<NativeConversationBinding | null> {
     signal?.throwIfAborted()
     this.lifetime.signal.throwIfAborted()
@@ -379,10 +380,10 @@ export default class NativeConversations extends TypertRemoteService {
     signal?.throwIfAborted()
     this.lifetime.signal.throwIfAborted()
     if (!stored) return null
-    const prior = this.coldBindings.get(id)
-    if (prior?.revision === stored.revision) return prior.binding
     const cached = this.ctx.sessionProjectionCache.cachedSnapshot(stored.header, ['nativeConversation'])
     if (cached?.values.nativeConversation?.source === 'axiom') return cached.values.nativeConversation
+    const prior = this.coldBindings.get(id)
+    if (prior?.revision === stored.revision) return prior.binding
     if (cached && stored.eventCount !== undefined && cached.asOfSeq === stored.eventCount - 1
       && Object.hasOwn(cached.values, 'nativeConversation')) return cached.values.nativeConversation ?? null
     if (stored.formatStatus === 'migration-required') return null
@@ -393,19 +394,27 @@ export default class NativeConversations extends TypertRemoteService {
       const revisionReads = reads
       task = (async () => {
         const owned = this.lifetime.signal
-        const handle = await this.ctx.sessionPersistence.open(id, 'read', { signal: owned })
         try {
-          const snapshot = await handle.read(undefined, undefined, { signal: owned })
-          owned.throwIfAborted()
-          let binding: NativeConversationBinding | null = null
-          for (const event of snapshot.events) {
+          const handle = await this.ctx.sessionPersistence.open(id, 'read', { signal: owned })
+          try {
+            const snapshot = await handle.read(undefined, undefined, { signal: owned })
             owned.throwIfAborted()
-            const record = pluginRecordOf(event)
-            if (record?.type === BINDING_RECORD) binding = bindingSchema.parse(record.data)
-          }
-          this.coldBindings.set(id, { revision: stored.revision, binding })
-          return binding
-        } finally { await handle.close() }
+            let binding: NativeConversationBinding | null = null
+            for (const event of snapshot.events) {
+              owned.throwIfAborted()
+              const record = pluginRecordOf(event)
+              if (record?.type === BINDING_RECORD) binding = bindingSchema.parse(record.data)
+            }
+            this.coldBindings.set(id, { revision: stored.revision, binding })
+            return binding
+          } finally { await handle.close() }
+        } catch {
+          owned.throwIfAborted()
+          // Visibility is optional metadata; corrupt unrelated history must not block discovery.
+          this.coldBindings.set(id, { revision: stored.revision, binding: null })
+          this.ctx.logger.warn('A saved Session could not be classified for dedicated-view visibility; retaining its ordinary header listing.')
+          return null
+        }
       })()
       reads.set(stored.revision, task)
       const clear = () => {

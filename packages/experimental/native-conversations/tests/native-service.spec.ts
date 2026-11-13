@@ -1,7 +1,8 @@
 /** Real source transport, JSONL persistence and workspace ownership exercise native Session assembly. */
+import { createHash } from 'node:crypto'
 import { Context } from '@deepseek-ai/cordis'
 import { createServer } from 'node:http'
-import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -26,6 +27,8 @@ import { createSessionTestController } from '../../../api/session-controller/tes
 import NativeConversations from '../src/index.ts'
 import { BINDING_RECORD, CODEX_CUT_RECORD } from '../src/projection.ts'
 import { sourceSessionId, appendSourceMessages } from '../src/history.ts'
+import WorkspaceController from '../../../api/workspace-controller/src/index.ts'
+import type { WorkspaceFollowFrame } from '../../../api/workspace-controller/src/types.ts'
 import type { SessionControlFrame } from '../../../api/session-controller/src/types.ts'
 import type { NativeConversationId } from '../src/types.ts'
 import type { AxiomSnapshot, AxiomTransport } from '../src/axiom-types.ts'
@@ -452,4 +455,63 @@ it.skipIf(process.platform === 'win32')('cancels metadata stat I/O with the call
   await ctx.fiber.dispose()
   await settled
   expect(finished).toBe(2)
+})
+
+
+it.skipIf(process.platform === 'win32')('keeps corrupt unrelated history listable while hiding cached corrupt Dot mirrors without rewriting logs', async () => {
+  const h = await fixture()
+  const { ctx, controller } = await h.open()
+  const workspace = await ctx.workspaceRegistry.create(h.workspacePath)
+  const signal = new AbortController().signal
+  const hashes = new Map<string, string>()
+  const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
+  const url = 'https://chatgpt.com/dots/fixture~corrupt'
+  for (const name of ['corrupt-ordinary', 'corrupt-codex', 'corrupt-dot']) {
+    const id = SessionId(name)
+    const session = Session.create(id, undefined, {
+      version: SESSION_FORMAT_VERSION, id, createdAt: 321, isSeeded: false, cwd: h.workspacePath,
+    })
+    session.append('session/title', { title: name, messageSeqs: [], source: { kind: 'user' } })
+    if (name !== 'corrupt-ordinary') appendPluginRecord(session, BINDING_RECORD, {
+      source: name === 'corrupt-dot' ? 'axiom' : 'codex',
+      sourceId: brandString<NativeConversationId>(name === 'corrupt-dot' ? url : 'corrupt-original-thread'),
+      title: name, model: 'fixture-model', cwd: h.workspacePath,
+    })
+    const handle = await ctx.sessionPersistence.create(session.header)
+    try { await handle.append(session.snapshotEvents()); await handle.flush() } finally { await handle.close() }
+    if (name === 'corrupt-dot') await ctx.sessionProjectionCache.write(session)
+    const location = (await ctx.sessionPersistence.stat(id))!.location!
+    // A syntactically complete JSONL record whose message body violates the released Session format.
+    await appendFile(location.path, JSON.stringify({ seq: session.snapshotEvents().length, time: 1000, type: 'system/message', data: {} }) + '\n')
+    hashes.set(location.path, digest(await readFile(location.path)))
+    await expect(ctx.sessionPersistence.open(id, 'read')).rejects.toThrow()
+    await workspace.attachSession(id)
+    if (name !== 'corrupt-ordinary') await ctx.workspaceRegistry.archiveSession(id)
+  }
+  const open = vi.spyOn(ctx.sessionPersistence, 'open')
+  onTestFinished(() => { open.mockRestore() })
+  const first = await controller.list({}, signal)
+  const ids = first.items.map(item => item.sessionId)
+  expect(ids).toContain('corrupt-ordinary')
+  expect(ids).toContain('corrupt-codex')
+  expect(ids).toContain(sourceSessionId('codex', 'source-one'))
+  expect(ids).not.toContain('corrupt-dot')
+  expect(await controller.presentation({ sessionId: SessionId('corrupt-dot') }, signal)).toEqual({
+    visibility: 'hidden', route: { view: 'dot', params: { url } },
+  })
+  const readsAfterFirst = open.mock.calls.length
+  await controller.list({}, signal)
+  expect(open.mock.calls).toHaveLength(readsAfterFirst)
+  expect(open.mock.calls.some(([id]) => id === 'corrupt-dot')).toBe(false)
+  const workspaceController = new WorkspaceController(ctx, { documentsDirectory: h.workspacePath })
+  const follow = workspaceController.follow(signal)[Symbol.asyncIterator]()
+  const frame: IteratorResult<WorkspaceFollowFrame, undefined> = await follow.next()
+  if (frame.value?.type !== 'baseline') throw new Error('Expected workspace baseline')
+  expect(frame.value.value.items.flatMap(item => item.sessionIds)).toContain('corrupt-ordinary')
+  expect(frame.value.value.archivedSessionIds).toContain('corrupt-codex')
+  expect(frame.value.value.archivedSessionIds).not.toContain('corrupt-dot')
+  await follow.return?.()
+  for (const [path, hash] of hashes) expect(digest(await readFile(path))).toBe(hash)
+  expect(ctx.sessions.list()).toEqual([])
+  expect(h.frames.some(frame => frame.method === 'thread/resume' || frame.method === 'turn/start')).toBe(false)
 })
