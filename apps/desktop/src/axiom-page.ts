@@ -25,12 +25,11 @@ export function readAxiomPage(beforeId?: string): AxiomPageState {
   // The website replaces optimistic bare UUIDv4 rows with committed compound source IDs.
   const temporaryId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
   const seen = new Set<string>()
+  // CSS virtualization must not remove a cursor; hidden bodies remain excluded below.
   const rows = [...document.querySelectorAll('article.message-row[data-message-id]')].filter((row) => {
     const id = row.getAttribute('data-message-id')
     if (!id || id.length > 512 || temporaryId.test(id) || seen.has(id) || row.parentElement?.closest('article.message-row[data-message-id]')
       || row.closest('.quoted-reply,blockquote,[hidden],[aria-hidden="true"]')) return false
-    const style = getComputedStyle(row)
-    if (style.display === 'none' || style.visibility === 'hidden') return false
     seen.add(id)
     return true
   })
@@ -44,6 +43,8 @@ export function readAxiomPage(beforeId?: string): AxiomPageState {
   let remaining = 131072
   let limited = preceding.length > 100
   for (const row of preceding.slice(-100).reverse()) {
+    const style = getComputedStyle(row)
+    if (style.display === 'none' || style.visibility === 'hidden') continue
     const id = row.getAttribute('data-message-id')
     const body = [...row.querySelectorAll('.message-body > .message-surface .message-bubble .message-text')]
       .find(candidate => candidate.closest('article.message-row[data-message-id]') === row

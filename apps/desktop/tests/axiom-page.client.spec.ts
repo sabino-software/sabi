@@ -33,6 +33,28 @@ function fixture(): void {
     <div role="status" class="typing-indicator" aria-live="polite">Reconnecting…</div>`
 }
 
+it.each(['visibility: hidden', 'display: none'])('keeps a %s history cursor without exposing its hidden body', (style) => {
+  fixture()
+  const scroller = document.createElement('section')
+  scroller.className = 'messages-scroll'
+  const list = document.createElement('div')
+  list.className = 'message-list'
+  list.append(...document.querySelectorAll('article.message-row'))
+  scroller.append(list)
+  document.body.prepend(scroller)
+  const cursor = list.querySelector<HTMLElement>('[data-message-id="original/assistant~2"]')!
+  cursor.setAttribute('style', style)
+  expect(readAxiomPage().sourceOrder).toEqual(['original/user~1', 'original/assistant~2'])
+  expect(readAxiomPage().messages.map(message => message.id)).toEqual(['original/user~1'])
+  const prior = readAxiomPage('original/assistant~2')
+  expect(prior.messages.map(message => message.id)).toEqual(['original/user~1'])
+  expect(prior.sourceOrder).toEqual(['original/user~1'])
+  const history = readAxiomHistoryPage(readAxiomPage, location.href.replace(/\/$/u, ''), 'original/assistant~2', false)
+  expect(history.anchorFound).toBe(true)
+  expect(history.messages).toEqual(prior.messages)
+  expect(history.messages.some(message => message.text.includes('world'))).toBe(false)
+})
+
 describe('original Dot DOM projection', () => {
   it('keeps source roles, IDs, Markdown and observed status without hidden data or image URLs', () => {
     fixture()
