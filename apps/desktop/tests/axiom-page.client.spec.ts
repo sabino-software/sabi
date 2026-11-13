@@ -237,6 +237,28 @@ it('retains exact bounded source row order before temporarily missing bodies are
 })
 
 
+it('collects only explicitly requested structural history diagnostics without exposing message data', () => {
+  fixture()
+  const scroller = document.createElement('section')
+  scroller.className = 'messages-scroll'
+  const list = document.createElement('div')
+  list.className = 'message-list'
+  list.append(...document.querySelectorAll('article.message-row'))
+  scroller.append(list)
+  document.body.prepend(scroller)
+  scroller.scrollTop = 7
+  Object.defineProperty(scroller, 'clientHeight', { value: 100 })
+  Object.defineProperty(scroller, 'scrollHeight', { value: 1000 })
+  const url = location.href.replace(/\/$/u, '')
+  expect(readAxiomHistoryPage(readAxiomPage, url, 'original/assistant~2', false).diagnostics).toBeUndefined()
+  const measured = readAxiomHistoryPage(readAxiomPage, url, 'original/assistant~2', true, true)
+  expect(measured.diagnostics).toMatchObject({ scrollerPresent: true, listPresent: true, rowCount: 2, bodyCount: 2,
+    scrollTop: 7, scrollTopAfter: 7, clientHeight: 100, scrollHeight: 1000, cursorPresent: true })
+  expect(measured.diagnostics?.visibility).toBe(document.visibilityState)
+  expect(JSON.stringify(measured.diagnostics)).not.toMatch(/https:|Exact user|original\//)
+})
+
+
 it('proposes validated native wheel geometry without scrolling or focusing, then reads the source-prepended body', () => {
   document.body.innerHTML = '<div id="primary-scroll"></div><input aria-label="Keep focus">'
     + '<section class="messages-scroll"><div class="message-list">'

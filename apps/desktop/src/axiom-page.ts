@@ -175,6 +175,22 @@ export function findAxiomAcknowledgement(text: string, before: readonly string[]
   return null
 }
 
+/** Opt-in structural source diagnostics; no message text, IDs, URL, title, or draft. */
+export interface AxiomHistoryDiagnostics {
+  readonly scrollerPresent: boolean
+  readonly listPresent: boolean
+  readonly rowCount: number
+  readonly bodyCount: number
+  readonly skippedRowCount: number
+  readonly scrollTop: number
+  readonly scrollTopAfter: number
+  readonly clientHeight: number
+  readonly scrollHeight: number
+  readonly visibility: 'visible' | 'hidden'
+  readonly readyState: 'loading' | 'interactive' | 'complete'
+  readonly cursorPresent: boolean
+}
+
 /** One bounded original history observation; absence of a start marker never means exhaustion. */
 export interface AxiomHistoryObservation {
   readonly url: string
@@ -188,6 +204,7 @@ export interface AxiomHistoryObservation {
     readonly viewportWidth: number
     readonly viewportHeight: number
   }
+  readonly diagnostics?: AxiomHistoryDiagnostics
   readonly messages: readonly AxiomMessage[]
   readonly sourceOrder?: readonly string[]
   readonly hasEarlier: boolean
@@ -200,17 +217,31 @@ export interface AxiomHistoryObservation {
  * @param url Exact selected canonical Dot; other documents are never read or scrolled.
  * @param beforeId Stable original message cursor.
  * @param scroll Whether to propose an upward native wheel event for the separately owned history page.
+ * @param debug Explicit owner opt-in to structural diagnostics; defaults to no additional metrics.
  * @returns A bounded chronological page and explicit source-boundary evidence.
  */
 export function readAxiomHistoryPage(
-  read: (beforeId?: string) => AxiomPageState, url: string, beforeId: string, scroll: boolean,
+  read: (beforeId?: string) => AxiomPageState, url: string, beforeId: string, scroll: boolean, debug = false,
 ): AxiomHistoryObservation {
   const empty: AxiomHistoryObservation = { url, supported: false, anchorFound: false, messages: [],
     hasEarlier: false, startVerified: false }
   if (location.href.replace(/\/$/u, '') !== url) return empty
   const scroller = document.querySelector('.messages-scroll')
   const list = scroller?.querySelector('.message-list')
-  if (!(scroller instanceof HTMLElement) || !(list instanceof HTMLElement)) return empty
+  const inspect = (rows: readonly Element[], cursor: number, scrollTop: number): AxiomHistoryDiagnostics | undefined => debug ? {
+    scrollerPresent: scroller instanceof HTMLElement, listPresent: list instanceof HTMLElement,
+    rowCount: rows.length, bodyCount: rows.filter(row => [...row.querySelectorAll('.message-body > .message-surface .message-bubble .message-text')]
+      .some(body => body.closest('article.message-row[data-message-id]') === row
+        && !body.closest('.quoted-reply,blockquote,[hidden],[aria-hidden="true"]'))).length,
+    skippedRowCount: rows.filter(row => row.hasAttribute('data-message-render-skipped')).length,
+    scrollTop, scrollTopAfter: scroller?.scrollTop ?? 0,
+    clientHeight: scroller?.clientHeight ?? 0, scrollHeight: scroller?.scrollHeight ?? 0,
+    visibility: document.visibilityState, readyState: document.readyState, cursorPresent: cursor >= 0,
+  } : undefined
+  if (!(scroller instanceof HTMLElement) || !(list instanceof HTMLElement)) {
+    const diagnostics = inspect([], -1, scroller?.scrollTop ?? 0)
+    return { ...empty, ...diagnostics === undefined ? {} : { diagnostics } }
+  }
   const temporaryId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
   const ids = new Set<string>()
   const rows = [...list.querySelectorAll('article.message-row[data-message-id]')].filter((row) => {
@@ -221,6 +252,7 @@ export function readAxiomHistoryPage(
     return true
   })
   const cursor = rows.findIndex(row => row.getAttribute('data-message-id') === beforeId)
+  const scrollTop = debug ? scroller.scrollTop : 0
   let wheel: AxiomHistoryObservation['wheel']
   if (scroll && scroller.clientHeight > 0 && scroller.scrollHeight > scroller.clientHeight) {
     const rect = scroller.getBoundingClientRect()
@@ -235,10 +267,13 @@ export function readAxiomHistoryPage(
         deltaY: Math.max(1, Math.min(600, Math.floor((bottom - top) * 0.8))) }
     }
   }
-  if (cursor < 0) return { ...empty, supported: true, ...wheel === undefined ? {} : { wheel } }
+  const diagnostics = inspect(rows, cursor, scrollTop)
+  if (cursor < 0) return { ...empty, supported: true, ...wheel === undefined ? {} : { wheel },
+    ...diagnostics === undefined ? {} : { diagnostics } }
   const { messages, sourceOrder } = read(beforeId)
   const first = messages[0]
   const firstIndex = first === undefined ? cursor : rows.findIndex(row => row.getAttribute('data-message-id') === first.id)
   return { url, supported: true, anchorFound: true, messages, ...wheel === undefined ? {} : { wheel },
+    ...diagnostics === undefined ? {} : { diagnostics },
     ...sourceOrder === undefined ? {} : { sourceOrder }, hasEarlier: firstIndex > 0, startVerified: false }
 }
