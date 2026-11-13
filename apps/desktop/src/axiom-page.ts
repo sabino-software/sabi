@@ -244,7 +244,10 @@ export function readAxiomHistoryPage(
   })
   const cursor = rows.findIndex(row => row.getAttribute('data-message-id') === beforeId)
   const scrollTop = debug ? scroller.scrollTop : 0
-  if (scroll) scroller.scrollTop = 0
+  if (scroll) {
+    // A later observation returns from one pixel to the top so an unchanged zero cannot stall scroll-driven loading.
+    scroller.scrollTop = scroller.scrollTop === 0 && scroller.scrollHeight > scroller.clientHeight ? 1 : 0
+  }
   const diagnostics = inspect(rows, cursor, scrollTop)
   if (cursor < 0) return { ...empty, supported: true, ...diagnostics === undefined ? {} : { diagnostics } }
   const { messages, sourceOrder } = read(beforeId)
