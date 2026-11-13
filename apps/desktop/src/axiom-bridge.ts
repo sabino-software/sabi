@@ -1,5 +1,5 @@
 /** Persistent original-site page ownership; Harness renders only bounded DOM projections. */
-import { type BrowserWindow, dialog, session, type WebContents } from 'electron'
+import { BrowserWindow, dialog, session, type WebContents } from 'electron'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { AxiomHistoryPage, AxiomSendRequest, AxiomSendResult, AxiomSnapshot } from './axiom-protocol.ts'
@@ -37,12 +37,16 @@ export class DesktopAxiomPage {
   private timer: ReturnType<typeof setTimeout> | undefined
   private refreshing: Promise<AxiomSnapshot> | undefined
   private sending = false
-  private readonly history = new DesktopAxiomHistory(() => createAxiomWebsiteWindow({ show: false, width: 1100, height: 800,
-    webPreferences: { session: session.fromPartition('persist:skeinlet-axiom'), nodeIntegration: false,
-      nodeIntegrationInWorker: false, nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: true,
-      webSecurity: true, allowRunningInsecureContent: false, webviewTag: false, navigateOnDragDrop: false,
-      backgroundThrottling: false, spellcheck: false },
-  }, this.locale()))
+  private readonly history = new DesktopAxiomHistory(() => {
+    // Hidden child views drop wheel input in Electron 44.7; this read-only page needs its own WebContents.
+    const window = new BrowserWindow({ show: false, width: 1100, height: 800,
+      webPreferences: { session: session.fromPartition('persist:skeinlet-axiom'), nodeIntegration: false,
+        nodeIntegrationInWorker: false, nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: true,
+        webSecurity: true, allowRunningInsecureContent: false, webviewTag: false, navigateOnDragDrop: false,
+        backgroundThrottling: false, spellcheck: false },
+    })
+    return { window, contents: window.webContents }
+  })
   private closedByUser = false
   private returnAfterChoice = false
   private readyUntil = 0

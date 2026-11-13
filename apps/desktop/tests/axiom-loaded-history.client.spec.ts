@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { readAxiomPage } from '../src/axiom-page.ts'
 
-const fixture = vi.hoisted(() => ({ windows: [] as unknown[] }))
+const fixture = vi.hoisted(() => ({ windows: [] as unknown[], windowOptions: [] as unknown[] }))
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
   return { dialog: { showMessageBox: vi.fn() }, session: { fromPartition: () => ({
@@ -24,7 +24,7 @@ vi.mock('electron', async () => {
       }),
       setWindowOpenHandler: vi.fn(), loadURL: vi.fn(async (url: string) => { this.url = url }),
     })
-    constructor() { super(); fixture.windows.push(this) }
+    constructor(options?: unknown) { super(); fixture.windows.push(this); fixture.windowOptions.push(options) }
     isDestroyed(): boolean { return this.destroyed }
     isVisible(): boolean { return this.visible }
     isFocused(): boolean { return this.visible }
@@ -35,9 +35,10 @@ vi.mock('electron', async () => {
 })
 vi.mock('../src/axiom-window.ts', async () => {
   const { BrowserWindow } = await import('electron')
-  return { createAxiomWebsiteWindow: () => { const window = new BrowserWindow(); return { window, contents: window.webContents } } }
+  return { createAxiomWebsiteWindow: vi.fn(() => { const window = new BrowserWindow(); return { window, contents: window.webContents } }) }
 })
 import type { BrowserWindow } from 'electron'
+import { createAxiomWebsiteWindow } from '../src/axiom-window.ts'
 import { DesktopAxiomPage } from '../src/axiom-bridge.ts'
 import { DesktopAxiomHistory } from '../src/axiom-history.ts'
 
@@ -65,10 +66,30 @@ beforeEach(() => {
 afterEach(() => {
   for (const owner of owners.splice(0)) owner.disconnect()
   fixture.windows.length = 0
+  fixture.windowOptions.length = 0
   if (innerText) Object.defineProperty(HTMLElement.prototype, 'innerText', innerText)
   else Reflect.deleteProperty(HTMLElement.prototype, 'innerText')
   vi.useRealTimers()
   vi.restoreAllMocks()
+})
+
+it('owns a hidden top-level website for native history input while the primary keeps its trusted window chrome', async () => {
+  vi.useFakeTimers()
+  vi.mocked(createAxiomWebsiteWindow).mockClear()
+  const h = await connect()
+  expect(h.snapshot.phase).toBe('ready')
+  const pending = h.owner.historyBefore(sourceId(0))
+  await vi.advanceTimersByTimeAsync(1)
+  expect(createAxiomWebsiteWindow).toHaveBeenCalledOnce()
+  expect(fixture.windows).toHaveLength(2)
+  expect(fixture.windowOptions[1]).toMatchObject({ show: false, webPreferences: {
+    nodeIntegration: false, nodeIntegrationInWorker: false, nodeIntegrationInSubFrames: false,
+    contextIsolation: true, sandbox: true, webSecurity: true, allowRunningInsecureContent: false,
+    webviewTag: false, navigateOnDragDrop: false, backgroundThrottling: false,
+  } })
+  expect((fixture.windows[1] as BrowserWindow).isVisible()).toBe(false)
+  h.owner.disconnect()
+  expect(await pending).toMatchObject({ status: 'unavailable' })
 })
 
 async function connect() {
