@@ -15,6 +15,8 @@ Desktop 和 Web 默认不挂载埋点消费者和导出器。可选的[产品采
 
 运行 `dsh --profile web`，获得浏览器内的聊天、模型与设置管理以及会话历史，并与其他 dsh 表层共用同一套模型访问、工具与安全默认值。启动时会打印带 token 的 URL，通常还会在默认浏览器中打开；SSH 会话和 `--no-open` 需要手动打开。你可以更改端口、允许额外 authority、绑定一个具体的本机 IP，并用自己提供的证书直接提供 HTTPS；通配地址会被拒绝。跨机访问使用剥离前缀代理后公告的 HTTP(S) URL、监听器 TLS，或非 loopback 绑定上的明文 HTTP。一次性的命令行任务应使用 headless 配置。
 
+设置 `DSH_PROVIDER_NEUTRAL=1` 时，账号菜单、账号通知和自动凭据引导不挂载或禁用。现有通用“设置”入口仍可使用。详见[本地 Desktop 策略](../../../apps/desktop/README.zh.md#terminal-command)。
+
 ## 目录
 
 - [使用本包](#use-this-package)

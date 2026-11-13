@@ -35,6 +35,8 @@ export function configureLocalFork(manifest: unknown, application: LocalForkAppl
   application.setPath('sessionData', electron)
   environment.DSH_HOME = join(root, 'harness-home')
   environment.DSH_NATIVE_CONVERSATIONS = '1'
+  environment.DSH_PROVIDER_NEUTRAL = '1'
+  environment.DSH_TELEMETRY_DISABLED = '1'
   return { productName: fork.productName, scheme: fork.scheme }
 }
 

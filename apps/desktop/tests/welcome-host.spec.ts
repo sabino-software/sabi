@@ -1,5 +1,6 @@
 /** Native onboarding reuses authenticated Web RPC and never reads credential values. */
 import { describe, expect, it, vi } from 'vitest'
+import { needsWelcome } from '../src/welcome-api.ts'
 import { connectDesktopWelcome } from '../src/welcome-backend.ts'
 
 function transport(preference?: string) {
@@ -179,4 +180,16 @@ describe('desktop welcome Web operations', () => {
     expect(init?.signal).toBeInstanceOf(AbortSignal)
     expect(JSON.parse(init!.body as string)).toMatchObject({ payload: { args: { event } } })
   })
+})
+
+it('opens a provider-neutral profile without DeepSeek account access or fabricated provider readiness', async () => {
+  const host = transport()
+  const backend = connectDesktopWelcome(url, cookie, host.send, { credentialOnboarding: false })
+  const state = await backend.read()
+  expect(state).toMatchObject({ loggedIn: false, hasApiKey: false, nativeReady: false, requiresProviderSetup: false })
+  expect(needsWelcome(state)).toBe(false)
+  expect(host.send.mock.calls.some(([, init]) => (init?.body as string).includes('account/'))).toBe(false)
+  expect(host.send.mock.calls.some(([, init]) => (init?.body as string).includes('credentials/set'))).toBe(false)
+  expect(host.keys.size).toBe(0)
+  expect(needsWelcome(await connectDesktopWelcome(url, cookie, host.send).read())).toBe(true)
 })

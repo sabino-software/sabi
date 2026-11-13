@@ -7,11 +7,14 @@ import { desktopAccountBackend, type DesktopAccountBackend } from './account-bac
 
 /** Metadata needed before the native entry or workspace becomes visible. */
 export interface WelcomeState {
+  /** Stored platform sign-in for enabled account onboarding; disabled profiles never read the account. */
   readonly loggedIn: boolean
   /** A provider API key or a stored provider sign-in is configured; no secret values are read. */
   readonly hasApiKey: boolean
   /** A connected, authenticated native provider is selected as the profile default. */
   readonly nativeReady: boolean
+  /** False only when the profile explicitly allows entry before provider configuration. */
+  readonly requiresProviderSetup?: boolean
   readonly writable: boolean
   readonly localePreference: string | null
   /** Effective Host theme preference; absent or invalid optional theme settings use system appearance. */
@@ -49,14 +52,14 @@ function record(value: unknown): value is Record<string, unknown> {
  * @param hostUrl - URL of the running Desktop Host; only its origin is used.
  * @param cookie - Cookie header returned by `authenticateWebHost` for this Host.
  * @param send - HTTP client for Host requests.
- * @param options - Explicit native composition; ordinary profiles never query its optional service.
+ * @param options - Explicit native integration and credential-onboarding policy; missing options retain ordinary account onboarding.
  * @returns metadata reads and write-only credential operations over standard RPC.
  */
 export function connectDesktopWelcome(
   hostUrl: string,
   cookie: string,
   send: (input: string, init?: RequestInit) => Promise<Response> = fetch,
-  options: { readonly nativeConversations?: boolean } = {},
+  options: { readonly nativeConversations?: boolean; readonly credentialOnboarding?: boolean } = {},
 ): DesktopWelcomeBackend {
   const origin = new URL(hostUrl).origin
   const invoke = async (
@@ -152,7 +155,8 @@ export function connectDesktopWelcome(
     }
     const hasProviderSignIn = authorizations.some((entry: unknown) => record(entry) && entry.configured === true)
     return {
-      loggedIn: (await account.state()).status === 'credential-stored',
+      loggedIn: options.credentialOnboarding !== false && (await account.state()).status === 'credential-stored',
+      ...options.credentialOnboarding === false ? { requiresProviderSetup: false } : {},
       nativeReady: (await nativeProvider())?.ready === true,
       hasApiKey: hasProviderSignIn || Object.values(states).some(value => record(value) && value.configured === true),
       writable: ref !== undefined && record(states[ref]) && states[ref].writable === true,

@@ -42,7 +42,7 @@ export function prepareDesktopCli(destination: string, platform: 'darwin' | 'win
     const launcher = readFileSync(command, 'utf8')
     if (!launcher.includes('ELECTRON_RUN_AS_NODE=1 exec')) throw new Error('desktop CLI: macOS launcher execution marker is missing')
     const source = launcher.replace('ELECTRON_RUN_AS_NODE=1 exec',
-      `DSH_HOME="\${HOME:?}/Library/Application Support/${LOCAL_FORK.profileDirectory}/harness-home" DSH_NATIVE_CONVERSATIONS=1 DSH_DESKTOP_CLI_NAME=dsh ELECTRON_RUN_AS_NODE=1 exec`)
+      `DSH_HOME="\${HOME:?}/Library/Application Support/${LOCAL_FORK.profileDirectory}/harness-home" DSH_NATIVE_CONVERSATIONS=1 DSH_PROVIDER_NEUTRAL=1 DSH_TELEMETRY_DISABLED=1 DSH_DESKTOP_CLI_NAME=dsh ELECTRON_RUN_AS_NODE=1 exec`)
     writeFileSync(command, source, { mode: 0o755 })
     writeFileSync(join(destination, 'bin', 'sabi'), source.replace('DSH_DESKTOP_CLI_NAME=dsh', 'DSH_DESKTOP_CLI_NAME=sabi'))
     chmodSync(join(destination, 'bin', 'sabi'), 0o755)

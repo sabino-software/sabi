@@ -598,11 +598,14 @@ async function main(): Promise<void> {
           .catch((error: unknown) => { console.error('desktop: legacy Host cookie cleanup failed', error) })
         if (ready.injections === undefined) throw new Error('Desktop Host did not provide boot injections')
         injections = ready.injections
-        welcomeBackend = connectDesktopWelcome(ready.url, cookie, fetch, { nativeConversations: process.env.DSH_NATIVE_CONVERSATIONS === '1' })
+        welcomeBackend = connectDesktopWelcome(ready.url, cookie, fetch, {
+          nativeConversations: process.env.DSH_NATIVE_CONVERSATIONS === '1', credentialOnboarding: localFork === undefined,
+        })
         analyticsEnabled = await welcomeBackend.analyticsEnabled().catch(() => false)
         if (!reportedLaunch) { reportedLaunch = true; void track('desktop_app_launch', {}) }
         stopAccount?.()
         const accountBackend = welcomeBackend.account
+        if (localFork !== undefined) return
         stopAccount = accountBackend.watch((state) => {
           if (quitting) return
           if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.webContents.send(WELCOME_IPC.state, state)

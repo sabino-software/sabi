@@ -1,7 +1,7 @@
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import LlmRuntime, { LlmAdapter } from '@deepseek-ai/dsh-llm'
@@ -315,4 +315,24 @@ describe('request-level dynamic profiles', () => {
     await configurations.get(ctx)!.update({ providers: { anthropic: {}, openai: {} } })
     expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(before)
   })
+})
+
+it('offers optional DeepSeek catalog setup and removes its route without changing stored credentials', async () => {
+  const dir = await home()
+  const credentials = join(dir, '.credentials.yaml')
+  const bytes = 'version: 1\nrefs:\n  DEEPSEEK_API_KEY: fixture-key\n'
+  await writeFile(credentials, bytes, { mode: 0o600 })
+  const ctx = await boot(dir, {})
+  expect(ctx.llm.listProviders()).toEqual([])
+  expect(ctx.llm.listConfigurableProviders()).toContainEqual(expect.objectContaining({
+    provider: 'deepseek', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'deepseek'],
+  }))
+  const model = getBuiltinModels('deepseek')[0]!
+  expect(model).toBeDefined()
+  await configurations.get(ctx)!.replace({ providers: { deepseek: { apiKeyEnv: 'DEEPSEEK_API_KEY', models: [{ id: model.id }] } } })
+  expect(ctx.llm.listProviders()).toContainEqual(expect.objectContaining({ id: 'deepseek' }))
+  await configurations.get(ctx)!.replace({ providers: {} })
+  expect(ctx.llm.listProviders()).toEqual([])
+  expect(ctx.llm.listConfigurableProviders()).toContainEqual(expect.objectContaining({ provider: 'deepseek' }))
+  expect(await readFile(credentials, 'utf8')).toBe(bytes)
 })

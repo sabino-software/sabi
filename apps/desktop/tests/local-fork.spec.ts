@@ -22,6 +22,7 @@ describe('isolated local application', () => {
       const environment = { DSH_HOME: '/unrelated-profile' }
       configureLocalFork({ dshLocalFork: LOCAL_FORK }, application, environment)
       expect(application.setName).toHaveBeenCalledWith(LOCAL_FORK.productName)
+      expect(environment).toMatchObject({ DSH_PROVIDER_NEUTRAL: '1', DSH_NATIVE_CONVERSATIONS: '1', DSH_TELEMETRY_DISABLED: '1' })
       expect(application.setPath).toHaveBeenCalledWith('userData', join(root, LOCAL_FORK.profileDirectory, 'electron'))
       expect(application.setPath).toHaveBeenCalledWith('sessionData', join(root, LOCAL_FORK.profileDirectory, 'electron'))
       expect(environment.DSH_HOME).toBe(join(root, LOCAL_FORK.profileDirectory, 'harness-home'))

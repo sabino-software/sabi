@@ -139,9 +139,11 @@
     # reports an actionable error when its settings-domain provider is absent.
     - id: ui-settings-account
       name: '@deepseek-ai/dsh-client-ui-settings-account'
+      disabled: !!js process.env.DSH_PROVIDER_NEUTRAL === '1'
 
     - id: ui-account-notifications
       name: '@deepseek-ai/dsh-client-ui-account-notifications'
+      disabled: !!js process.env.DSH_PROVIDER_NEUTRAL === '1'
 
     - id: codex-library
       name: '@deepseek-ai/dsh-client-ui-codex-library'
@@ -341,6 +343,8 @@
 
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
+      config:
+        credentialOnboarding: !!js process.env.DSH_PROVIDER_NEUTRAL !== '1'
 
     # Plugin management: the sidebar Plugins page installs, enables, disables,
     # and removes the profile's bundles through the `pluginManager` Remote.

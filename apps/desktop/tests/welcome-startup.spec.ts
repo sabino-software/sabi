@@ -3,7 +3,11 @@ vi.mock('../src/web-document.ts', () => ({
 }))
 /** Welcome startup uses the Host before transitioning to the workspace. */
 
-import { afterEach, expect, it, vi } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import type { BrowserWindowConstructorOptions } from 'electron'
 import type { DesktopLocale } from '../src/locale.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
@@ -35,6 +39,7 @@ const state = vi.hoisted(() => ({
   preference: 'zh',
   themePreference: 'system',
   hasApiKey: false,
+  forkHome: '',
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
   listeners: new Map<string, (...args: unknown[]) => void>(),
   contents: undefined as { mainFrame: { url: string } } | undefined,
@@ -61,7 +66,9 @@ vi.mock('electron', () => ({
     getVersion: () => '1.0.0',
     setAboutPanelOptions: vi.fn(),
     getAppPath: () => '/development-app',
-    getPath: (name: string) => name === 'userData' ? '/desktop-user-data' : `/development-${name}`,
+    setName: vi.fn(), setPath: vi.fn(),
+    getPath: (name: string) => name === 'appData' && state.forkHome !== '' ? state.forkHome
+      : name === 'userData' ? '/desktop-user-data' : `/development-${name}`,
     setAppLogsPath: vi.fn(),
     getPreferredSystemLanguages: () => ['en-US'],
     on: (name: string, callback: (...args: unknown[]) => void) => { state.appListeners.set(name, callback) },
@@ -128,12 +135,13 @@ vi.mock('../src/host-process.ts', () => ({
   },
 }))
 vi.mock('../src/welcome-backend.ts', () => ({
-  connectDesktopWelcome: () => ({
+  connectDesktopWelcome: (_url: string, _cookie: string, _send: unknown, options?: { credentialOnboarding?: boolean }) => ({
     analyticsEnabled: async () => false,
     readLocalePreference: async () => state.preference,
     read: async () => {
       await state.beforeRead()
       return { loggedIn: false, hasApiKey: state.hasApiKey, writable: true,
+        ...options?.credentialOnboarding === false ? { requiresProviderSetup: false } : {},
         localePreference: state.preference, themePreference: state.themePreference }
     },
     save: async () => ({ ok: true }),
@@ -153,7 +161,9 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     readFileSync: (...args: Parameters<typeof actual.readFileSync>): ReturnType<typeof actual.readFileSync> => {
       if (args[0] === '/development-app/package.json' && args[1] === 'utf8') {
-        return JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '1.0.0' })
+        return JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '1.0.0',
+          ...state.forkHome === '' ? {} : { dshLocalFork: { productName: 'Skeinlet', scheme: 'skeinlet', profileDirectory: 'DeepSeek Harness Local' } },
+        })
       }
       return actual.readFileSync(...args)
     },
@@ -183,6 +193,7 @@ vi.mock('../src/welcome-window.ts', () => ({
 }))
 
 afterEach(() => {
+  state.forkHome = ''
   vi.clearAllTimers()
   vi.useRealTimers()
   vi.unstubAllEnvs()
@@ -321,4 +332,29 @@ it.each([false, true])('starts welcome onboarding without carrying update focus 
   expect(state.showWorkspace).toHaveBeenCalledOnce()
   expect(state.focusWorkspace).toHaveBeenCalledOnce()
 
+})
+
+it('cold-starts the local fork directly into workspace without a DeepSeek account or provider', async () => {
+  vi.resetModules()
+  vi.clearAllMocks()
+  state.forkHome = mkdtempSync(join(tmpdir(), 'provider-neutral-startup-'))
+  const home = state.forkHome
+  onTestFinished(() => rm(home, { recursive: true, force: true }))
+  state.hasApiKey = false
+  state.accountListener = undefined
+  state.operations = undefined
+  for (const key of ['DSH_HOME', 'DSH_NATIVE_CONVERSATIONS', 'DSH_PROVIDER_NEUTRAL', 'DSH_TELEMETRY_DISABLED']) vi.stubEnv(key, process.env[key])
+  vi.stubEnv('DSH_DESKTOP_DEV_PROJECT_DIR', '/development-profile')
+  vi.stubEnv('DSH_DESKTOP_NODE_BINARY', '/runtime/node')
+  vi.stubEnv('DSH_DESKTOP_PNPM_ENTRY', '/runtime/pnpm')
+  vi.stubEnv('DSH_DESKTOP_DSH_DIR', '/runtime/dsh')
+  vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', '/runtime/primary-runtime')
+  vi.stubEnv('DSH_DESKTOP_OPEN_DEVTOOLS', '0')
+  await import('../src/main.ts')
+  await vi.waitFor(() => expect(state.loadWorkspace).toHaveBeenCalled())
+  expect(state.beforeWelcome).not.toHaveBeenCalled()
+  expect(state.accountListener).toBeUndefined()
+  expect(state.accountState).not.toHaveBeenCalled()
+  expect(process.env.DSH_HOME).toBe(join(home, 'DeepSeek Harness Local', 'harness-home'))
+  expect(process.env.DSH_PROVIDER_NEUTRAL).toBe('1')
 })

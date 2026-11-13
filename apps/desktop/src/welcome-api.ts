@@ -78,13 +78,16 @@ export interface WelcomeAuthentication {
   readonly loggedIn: boolean
   readonly hasApiKey: boolean
   readonly nativeReady?: boolean
+  /** False for profiles that allow opening Settings before choosing a provider; missing retains credential onboarding. */
+  readonly requiresProviderSetup?: boolean
 }
 
 /**
  * Decide whether a startup or sign-out requires the welcome entry.
  * @param authentication - current account, stored provider credential, and native provider readiness facts.
- * @returns true only when no independent provider route is ready.
+ * @returns true when the profile requires credentials and no independent provider route is ready.
  */
 export function needsWelcome(authentication: WelcomeAuthentication): boolean {
-  return !authentication.loggedIn && !authentication.hasApiKey && authentication.nativeReady !== true
+  return authentication.requiresProviderSetup !== false
+    && !authentication.loggedIn && !authentication.hasApiKey && authentication.nativeReady !== true
 }

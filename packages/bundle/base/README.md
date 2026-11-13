@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 Every base-backed `dsh --profile` surface runs on `dsh-base`, so those surfaces share a model connection, the full tool set, durable session history, and workspace safety defaults. The shipped `sdk-minimal` profile deliberately uses a complete standalone tree instead. You rarely touch this bundle directly — shipped base-backed profiles already include it, and a custom base-backed profile names it first. When you need different defaults, change your profile patch or add a later bundle; this package is not a library you import.
 
+With `DSH_PROVIDER_NEUTRAL=1`, the fixed DeepSeek API-key and account model routes stay unmounted; the existing pi-ai catalog still offers optional DeepSeek configuration. See the [local Desktop policy](../../../apps/desktop/README.md#terminal-command) for profile preservation and existing-route limitations.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

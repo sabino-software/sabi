@@ -75,6 +75,8 @@ Command registration is optional after installing Desktop. Use **Manage dsh Comm
 
 The isolated local fork instead offers **Manage sabi command…**, installing only `/usr/local/bin/sabi`. Its packaged `sabi` and compatibility `dsh` launchers use the installed Skeinlet executable and the preserved `DeepSeek Harness Local/harness-home` profile, without a checkout or system Node. `sabi --help` and `sabi --version` identify the public command. Installation refuses an unrelated `sabi` file, link, or selected shell command; remove that conflict yourself before retrying. Repair and Remove affect only the recorded `sabi` link and leave existing `dsh` registrations intact.
 
+The local fork opens the workspace without a DeepSeek account or a configured provider. Its Settings button replaces the account menu, and Models offers DeepSeek through the same optional catalog setup and removal as other providers. The fork sets `DSH_PROVIDER_NEUTRAL=1` and `DSH_TELEMETRY_DISABLED=1` for the app and packaged CLI; ordinary profiles retain their existing account flow. Saved credentials, model selections and Sessions are not rewritten. Existing Sessions bound to the disabled `deepseek-official` or `deepseek-account` routes require choosing a configured provider before continuing; native Codex bindings and credentials are unchanged.
+
 <a id="closing-the-window-and-quitting"></a>
 
 ## Closing the window and quitting

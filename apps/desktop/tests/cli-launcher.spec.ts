@@ -108,7 +108,7 @@ it('rejects executable paths and shell expansions before preparing a launcher', 
 
 it.skipIf(process.platform === 'win32')('runs sabi and dsh from a foreign cwd without system Node and pins the preserved fork profile', async () => {
   const f = fixture(true)
-  writeFileSync(f.entry, 'process.stdout.write(JSON.stringify({args:process.argv.slice(2),cwd:process.cwd(),home:process.env.DSH_HOME,name:process.env.DSH_DESKTOP_CLI_NAME,native:process.env.DSH_NATIVE_CONVERSATIONS}))')
+  writeFileSync(f.entry, 'process.stdout.write(JSON.stringify({args:process.argv.slice(2),cwd:process.cwd(),home:process.env.DSH_HOME,name:process.env.DSH_DESKTOP_CLI_NAME,native:process.env.DSH_NATIVE_CONVERSATIONS,neutral:process.env.DSH_PROVIDER_NEUTRAL,telemetry:process.env.DSH_TELEMETRY_DISABLED}))')
   for (const name of ['sabi', 'dsh']) {
     const command = join(f.root, name)
     symlinkSync(join(f.cli, 'bin', name), command)
@@ -117,7 +117,7 @@ it.skipIf(process.platform === 'win32')('runs sabi and dsh from a foreign cwd wi
     run.child.stdin.end()
     expect(await run.closed, run.stderr()).toBe(0)
     expect(JSON.parse(run.stdout())).toEqual({ args, cwd: f.root,
-      home: join(f.root, 'User home', 'Library', 'Application Support', LOCAL_FORK.profileDirectory, 'harness-home'), name, native: '1' })
+      home: join(f.root, 'User home', 'Library', 'Application Support', LOCAL_FORK.profileDirectory, 'harness-home'), name, native: '1', neutral: '1', telemetry: '1' })
   }
 })
 
