@@ -107,6 +107,7 @@ it('reads every original message across chronological bounded pages without a to
   }
   let messages = [...readAxiomPage().messages]
   expect(messages).toHaveLength(100)
+  expect(readAxiomPage().sourceOrder).toHaveLength(100)
   const pageUrl = location.href.replace(/\/$/u, '')
   for (let count = 0; count < 2; count++) {
     const older = readAxiomHistoryPage(readAxiomPage, pageUrl, messages[0]!.id, false)
@@ -183,4 +184,52 @@ it('excludes temporary website rows from older pages and original history cursor
   user.setAttribute('data-message-id', committedId)
   expect(readAxiomHistoryPage(readAxiomPage, url, 'original/assistant~2', false).messages.map(message => message.id))
     .toEqual([committedId])
+})
+
+
+it('retains exact bounded source row order before temporarily missing bodies are skipped', () => {
+  document.body.innerHTML = '<section class="messages-scroll"><div class="message-list"></div></section>'
+  const list = document.querySelector('.message-list')!
+  for (const id of ['a', 'b', 'c', 'd']) {
+    const row = document.createElement('article')
+    row.className = 'message-row'
+    row.dataset.messageId = id
+    row.innerHTML = '<div class="message-body"><div class="message-surface"><div class="message-bubble"><div class="message-text"></div></div></div></div>'
+    row.querySelector('.message-text')!.textContent = id
+    list.append(row)
+  }
+  const b = list.querySelector('[data-message-id="b"] .message-body')!
+  const c = list.querySelector('[data-message-id="c"] .message-body')!
+  b.remove(); c.remove()
+  expect(readAxiomPage().messages.map(message => message.id)).toEqual(['a', 'd'])
+  expect(readAxiomPage().sourceOrder).toEqual(['a', 'b', 'c', 'd'])
+  list.querySelector('[data-message-id="b"]')!.append(b)
+  list.querySelector('[data-message-id="c"]')!.append(c)
+  list.querySelector('[data-message-id="d"] .message-body')!.remove()
+  expect(readAxiomPage().messages.map(message => message.id)).toEqual(['a', 'b', 'c'])
+  expect(readAxiomPage().sourceOrder).toEqual(['a', 'b', 'c', 'd'])
+  const earlier = readAxiomHistoryPage(readAxiomPage, location.href.replace(/\/$/u, ''), 'd', false)
+  expect(earlier.sourceOrder).toEqual(['a', 'b', 'c'])
+})
+
+
+it('collects only explicitly requested structural history diagnostics without exposing message data', () => {
+  fixture()
+  const scroller = document.createElement('section')
+  scroller.className = 'messages-scroll'
+  const list = document.createElement('div')
+  list.className = 'message-list'
+  list.append(...document.querySelectorAll('article.message-row'))
+  scroller.append(list)
+  document.body.prepend(scroller)
+  scroller.scrollTop = 7
+  Object.defineProperty(scroller, 'clientHeight', { value: 100 })
+  Object.defineProperty(scroller, 'scrollHeight', { value: 1000 })
+  const url = location.href.replace(/\/$/u, '')
+  expect(readAxiomHistoryPage(readAxiomPage, url, 'original/assistant~2', false).diagnostics).toBeUndefined()
+  const measured = readAxiomHistoryPage(readAxiomPage, url, 'original/assistant~2', true, true)
+  expect(measured.diagnostics).toMatchObject({ scrollerPresent: true, listPresent: true, rowCount: 2, bodyCount: 2,
+    scrollTop: 7, scrollTopAfter: 0, clientHeight: 100, scrollHeight: 1000, cursorPresent: true })
+  expect(measured.diagnostics?.visibility).toBe(document.visibilityState)
+  expect(JSON.stringify(measured.diagnostics)).not.toMatch(/https:|Exact user|original\//)
 })

@@ -79,3 +79,15 @@ it('bounds an unacknowledged request and prevents later mutations from overtakin
   await expect(source.transport.acquire()).rejects.toThrow('bridge is unavailable')
   expect(source.messages.some(message => 'type' in message && message.type === 'axiom-cancel')).toBe(true)
 })
+
+
+it('admits bounded optional source row order without requiring it from older desktop responses', async () => {
+  const source = fixture()
+  const pending = source.transport.snapshot()
+  const sourceOrder = ['source-a', 'missing-body', 'source-d']
+  source.reply(id(source.messages[0]!), { ...snapshot, sourceOrder })
+  expect((await pending).sourceOrder).toEqual(sourceOrder)
+  const invalid = source.transport.snapshot()
+  source.reply(id(source.messages[1]!), { ...snapshot, sourceOrder: Array.from({ length: 101 }, (_, index) => `id-${index}`) })
+  await expect(invalid).rejects.toThrow()
+})

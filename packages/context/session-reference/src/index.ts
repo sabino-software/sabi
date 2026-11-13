@@ -12,6 +12,7 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { createUserMessage, freezeMessage, LlmError } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, LlmCallConfig, LlmResolvedModelInfo, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import { sessionPresentation } from '@deepseek-ai/dsh-workspace'
 // Type-only: the `title` projection key plus the live registry and durable
 // cache Context merges — the two projection faces discovery labels from.
 import type { ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
@@ -172,7 +173,7 @@ export class SessionReferenceResolver extends TypertRemoteService {
   }
 
   /**
-   * List reference candidates, ranked by working-directory affinity.
+   * List visible reference candidates, ranked by working-directory affinity.
    *
    * Discovery runs at keystroke rate, so titles and subagent labels only ever
    * come from projection reads; sessions without either fall back to their id.
@@ -197,7 +198,10 @@ export class SessionReferenceResolver extends TypertRemoteService {
     const records = (await settleWithCancellation(this.ctx.sessionQuery.listSessions(signal), signal))
       .filter(record => record.header.id !== agent.id)
       .map((record, index) => ({ record, index }))
-    const labelled = this.projectedLabels(records)
+    const presentations = await settleWithCancellation(
+      Promise.all(records.map(({ record }) => sessionPresentation(this.ctx, record.header.id, signal))), signal,
+    )
+    const labelled = this.projectedLabels(records.filter((_, index) => presentations[index]?.visibility === 'visible'))
     return labelled.filter(({ record, label, displayTitle }) => {
       if (needle === '') return true
       return record.header.id.toLocaleLowerCase().includes(needle)
@@ -296,6 +300,7 @@ export class SessionReferenceResolver extends TypertRemoteService {
 
   /**
    * Snapshot all references for one accepted direct message and return one aggregated durable context.
+   * Hidden sources reject the entire reference set before any source content is read.
    * Automatic budgets use the context capacity of `route`.
    * Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation.
    * Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice.
@@ -318,7 +323,13 @@ export class SessionReferenceResolver extends TypertRemoteService {
     const inputs = normalizeReferences(agent.id, references, this.config.maxReferences)
     if (inputs.length === 0) return { content: acceptedContent }
     assertNotCancelled(signal)
-    const maxReferenceBytes = await this.referenceBudget(route, signal)
+    const [maxReferenceBytes, presentations] = await settleWithCancellation(Promise.all([
+      this.referenceBudget(route, signal),
+      Promise.all(inputs.map(input => sessionPresentation(this.ctx, input.sessionId, signal))),
+    ]), signal)
+    if (presentations.some(presentation => presentation.visibility === 'hidden')) {
+      throw new SessionReferenceError('referenced session is unavailable', 'SESSION_REFERENCE_INVALID_REFERENCE')
+    }
     assertNotCancelled(signal)
     let prepared: PreparedSource[]
     try {

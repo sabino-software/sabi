@@ -8,7 +8,7 @@ English | [中文](plan.zh.md)
 
 ## Scope
 
-Sabi is the independently branded macOS workspace and `sabi` CLI backed by the existing Harness engine, with release repository target `sabino-software/sabi`. The next packaged version is `0.3.0-beta.1`. Preserve existing workspaces, local Sessions, the stored work Codex grant, and the Electron/Harness profile at `~/Library/Application Support/DeepSeek Harness Local`. Work Codex remains under `~/.codex`; personal Codex and the `dsh` command stay separate. Preserve the MIT DeepSeek copyright and third-party notices. A name does not establish trademark clearance.
+Sabi is the independently branded macOS workspace and `sabi` CLI backed by the existing Harness engine, with release repository target `sabino-software/sabi`. The fork build version is `0.3.0-beta.1`. Preserve existing workspaces, local Sessions, the stored work Codex grant, and the Electron/Harness profile at `~/Library/Application Support/DeepSeek Harness Local`. Work Codex remains under `~/.codex`; personal Codex and the `dsh` command stay separate. Preserve the MIT DeepSeek copyright and third-party notices. A name does not establish trademark clearance.
 
 DeepSeek is an optional provider configured through Add provider with its API key. No DeepSeek account is required for the workspace, General Settings, work Codex, or original ChatGPT Dot access. Providers and the ChatGPT website retain their own authentication requirements.
 
@@ -24,9 +24,9 @@ All five fork reporting plugins are disabled and unmounted by default. Preserve 
 
 ## Verified core boundary
 
-Installed-candidate checks exercised persistent in-app ChatGPT authentication, one native Dot send and its observed reply under the original source identity, and native interaction with the source page hidden. Reload recovered the signed-in page; Close destroyed it, background observation did not reopen it, and explicit Dot selection reconnected without another login. Both sidebar flags, placement, and style persistence were exercised. These results require no browser extension.
+Earlier installed-candidate checks exercised persistent in-app ChatGPT authentication, one native Dot send and its observed reply under the original source identity, and native interaction with the source page hidden. Reload recovered the signed-in page; Close destroyed it, background observation did not reopen it, and explicit Dot selection reconnected without another login. Both sidebar flags, placement, and style persistence were exercised. These results require no browser extension.
 
-Work Codex checks continued the same original thread through a completed Harness bash call, reopened native history after a cold restart, retained the selected work provider, and preserved the legacy credential hash. Runtime inventory showed all five reporters disabled and unmounted. The `sabi` CLI ran through bundled Electron outside a checkout, from a path containing spaces, without system Node. These are local core and CLI observations, not acceptance of the forthcoming Sabi-branded package or a hosted CI result.
+Work Codex checks continued the same original thread through a completed Harness bash call, reopened native history after a cold restart, retained the selected work provider, and preserved the legacy credential hash. Runtime inventory showed all five reporters disabled and unmounted. The `sabi` CLI ran through bundled Electron outside a checkout, from a path containing spaces, without system Node. Installed package 22 verified a native Dot send and original Codex continuation. Final-source artifact and older-history acceptance remain pending. These local observations do not establish a hosted CI result; the artifact workflow is configured but awaits an actual run.
 
 ## Release verification procedure
 

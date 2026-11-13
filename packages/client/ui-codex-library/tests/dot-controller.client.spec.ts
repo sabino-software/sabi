@@ -238,3 +238,21 @@ it.each(['none', 'before-preferences', 'after-preferences'] as const)(
     f.controller.dispose()
   },
 )
+
+
+it('uses authoritative source row order across sparse live observations and older history pages', async () => {
+  const f = fixture()
+  await f.controller.open()
+  const order = ['a', 'b', 'c', 'd']
+  f.publish({ ...snapshot, revision: 2, messages: [message('a'), message('d')], sourceOrder: order })
+  f.publish({ ...snapshot, revision: 3, messages: [message('a'), message('b'), message('c')], sourceOrder: order })
+  // Earlier observed fixture messages remain older than this disjoint source window.
+  expect(f.controller.store.getSnapshot().messages.slice(-4).map(value => value.id)).toEqual(order)
+  vi.mocked(f.companion.historyBefore).mockResolvedValue({ messages: [message('older')],
+    sourceOrder: ['older', 'u1'], hasMore: true, status: 'ready' })
+  await f.controller.loadOlder()
+  f.publish({ ...snapshot, revision: 4, messages: [message('d', 'assistant', 'streamed')], sourceOrder: order })
+  expect(f.controller.store.getSnapshot().messages.map(value => value.id)).toEqual(['older', 'u1', 'a1', ...order])
+  expect(f.controller.store.getSnapshot().messages.at(-1)?.text).toBe('streamed')
+  f.controller.dispose()
+})

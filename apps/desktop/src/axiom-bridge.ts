@@ -12,6 +12,7 @@ export { axiomConversationUrl } from './axiom-navigation.ts'
 
 const pageSchema = z.object({
   url: z.string().max(4096), title: z.string().max(300),
+  sourceOrder: z.array(z.string().min(1).max(512)).max(100).optional(),
   messages: z.array(z.object({ id: z.string().max(512), role: z.enum(['user', 'assistant']),
     text: z.string().max(32768), timestamp: z.string().max(100).nullable(), truncated: z.boolean() })).max(100),
   composer: z.boolean(), draft: z.string().max(131073), sendPresent: z.boolean(), sendEnabled: z.boolean(),
@@ -297,7 +298,8 @@ export class DesktopAxiomPage {
       const state = pageSchema.parse(await this.observePage(page, generation, documentEpoch,
         `location.href.replace(/\\/$/, '') === ${JSON.stringify(selected)} ? (${readAxiomPage.toString()})(${JSON.stringify(beforeId)}) : null`, 'history'))
       if (!valid() || !this.matches(state.url)) return unavailable
-      if (state.messages.length > 0) return { messages: state.messages, hasMore: true, status: 'ready' }
+      if (state.messages.length > 0) return { messages: state.messages,
+        ...state.sourceOrder === undefined ? {} : { sourceOrder: state.sourceOrder }, hasMore: true, status: 'ready' }
       // No older bodies are currently loaded. Only the separately owned page may scroll for more.
       return await this.history.before(selected, beforeId)
     } catch (_unavailableHistory: unknown) { return unavailable }
@@ -458,7 +460,7 @@ export class DesktopAxiomPage {
         || !this.matches(state.url) || !this.matches(this.contents(page).getURL())) return this.current
       this.update({ source: 'chatgpt-web', url: this.selected, title: state.title, revision: this.current.revision,
         phase: state.composer ? 'ready' : this.contents(page).isLoading() || Date.now() < this.readyUntil ? 'loading' : 'unavailable',
-        messages: state.messages, canSend: state.composer && state.sendPresent, draftPresent: state.draft.trim() !== '',
+        messages: state.messages, ...state.sourceOrder === undefined ? {} : { sourceOrder: state.sourceOrder }, canSend: state.composer && state.sendPresent, draftPresent: state.draft.trim() !== '',
         siteStatus: state.siteStatus, limited: state.limited })
       this.finishChoice(this.current)
     } catch (_unsupportedPage) {

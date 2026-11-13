@@ -59,24 +59,19 @@ export function apply(ctx: Context): void {
     setDotPreferences: async (preferences) => { await dot?.setPreferences(preferences) },
   })
   const unavailableDot = createSnapshotStore(emptyDotState)
+  ctx.effect(() => ctx.uiWorkspace.registerSessionOpenInterceptor((target, signal) => {
+    const sessionId = typeof target === 'string' ? target : target.childSessionId
+    const summary = ctx.sessions.list.getSnapshot().byId[sessionId]
+    if (summary !== undefined && summary.projectionValues?.nativeConversation?.source !== 'axiom') return false
+    return ctx.remote.session.presentation({ sessionId }, signal).then((response) => {
+      const presentation = valueOf(response)
+      if (signal.aborted) return true
+      if (presentation.visibility === 'visible') return false
+      // Consume legacy links without selecting Dot; only its top button opens that view.
+      return true
+    })
+  }), 'native-conversations.legacy-dot-route')
   if (dot !== undefined) {
-    ctx.effect(() => ctx.uiWorkspace.registerSessionOpenInterceptor((target, signal) => {
-      const sessionId = typeof target === 'string' ? target : target.childSessionId
-      const summary = ctx.sessions.list.getSnapshot().byId[sessionId]
-      if (summary !== undefined && summary.projectionValues?.nativeConversation?.source !== 'axiom') return false
-      return ctx.remote.session.presentation({ sessionId }, signal).then((response) => {
-        const presentation = valueOf(response)
-        if (signal.aborted) return true
-        if (presentation.visibility === 'visible') return false
-        // Hidden logs are never opened as regular Sessions, even if their view is unavailable.
-        if (presentation.route?.view === 'dot') {
-          ctx.layout.selectPanel(dotPanel)
-          void dot.open(presentation.route.params.url)
-          return true
-        }
-        throw new Error(t('dotLegacyUnavailable'))
-      })
-    }), 'native-conversations.legacy-dot-route')
     ctx.slots.inject('sidebar.primary.action', () => ctx.slots.register({
       name: 'sidebar.primary.action', id: 'dot', locale: 'codexLibrary',
       inject: () => ({ ...dotInjected(), chooseDot: async () => {

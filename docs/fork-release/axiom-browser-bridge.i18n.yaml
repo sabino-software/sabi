@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/fork-release/axiom-browser-bridge.md
 /original-chatgpt-browser-bridge:
-  en: f3b7c37a9f44fce1
-  zh: 5f36b05e10e96211
+  en: 3e4ff77755d74354
+  zh: 1ceaf948d0c73913
 /original-chatgpt-browser-bridge/review-the-prepared-artifacts:
-  en: 44c0381f6871220a
-  zh: 0ec0f0452e5b414e
+  en: 4527cbd5a41573c1
+  zh: cdd29ab8fbf2a92a
 /original-chatgpt-browser-bridge/explicit-local-setup:
-  en: e2d2e82ddcc6691e
-  zh: ab65846da2e9c7a1
+  en: 10dad71db84f649c
+  zh: 0d682da4f95125f4
 /original-chatgpt-browser-bridge/data-and-input-limits:
   en: cf63fe02367ff8ee
   zh: f5ab1ec1b00dd513

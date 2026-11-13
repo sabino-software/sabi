@@ -17,6 +17,8 @@ export interface AxiomSnapshot {
   readonly revision: number
   readonly phase: 'disconnected' | 'loading' | 'login-required' | 'ready' | 'unavailable'
   readonly messages: readonly AxiomMessage[]
+  /** Ordered original row IDs in this bounded window, including rows whose bodies are temporarily absent. */
+  readonly sourceOrder?: readonly string[]
   /** The original page has an editable composer and Send control; final admission stays with that control. */
   readonly canSend: boolean
   readonly draftPresent: boolean
@@ -32,6 +34,8 @@ export interface AxiomSelection { readonly url: string; readonly title: string }
 /** One bounded earlier page in chronological source order; unknown boundaries stay retryable. */
 export interface AxiomHistoryPage {
   readonly messages: readonly AxiomMessage[]
+  /** Ordered original row IDs in this bounded window, including rows whose bodies are temporarily absent. */
+  readonly sourceOrder?: readonly string[]
   readonly hasMore: boolean
   readonly status: 'ready' | 'unavailable'
 }

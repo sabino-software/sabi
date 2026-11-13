@@ -42,6 +42,8 @@ export interface DotSnapshot {
   readonly revision: number
   readonly phase: 'disconnected' | 'loading' | 'login-required' | 'ready' | 'unavailable'
   readonly messages: readonly DotMessage[]
+  /** Original row order before temporary body omissions, bounded to this source window. */
+  readonly sourceOrder?: readonly string[]
   readonly canSend: boolean
   readonly draftPresent: boolean
   readonly siteStatus: string | null
@@ -62,6 +64,8 @@ export interface DotSendResult {
 /** Older source page in chronological order; unavailable never means history exhaustion. */
 export interface DotHistoryPage {
   readonly messages: readonly DotMessage[]
+  /** Original row order before temporary body omissions, bounded to this source window. */
+  readonly sourceOrder?: readonly string[]
   readonly hasMore: boolean
   readonly status: 'ready' | 'unavailable'
 }
@@ -95,13 +99,19 @@ const identitySchema = z.object({ url: z.string().max(4096), title: z.string().m
 const snapshotSchema = z.object({ source: z.literal('chatgpt-web'), url: z.string().max(4096).nullable(),
   title: z.string().max(300), revision: z.number().int().nonnegative(),
   phase: z.enum(['disconnected', 'loading', 'login-required', 'ready', 'unavailable']),
+  sourceOrder: z.array(z.string().min(1).max(512)).max(100).optional(),
   messages: z.array(messageSchema).max(100), canSend: z.boolean(), draftPresent: z.boolean(),
   siteStatus: z.string().max(2000).nullable(), limited: z.boolean(), errorCode: z.enum(['page-unavailable', 'unsupported-page']).optional(),
-})
+}).transform(({ errorCode, sourceOrder, ...snapshot }): DotSnapshot => ({ ...snapshot,
+  ...sourceOrder === undefined ? {} : { sourceOrder }, ...errorCode === undefined ? {} : { errorCode },
+}))
 const sendSchema = z.object({ status: z.enum(['confirmed', 'unknown', 'refused']), snapshot: snapshotSchema,
   messageId: z.string().max(512).optional(),
 })
-const historySchema = z.object({ messages: z.array(messageSchema), hasMore: z.boolean(), status: z.enum(['ready', 'unavailable']) })
+const historySchema = z.object({ messages: z.array(messageSchema).max(100),
+  sourceOrder: z.array(z.string().min(1).max(512)).max(100).optional(),
+  hasMore: z.boolean(), status: z.enum(['ready', 'unavailable']),
+}).transform(({ sourceOrder, ...page }): DotHistoryPage => ({ ...page, ...sourceOrder === undefined ? {} : { sourceOrder } }))
 
 const modeSchema = z.enum(['browser', 'embedded'])
 const path = z.string().max(4096)

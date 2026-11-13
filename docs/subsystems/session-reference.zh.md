@@ -180,7 +180,7 @@ Exact-read consumer that prepares immutable cross-session message context.
 
 ```ts cordis-catalog
 /**
- * List reference candidates, ranked by working-directory affinity.
+ * List visible reference candidates, ranked by working-directory affinity.
  *
  * Discovery runs at keystroke rate, so titles and subagent labels only ever
  * come from projection reads; sessions without either fall back to their id.
@@ -205,6 +205,7 @@ async listCandidates( agent: Agent, query: string = '', limit: number = this.con
 
 /**
  * Snapshot all references for one accepted direct message and return one aggregated durable context.
+ * Hidden sources reject the entire reference set before any source content is read.
  * Automatic budgets use the context capacity of `route`.
  * Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation.
  * Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice.

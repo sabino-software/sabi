@@ -2,11 +2,11 @@
 
 [English](axiom-browser-bridge.md) | 中文
 
-可选的 Skeinlet 扩展连接用户常用 Edge 或 Chrome 配置中的一个指定 ChatGPT Dot。Google 和 ChatGPT 登录始终由该浏览器管理。内嵌 Google 登录导航已修复，但实际完成 SSO 尚未验收；浏览器扩展的实际原始 Dot 发送也仍待验收。仅在尚无设置时默认使用内嵌登录。明确选择浏览器或内嵌方式后，选择会保存到现有应用配置中，在更新或重启后保留；标签页配对仍仅限当前运行。扩展读取已渲染消息并使用网站原有输入框，不读取 Cookie、浏览器存储、登录页面、隐藏历史或网络响应。
+可选的 Sabi 扩展连接用户常用 Edge 或 Chrome 配置中的一个指定 ChatGPT Dot。Google 和 ChatGPT 登录始终由该浏览器管理。安装核心版检查已确认应用内 ChatGPT 认证；已安装的第 22 次打包产物验证了原生 Dot 发送。常规浏览器扩展对实际原始 Dot 的输入仍待实时验收。仅在尚无设置时默认使用内嵌登录。明确选择浏览器或内嵌方式后，选择会保存到现有应用配置中，在更新或重启后保留；标签页配对仍仅限当前运行。扩展读取已渲染消息并使用网站原有输入框，不读取 Cookie、浏览器存储、登录页面、隐藏历史或网络响应。
 
 ## 检查准备好的文件
 
-本地 macOS 分支打包将文件放在 Skeinlet.app 内的 `Contents/Resources/runtime/axiom-browser/`。`extension/` 是未打包的 Manifest V3 扩展；`native-host.sh` 使用已安装应用自带的 Node 运行时，无需源码或系统 Node。`registration.mjs` 仅输出原生消息主机配置，不会安装它。桌面预加载接口 `axiom.browserSetup()` 返回文件路径、可用性、扩展 ID 和权限，供设置界面预览。
+本地 macOS 分支打包将文件放在 Sabi.app 内的 `Contents/Resources/runtime/axiom-browser/`。`extension/` 是未打包的 Manifest V3 扩展；`native-host.sh` 使用已安装应用自带的 Node 运行时，无需源码或系统 Node。`registration.mjs` 仅输出原生消息主机配置，不会安装它。桌面预加载接口 `axiom.browserSetup()` 返回文件路径、可用性、扩展 ID 和权限，供设置界面预览。
 
 固定扩展 ID 为 `kbmcpehehgohghdkbamffnepndemabkd`，公钥位于 `extension/manifest.json`。权限仅为 `activeTab`、`scripting` 和 `nativeMessaging`，不申请 Cookie、调试器、网络拦截、剪贴板或广泛网站权限。通信和临时标签页访问采用 [Chrome 原生消息 API](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging) 与 [activeTab API](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab)。
 
@@ -18,15 +18,15 @@
 2. 针对实际应用安装位置生成并检查原生主机配置。例如，应用位于 `~/Applications` 时运行以下命令；先将输出保存到审核文件，不要直接安装。
 
 ```sh
-"$HOME/Applications/Skeinlet.app/Contents/Resources/runtime/primary-runtime/dependencies/node/bin/node" \
-  "$HOME/Applications/Skeinlet.app/Contents/Resources/runtime/axiom-browser/registration.mjs" \
-  --app "$HOME/Applications/Skeinlet.app"
+"$HOME/Applications/Sabi.app/Contents/Resources/runtime/primary-runtime/dependencies/node/bin/node" \
+  "$HOME/Applications/Sabi.app/Contents/Resources/runtime/axiom-browser/registration.mjs" \
+  --app "$HOME/Applications/Sabi.app"
 ```
 
 3. 检查后，将 JSON 以 `dev.sabino.skeinlet.axiom.json` 文件名安装到目标浏览器的用户级 `NativeMessagingHosts` 目录。Chrome 文档给出的目录为 `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`；Edge 使用对应的 Microsoft Edge 目录。配置只允许固定扩展来源，并指向该应用的辅助程序。移动应用后需重新生成配置。没有自动安装器。
-4. 在 Skeinlet 中选择浏览器连接方式并连接准确的 Dot 网址。在常用浏览器中正常登录并打开同一个 Dot，点击扩展工具栏按钮，再确认明确显示该 Dot 的原生提示。保留标签页，仅其主文档获得配对。
+4. 在 Sabi 中选择浏览器连接模式，并使用顶部专用 Dot 按钮选择原始对话。在目标常规浏览器配置中正常登录并打开同一 Dot。点击扩展工具栏按钮，批准标明所选 Dot 的原生提示。保持标签页打开；仅此标签页的主文档会配对。
 
-现有“打开 ChatGPT”操作仅在已配对标签页仍显示指定 Dot 时聚焦该标签页。若已跳转到其他页面，操作会明确失败，不会聚焦无关页面；请在浏览器中手动完成登录并返回指定 Dot。配对前只会在默认浏览器中打开指定的规范 Dot 网址。重新加载或跨来源登录后，需再次点击扩展，为新文档授权并配对。断开 Skeinlet 不会关闭标签页或退出网站登录。
+现有“打开 ChatGPT”操作仅在已配对标签页仍显示指定 Dot 时聚焦该标签页。若已跳转到其他页面，操作会明确失败，不会聚焦无关页面；请在浏览器中手动完成登录并返回指定 Dot。配对前只会在默认浏览器中打开指定的规范 Dot 网址。重新加载或跨来源登录后，需再次点击扩展，为新文档授权并配对。断开 Sabi 不会关闭标签页或退出网站登录。
 
 ## 数据和输入限制
 

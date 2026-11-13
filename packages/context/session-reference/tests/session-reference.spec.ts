@@ -346,6 +346,7 @@ describe('session reference spill outcomes', () => {
       const target = ctx.sessions.create(SessionId('target'))
       const source = ctx.sessions.create(SessionId('source'))
       for (const text of texts) appendText(source, text)
+      await ctx.sessionTitle.refresh(source)
       const captured = source.snapshotEvents().at(-1)?.seq
       const read = vi.spyOn(ctx.sessionQuery, 'readSurface')
       const store = ctx.spillStore as RecordingSpill
@@ -411,6 +412,7 @@ describe('session reference spill outcomes', () => {
       const target = ctx.sessions.create(SessionId('target'))
       const source = ctx.sessions.create(SessionId('source'))
       appendConversation(source)
+      await ctx.sessionTitle.refresh(source)
       const capturedThroughSeq = source.seq - 1
       const read = vi.spyOn(ctx.sessionQuery, 'readSurface')
       const save = vi.spyOn(ctx.spillStore, 'saveText').mockImplementation(async (input) => {
@@ -637,6 +639,51 @@ describe('model-relative reference budgets', () => {
 })
 
 describe('session reference discovery and preparation', () => {
+  it('omits hidden candidates before applying the result limit and refuses their content reads', async () => {
+    const ctx = await harness()
+    const target = ctx.sessions.create(SessionId('target'))
+    const hidden = ctx.sessions.create(SessionId('legacy-dot'), { meta: { createdAt: 20 } })
+    const visible = ctx.sessions.create(SessionId('ordinary'), { meta: { createdAt: 10 } })
+    ctx.on('workspace/session-presentation', id => id === hidden.id
+      ? { visibility: 'hidden', route: { view: 'dot', params: { url: 'https://chatgpt.com/dots/original' } } }
+      : undefined)
+    const read = vi.spyOn(ctx.sessionQuery, 'readSurface')
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '', 1))
+      .resolves.toEqual([expect.objectContaining({ sessionId: visible.id })])
+    await expect(ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), 'legacy-dot')).resolves.toEqual([])
+    await expect(ctx.sessionReferenceResolver.prepare(fakeAgent(target), [], [
+      { sessionId: visible.id }, { sessionId: hidden.id },
+    ], { provider: 'seed', model: 'seed' })).rejects.toThrow(expectCode('SESSION_REFERENCE_INVALID_REFERENCE'))
+    expect(read).not.toHaveBeenCalled()
+    expect(ctx.sessions.get(hidden.id)).toBe(hidden)
+  })
+
+  it('cancels discovery and preparation while presentation metadata is pending without reading content', async () => {
+    const ctx = await harness()
+    const target = ctx.sessions.create(SessionId('target'))
+    const source = ctx.sessions.create(SessionId('source'))
+    let release: (() => void) | undefined
+    ctx.on('workspace/session-presentation', async () => {
+      await new Promise<void>((resolve) => { release = resolve })
+      return { visibility: 'hidden' }
+    })
+    const read = vi.spyOn(ctx.sessionQuery, 'readSurface')
+    for (const discover of [true, false]) {
+      release = undefined
+      const abort = new AbortController()
+      const pending = discover
+        ? ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '', 1, abort.signal)
+        : ctx.sessionReferenceResolver.prepare(fakeAgent(target), [], [{ sessionId: source.id }],
+          { provider: 'seed', model: 'seed' }, abort.signal)
+      await vi.waitFor(() => { expect(release).toBeTypeOf('function') })
+      const cancelled = expect(pending).rejects.toThrow(expectCode('SESSION_REFERENCE_CANCELLED'))
+      abort.abort('reference dismissed')
+      await cancelled
+      release?.()
+    }
+    expect(read).not.toHaveBeenCalled()
+  })
+
   it('matches candidate metadata and titles before ranking by cwd', async () => {
     const ctx = await harness()
     const target = ctx.sessions.create(SessionId('target'), { meta: { cwd: '/same', createdAt: 10 } })
@@ -945,6 +992,8 @@ describe('session reference discovery and preparation', () => {
     const target = ctx.sessions.create(SessionId('target'), { meta: { cwd: '/target' } })
     const source = ctx.sessions.create(SessionId('source'), { meta: { cwd: '/source' } })
     appendConversation(source)
+    await ctx.sessionTitle.refresh(source)
+    const capturedThroughSeq = source.seq - 1
 
     const prepared = await ctx.sessionReferenceResolver.prepare(
       fakeAgent(target),
@@ -960,7 +1009,7 @@ describe('session reference discovery and preparation', () => {
       sessionId: 'source',
       label: 'source',
       cwd: '/source',
-      capturedThroughSeq: 14,
+      capturedThroughSeq,
       conversation: [
         { role: 'user', text: '<compacted-summary>checkpoint</compacted-summary>' },
         { role: 'user', text: 'recent user' },
@@ -974,7 +1023,7 @@ describe('session reference discovery and preparation', () => {
       references: [{
         sessionId: 'source',
         label: 'source',
-        capturedThroughSeq: 14,
+        capturedThroughSeq,
         compacted: true,
         truncated: false,
       }],

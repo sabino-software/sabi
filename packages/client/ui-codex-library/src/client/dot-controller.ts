@@ -65,7 +65,7 @@ export function createDotController(companion: DesktopAxiomCompanion): DotContro
       || snapshot.url !== null && state.selection !== null && !same) generation++
     const selection = snapshot.url === null ? state.selection : { url: snapshot.url, title: snapshot.title || state.selection?.title || '' }
     update({ snapshot, selection,
-      messages: snapshot.url === null ? state.messages : mergeDotMessages(same ? state.messages : [], snapshot.messages, 'live'),
+      messages: snapshot.url === null ? state.messages : mergeDotMessages(same ? state.messages : [], snapshot.messages, 'live', snapshot.sourceOrder),
       ...snapshot.phase === 'disconnected' ? { sending: false,
         sendOutcome: state.sending ? 'unknown' : state.sendOutcome,
         history: state.history === 'loading' ? 'unavailable' : state.history } : {},
@@ -140,7 +140,7 @@ export function createDotController(companion: DesktopAxiomCompanion): DotContro
       try {
         const page = await companion.historyBefore(first.id)
         if (!currentAttempt(attempt, selected)) return
-        const messages = mergeDotMessages(store.getSnapshot().messages, page.messages, 'older')
+        const messages = mergeDotMessages(store.getSnapshot().messages, page.messages, 'older', page.sourceOrder)
         const status = page.status === 'ready' && page.hasMore && messages[0]?.id === first.id ? 'unavailable' : page.status
         update({ messages, history: status, hasMore: status === 'unavailable' ? true : page.hasMore })
       } catch (_historyFailed: unknown) {

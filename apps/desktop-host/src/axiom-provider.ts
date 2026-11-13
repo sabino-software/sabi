@@ -7,11 +7,14 @@ import type { AxiomSendRequest, AxiomSendResult, AxiomSnapshot, AxiomTransport }
 const snapshotSchema = z.object({
   source: z.literal('chatgpt-web'), url: z.string().max(4096).nullable(), title: z.string().max(300),
   revision: z.number().int().nonnegative(), phase: z.enum(['disconnected', 'loading', 'login-required', 'ready', 'unavailable']),
+  sourceOrder: z.array(z.string().min(1).max(512)).max(100).optional(),
   messages: z.array(z.object({ id: z.string().max(512), role: z.enum(['user', 'assistant']), text: z.string().max(32768),
     timestamp: z.string().max(100).nullable(), truncated: z.boolean() }).strict()).max(100),
   canSend: z.boolean(), draftPresent: z.boolean(), siteStatus: z.string().max(500).nullable(), limited: z.boolean(),
   errorCode: z.enum(['page-unavailable', 'unsupported-page']).optional(),
-}).strict().transform(({ errorCode, ...snapshot }): AxiomSnapshot => errorCode === undefined ? snapshot : { ...snapshot, errorCode })
+}).strict().transform(({ errorCode, sourceOrder, ...snapshot }): AxiomSnapshot => ({ ...snapshot,
+  ...sourceOrder === undefined ? {} : { sourceOrder }, ...errorCode === undefined ? {} : { errorCode },
+}))
 const sentSchema = z.object({
   status: z.enum(['confirmed', 'unknown', 'refused']), snapshot: snapshotSchema, messageId: z.string().max(512).optional(),
 }).strict().transform(({ messageId, ...result }): AxiomSendResult => messageId === undefined ? result : { ...result, messageId })

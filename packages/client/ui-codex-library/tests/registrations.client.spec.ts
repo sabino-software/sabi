@@ -5,6 +5,9 @@ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { ConversationEventRegistry } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply, inject } from '../src/client/index.ts'
+import * as desktop from '../src/client/desktop-axiom.ts'
+import type { UiWorkspace } from '@deepseek-ai/dsh-client-ui-workspace/client'
+type SessionOpenInterceptor = Parameters<UiWorkspace['registerSessionOpenInterceptor']>[0]
 import { en, type CodexLibraryKey } from '../src/client/locales.ts'
 
 /** Preserve the real UiConversation service's caller-context tracing for nested registries. */
@@ -40,7 +43,7 @@ describe('Native conversation registrations', () => {
     ctx.provide('remote.session', {} as never)
     ctx.provide('layout', { selectPanel: () => {} } as never)
     ctx.provide('sessions', { refresh: async () => {} } as never)
-    ctx.provide('uiWorkspace', { openSession: () => {} } as never)
+    ctx.provide('uiWorkspace', { openSession: () => {}, registerSessionOpenInterceptor: () => () => {} } as never)
     ctx.slots.register({ name: 'root', children: {
       main: { kind: 'keyed', scope: 'root' }, 'sidebar.panellist': { kind: 'list', scope: 'root' },
       'sidebar.session.row.trailing': { kind: 'list', scope: 'root', inline: true },
@@ -109,4 +112,46 @@ it('waits for the required Session endpoint and accesses it through the real str
     expect(() => scoped.remote.session).toThrow('without inject')
   } })
   await withoutEndpoint.await()
+})
+
+
+it.each([true, false])('consumes startup and direct legacy links without opening Dot (desktop available: %s)', async (available) => {
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  const choose = vi.fn()
+  const companion = {
+    preferences: async () => ({ enabled: true, showInSidebar: true, sidebarStyle: 'sameNewSession' as const }),
+    selection: async () => null,
+    snapshot: async () => ({ source: 'chatgpt-web' as const, url: null, title: 'Dot', revision: 0,
+      phase: 'disconnected' as const, messages: [], canSend: false, draftPresent: false, siteStatus: null, limited: true }),
+    subscribe: () => () => {}, choose,
+  }
+  const desktopSpy = vi.spyOn(desktop, 'desktopAxiomCompanion').mockReturnValue(available ? companion as never : undefined)
+  onTestFinished(() => { desktopSpy.mockRestore() })
+  new FixtureUiConversation(ctx)
+  const selectPanel = vi.fn()
+  const presentation = vi.fn(async () => ({ ok: true as const, value: {
+    visibility: 'hidden' as const, route: { view: 'dot', params: { url: 'https://chatgpt.com/dots/original' } },
+  } }))
+  let intercept: SessionOpenInterceptor | undefined
+  let startup: ReturnType<SessionOpenInterceptor> | undefined
+  ctx.provide('slots', { inject: () => {} } as never)
+  ctx.provide('locale', { bind: () => (key: CodexLibraryKey) => en[key], register: () => () => {} } as never)
+  ctx.provide('resources', { register: () => () => {} } as never)
+  ctx.provide('remote', { session: { presentation }, nativeConversations: {} } as never)
+  ctx.provide('remote.session', { presentation } as never)
+  ctx.provide('remote.nativeConversations', {} as never)
+  ctx.provide('layout', { selectPanel } as never)
+  ctx.provide('sessions', { list: { getSnapshot: () => ({ byId: {} }) } } as never)
+  ctx.provide('uiWorkspace', { registerSessionOpenInterceptor: (handler: SessionOpenInterceptor) => {
+    intercept = handler
+    startup = handler('saved-dot' as never, new AbortController().signal)
+    return () => {}
+  } } as never)
+  await ctx.plugin({ inject: [...inject], apply }).await()
+  await expect(startup).resolves.toBe(true)
+  await expect(intercept?.('direct-dot' as never, new AbortController().signal)).resolves.toBe(true)
+  expect(presentation).toHaveBeenCalledTimes(2)
+  expect(selectPanel).not.toHaveBeenCalled()
+  expect(choose).not.toHaveBeenCalled()
 })

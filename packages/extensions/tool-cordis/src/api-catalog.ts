@@ -3523,7 +3523,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async listCandidates( agent: Agent, query: string = \'\', limit: number = this.config.candidateLimit, signal?: AbortSignal, ): Promise<SessionReferenceCandidate[]>',
-        description: 'List reference candidates, ranked by working-directory affinity.\n\nDiscovery runs at keystroke rate, so titles and subagent labels only ever come from projection reads; sessions without either fall back to their id.',
+        description: 'List visible reference candidates, ranked by working-directory affinity.\n\nDiscovery runs at keystroke rate, so titles and subagent labels only ever come from projection reads; sessions without either fall back to their id.',
         parameters: [{ name: 'agent', description: 'target agent; self is excluded and its cwd drives ranking.' }, { name: 'query', description: 'optional case-insensitive session-id/cwd/title/display-title substring.' }, { name: 'limit', description: 'optional positive result cap.' }, { name: 'signal', description: 'optional cancellation boundary for host autocomplete teardown.' }],
         returns: 'candidates with canonical mention labels and presentation titles.',
       },
@@ -3535,7 +3535,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async prepare( agent: Agent, content: ContentBlock[], references: SessionReferenceInput[], route: Readonly<Pick<LlmCallConfig, \'provider\' | \'model\'>>, signal?: AbortSignal, ): Promise<PreparedReferencedMessage>',
-        description: 'Snapshot all references for one accepted direct message and return one aggregated durable context. Automatic budgets use the context capacity of `route`. Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation. Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice. Cancellation prevents context publication, including when storage completes after cancellation.',
+        description: 'Snapshot all references for one accepted direct message and return one aggregated durable context. Hidden sources reject the entire reference set before any source content is read. Automatic budgets use the context capacity of `route`. Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation. Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice. Cancellation prevents context publication, including when storage completes after cancellation.',
         parameters: [{ name: 'agent', description: 'target agent; references to it are rejected.' }, { name: 'content', description: 'already host-normalized readable message content.' }, { name: 'references', description: 'structured source sessions in mention order.' }, { name: 'route', description: 'provider and model whose context capacity sizes the previews.' }, { name: 'signal', description: 'optional cancellation boundary for the active turn.' }],
         returns: 'detached content and optional referenced-session context.',
       },
@@ -6300,7 +6300,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AxiomSnapshot',
-    declaration: 'export interface AxiomSnapshot {\n    readonly source: \'chatgpt-web\';\n    readonly url: string | null;\n    readonly title: string;\n    readonly revision: number;\n    readonly phase: \'disconnected\' | \'loading\' | \'login-required\' | \'ready\' | \'unavailable\';\n    readonly messages: readonly AxiomMessage[];\n    readonly canSend: boolean;\n    readonly draftPresent: boolean;\n    readonly siteStatus: string | null;\n    readonly limited: boolean;\n    readonly errorCode?: \'page-unavailable\' | \'unsupported-page\';\n}',
+    declaration: 'export interface AxiomSnapshot {\n    readonly source: \'chatgpt-web\';\n    readonly url: string | null;\n    readonly title: string;\n    readonly revision: number;\n    readonly phase: \'disconnected\' | \'loading\' | \'login-required\' | \'ready\' | \'unavailable\';\n    readonly messages: readonly AxiomMessage[];\n    readonly sourceOrder?: readonly string[];\n    readonly canSend: boolean;\n    readonly draftPresent: boolean;\n    readonly siteStatus: string | null;\n    readonly limited: boolean;\n    readonly errorCode?: \'page-unavailable\' | \'unsupported-page\';\n}',
   },
   {
     name: 'AxiomTransport',

@@ -3,10 +3,35 @@ import { z } from 'zod'
 import type { AxiomHistoryPage } from './axiom-protocol.ts'
 import type { AxiomWebsiteWindow } from './axiom-window.ts'
 import { axiomConversationUrl } from './axiom-navigation.ts'
-import { readAxiomHistoryPage, readAxiomPage } from './axiom-page.ts'
+import { readAxiomHistoryPage, readAxiomPage, type AxiomHistoryDiagnostics } from './axiom-page.ts'
+
+const diagnosticsSchema = z.object({
+  scrollerPresent: z.boolean(), listPresent: z.boolean(), rowCount: z.number().int().nonnegative(),
+  bodyCount: z.number().int().nonnegative(), skippedRowCount: z.number().int().nonnegative(),
+  scrollTop: z.number(), scrollTopAfter: z.number(), clientHeight: z.number(), scrollHeight: z.number(),
+  visibility: z.enum(['visible', 'hidden']), readyState: z.enum(['loading', 'interactive', 'complete']), cursorPresent: z.boolean(),
+}).strict()
+type DiagnosticReporter = (status: string, metrics?: AxiomHistoryDiagnostics, final?: boolean) => void
+
+function reporter(enabled: boolean): DiagnosticReporter {
+  let samples = 0
+  let previous = ''
+  let finished = false
+  return (status, metrics, final = false) => {
+    if (!enabled || finished || samples >= 19 && !final) return
+    const line = JSON.stringify({ status, ...metrics })
+    if (!final && line === previous) return
+    previous = line
+    samples++
+    finished = final
+    console.info('[Dot history debug]', line)
+  }
+}
 
 const observationSchema = z.object({
+  diagnostics: diagnosticsSchema.optional(),
   url: z.string().max(4096), supported: z.boolean(), anchorFound: z.boolean(), hasEarlier: z.boolean(), startVerified: z.boolean(),
+  sourceOrder: z.array(z.string().min(1).max(512)).max(100).optional(),
   messages: z.array(z.object({ id: z.string().min(1).max(512), role: z.enum(['user', 'assistant']),
     text: z.string().max(32768), timestamp: z.string().max(100).nullable(), truncated: z.boolean() }).strict()).max(100),
 }).strict().refine(value => value.messages.reduce((total, message) => total + message.text.length, 0) <= 131072)
@@ -32,13 +57,19 @@ export class DesktopAxiomHistory {
   before(url: string, beforeId: string): Promise<AxiomHistoryPage> {
     if (typeof beforeId !== 'string' || beforeId.length === 0 || beforeId.length > 512) return Promise.resolve(unavailable())
     const selected = axiomConversationUrl(url)
+    const debug = process.env.SABI_DOT_HISTORY_DEBUG === '1'
+    const report = reporter(debug)
     if (selected !== this.source) { this.disconnect(); this.source = selected }
     if (this.active) return this.active.id === beforeId ? this.active.result : Promise.resolve(unavailable())
     // A timed-out renderer read is still owned until it settles; do not queue more execution behind it.
-    if (this.read) return Promise.resolve(unavailable())
+    if (this.read) { report('pending-read', undefined, true); return Promise.resolve(unavailable()) }
     const controller = new AbortController()
     const generation = this.generation
-    const result = this.collect(selected, beforeId, generation, controller.signal).catch((_unavailableHistory: unknown) => unavailable())
+    const result = this.collect(selected, beforeId, generation, controller.signal, debug, report).catch((error: unknown) => {
+      report(controller.signal.aborted ? 'cancelled' : error instanceof z.ZodError ? 'invalid-observation'
+        : error instanceof Error && error.message === 'Original history observation timed out' ? 'read-timeout' : 'read-failed', undefined, true)
+      return unavailable()
+    })
     const active = { id: beforeId, controller, result }
     this.active = active
     void result.finally(() => { if (this.active === active) this.active = undefined })
@@ -57,7 +88,8 @@ export class DesktopAxiomHistory {
     if (page && !page.window.isDestroyed()) page.window.destroy()
   }
 
-  private open(url: string): AxiomWebsiteWindow {
+  private open(url: string, report: DiagnosticReporter): AxiomWebsiteWindow {
+    report('opening')
     const page = this.create()
     this.page = page
     page.contents.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -72,21 +104,31 @@ export class DesktopAxiomHistory {
     page.contents.on('will-redirect', (event, target, _inPlace, mainFrame) => { if (mainFrame && !allowed(target)) event.preventDefault() })
     page.contents.on('will-attach-webview', (event) => { event.preventDefault() })
     void page.contents.loadURL(url).catch((_historyLoadFailure: unknown) => {
-      if (this.page === page) { this.page = undefined; if (!page.window.isDestroyed()) page.window.destroy() }
+      if (this.page === page) {
+        report('load-failed', undefined, true)
+        this.page = undefined; if (!page.window.isDestroyed()) page.window.destroy()
+      }
     })
     return page
   }
 
-  private async collect(url: string, beforeId: string, generation: number, signal: AbortSignal): Promise<AxiomHistoryPage> {
-    const page = this.page ?? this.open(url)
+  private async collect(url: string, beforeId: string, generation: number, signal: AbortSignal,
+    debug: boolean, report: DiagnosticReporter): Promise<AxiomHistoryPage> {
+    const page = this.page ?? this.open(url, report)
     const deadline = Date.now() + 20000
     let scrolled = false
     while (Date.now() < deadline) {
-      if (signal.aborted || generation !== this.generation || this.page !== page || page.window.isDestroyed()) return unavailable()
+      if (signal.aborted || generation !== this.generation || this.page !== page || page.window.isDestroyed()) {
+        report(signal.aborted ? 'cancelled' : 'page-revoked', undefined, true)
+        return unavailable()
+      }
       const currentUrl = page.contents.getURL()
-      if (currentUrl !== '' && currentUrl !== 'about:blank' && currentUrl.replace(/\/$/u, '') !== url) return unavailable()
+      if (currentUrl !== '' && currentUrl !== 'about:blank' && currentUrl.replace(/\/$/u, '') !== url) {
+        report('wrong-document', undefined, true)
+        return unavailable()
+      }
       if (currentUrl.replace(/\/$/u, '') === url && !page.contents.isLoading()) {
-        const script = `(${readAxiomHistoryPage.toString()})(${readAxiomPage.toString()},${JSON.stringify(url)},${JSON.stringify(beforeId)},${scrolled})`
+        const script = `(${readAxiomHistoryPage.toString()})(${readAxiomPage.toString()},${JSON.stringify(url)},${JSON.stringify(beforeId)},${scrolled}${debug ? ',true' : ''})`
         const epoch = this.documentEpoch
         const reading = page.contents.executeJavaScript(script)
         this.read = reading
@@ -95,17 +137,24 @@ export class DesktopAxiomHistory {
         const observation = observationSchema.parse(await this.bounded(reading, Math.min(5000, deadline - Date.now()), signal))
         signal.throwIfAborted()
         if (generation !== this.generation || this.page !== page || epoch !== this.documentEpoch
-          || observation.url !== url || page.contents.getURL().replace(/\/$/u, '') !== url) return unavailable()
+          || observation.url !== url || page.contents.getURL().replace(/\/$/u, '') !== url) {
+          report('document-changed', undefined, true)
+          return unavailable()
+        }
+        report(!observation.supported ? 'unsupported-layout' : !observation.anchorFound ? 'cursor-missing'
+          : observation.messages.length > 0 ? 'ready' : 'awaiting-older', observation.diagnostics, observation.messages.length > 0)
         if (observation.supported && observation.anchorFound) {
           if (observation.messages.length > 0) return { messages: observation.messages,
+            ...observation.sourceOrder === undefined ? {} : { sourceOrder: observation.sourceOrder },
             hasMore: observation.hasEarlier || !observation.startVerified, status: 'ready' }
           if (observation.startVerified) return { messages: [], hasMore: false, status: 'ready' }
         }
         // A fresh page may not have mounted the requested older cursor yet. Use only the site's scroller.
         if (observation.supported) scrolled = true
-      }
+      } else report('document-loading')
       await this.pause(signal)
     }
+    report('history-deadline', undefined, true)
     return unavailable()
   }
 

@@ -40,6 +40,8 @@ export interface AxiomSnapshot {
   readonly revision: number
   readonly phase: 'disconnected' | 'loading' | 'login-required' | 'ready' | 'unavailable'
   readonly messages: readonly AxiomMessage[]
+  /** Optional bounded original row order, including temporarily missing bodies. */
+  readonly sourceOrder?: readonly string[]
   readonly canSend: boolean
   readonly draftPresent: boolean
   readonly siteStatus: string | null

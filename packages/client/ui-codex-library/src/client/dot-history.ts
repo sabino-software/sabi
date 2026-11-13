@@ -6,18 +6,27 @@ import type { DotMessage } from './desktop-axiom.ts'
  * @param existing - Previously observed messages, oldest first.
  * @param incoming - Ordered source window or older history page.
  * @param placement - Disjoint older pages prepend; disjoint live windows append.
- * @returns The combined original-source chronology.
+ * @param sourceOrder Optional authoritative row order, including IDs whose source bodies are currently absent.
+ * @returns Source chronology where observed rows establish it; absent metadata preserves existing sparse placement.
  */
-export function mergeDotMessages(existing: readonly DotMessage[], incoming: readonly DotMessage[], placement: 'older' | 'live'): readonly DotMessage[] {
-  const incomingIds = new Set(incoming.map(message => message.id))
+export function mergeDotMessages(existing: readonly DotMessage[], incoming: readonly DotMessage[], placement: 'older' | 'live',
+  sourceOrder?: readonly string[]): readonly DotMessage[] {
   const prior = new Map(existing.map(message => [message.id, message]))
   const seen = new Set<string>()
-  const window = incoming.filter((message) => {
+  let window = incoming.filter((message) => {
     if (seen.has(message.id)) return false
     seen.add(message.id)
     return true
   }).map(message => placement === 'older' ? prior.get(message.id) ?? message : message)
+  if (sourceOrder !== undefined && window.every(message => sourceOrder.includes(message.id))) {
+    const bodies = new Map([...prior, ...window.map(message => [message.id, message] as const)])
+    window = [...new Set(sourceOrder)].flatMap((id) => {
+      const body = bodies.get(id)
+      return body === undefined ? [] : [body]
+    })
+  }
   if (window.length === 0) return existing
+  const incomingIds = new Set(window.map(message => message.id))
   const positions = new Map(existing.map((message, index) => [message.id, index]))
   const overlap = window.map(message => positions.get(message.id)).filter((index): index is number => index !== undefined)
   if (overlap.length === 0) return placement === 'older' ? [...window, ...existing] : [...existing, ...window]

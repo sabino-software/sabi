@@ -97,6 +97,7 @@ it('reads all 292 already-loaded original rows without another page, scrolling, 
     expect(page.status).toBe('ready')
     expect(page.hasMore).toBe(true)
     expect(page.messages.length).toBeLessThanOrEqual(100)
+    expect(page.sourceOrder).toEqual(page.messages.map(message => message.id))
     messages = [...page.messages, ...messages]
   }
   expect(messages.map(message => message.id)).toEqual(Array.from({ length: 292 }, (_, index) => sourceId(index)))
@@ -177,4 +178,17 @@ it('never reads primary history from a different or authentication document', as
   h.execute.mockClear()
   expect(await h.owner.historyBefore(sourceId(192))).toEqual({ messages: [], hasMore: true, status: 'unavailable' })
   expect(h.execute).not.toHaveBeenCalled()
+})
+
+
+it('preserves missing-body source neighbors through the primary snapshot and loaded history schemas', async () => {
+  document.querySelector(`[data-message-id="${sourceId(200)}"] .message-body`)!.remove()
+  document.querySelector(`[data-message-id="${sourceId(100)}"] .message-body`)!.remove()
+  const h = await connect()
+  expect(h.snapshot.sourceOrder).toEqual(Array.from({ length: 100 }, (_, index) => sourceId(index + 192)))
+  expect(h.snapshot.messages.some(message => message.id === sourceId(200))).toBe(false)
+  const older = await h.owner.historyBefore(sourceId(192))
+  expect(older.status).toBe('ready')
+  expect(older.sourceOrder).toEqual(Array.from({ length: 100 }, (_, index) => sourceId(index + 92)))
+  expect(older.messages.some(message => message.id === sourceId(100))).toBe(false)
 })

@@ -54,3 +54,30 @@ it('rejects malformed source states and unknown sidebar style enums at the prelo
   await expect(desktopAxiomCompanion()!.snapshot()).rejects.toThrow()
   await expect(desktopAxiomCompanion()!.preferences()).rejects.toThrow()
 })
+
+
+it('preserves bounded source row order independently of missing message bodies', async () => {
+  const sourceOrder = ['u1', 'missing-body', 'a1']
+  vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: { ...bridge(),
+    snapshot: async () => ({ ...snapshot, sourceOrder }),
+    historyBefore: async () => ({ messages: [], sourceOrder, hasMore: true, status: 'ready' }),
+  } })
+  const client = desktopAxiomCompanion()!
+  expect((await client.snapshot()).sourceOrder).toEqual(sourceOrder)
+  expect((await client.historyBefore('u1')).sourceOrder).toEqual(sourceOrder)
+})
+
+it.each([
+  { name: 'too many IDs', sourceOrder: Array.from({ length: 101 }, (_, index) => `id-${index}`) },
+  { name: 'an oversized ID', sourceOrder: ['x'.repeat(513)] },
+  { name: 'an empty ID', sourceOrder: [''] },
+])(
+  'rejects source order metadata with $name', async ({ sourceOrder }) => {
+    vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: { ...bridge(),
+      snapshot: async () => ({ ...snapshot, sourceOrder }),
+      historyBefore: async () => ({ messages: [], sourceOrder, hasMore: true, status: 'ready' }),
+    } })
+    await expect(desktopAxiomCompanion()!.snapshot()).rejects.toThrow()
+    await expect(desktopAxiomCompanion()!.historyBefore('u1')).rejects.toThrow()
+  },
+)

@@ -6,7 +6,7 @@
 
 Sabi 是基于 DeepSeek Harness 的独立 macOS 编程工作区。它支持在原生聊天界面继续原始工作 Codex 对话、使用 Harness 工具与审批，并可选连接原始 ChatGPT Dot。现有工作区、本地会话与工作登录保持独立于个人 Codex。无需 DeepSeek 账户；DeepSeek 是使用自身 API key 配置的可选模型提供方。
 
-公开 CLI 为 `sabi`，底层复用现有 Harness 引擎。下一打包版本为 `0.3.0-beta.1`，分发前须检查确切产物与[工作流运行](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml)。详见[发布验证流程](docs/fork-release/plan.zh.md)。
+公开 CLI 为 `sabi`，底层复用现有 Harness 引擎。分支构建版本为 `0.3.0-beta.1`。已安装的第 22 次打包产物验证了 Dot 发送和原始 Codex 对话连续性。最终源码产物与旧历史验收仍待完成。[产物工作流](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml)已配置；托管 CI 验收须等待实际运行。详见[发布验证流程](docs/fork-release/plan.zh.md)。
 
 ## 原生对话
 

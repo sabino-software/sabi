@@ -196,8 +196,8 @@ export class BrowserAxiomPage {
     const parsed = browserSnapshotSchema.parse(value)
     if (parsed.url !== this.selected || parsed.url === null || axiomConversationUrl(parsed.url) !== this.selected) throw new Error('Wrong browser document')
     if (parsed.phase !== 'ready' && (parsed.messages.length > 0 || parsed.canSend)) throw new Error('Unavailable pages cannot export messages')
-    const { errorCode, ...snapshot } = parsed
-    return { ...snapshot, ...errorCode === undefined ? {} : { errorCode } }
+    const { errorCode, sourceOrder, ...snapshot } = parsed
+    return { ...snapshot, ...sourceOrder === undefined ? {} : { sourceOrder }, ...errorCode === undefined ? {} : { errorCode } }
   }
 
   private update(snapshot: AxiomSnapshot): void { this.current = snapshot; this.options.publish(snapshot) }
