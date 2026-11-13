@@ -278,7 +278,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-session-controller`
 
 - `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `typertGateway` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:110`](../packages/api/session-controller/src/index.ts)
+- `source`: [`packages/api/session-controller/src/index.ts:113`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -364,7 +364,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-workspace-controller`
 
 - `inject`: `remoteAccess` · `typert` · `workspaceRegistry`
-- `source`: [`packages/api/workspace-controller/src/index.ts:37`](../packages/api/workspace-controller/src/index.ts)
+- `source`: [`packages/api/workspace-controller/src/index.ts:38`](../packages/api/workspace-controller/src/index.ts)
 
 ```ts config-catalog
 /** First-use directory policy for the Host account. */
@@ -2674,7 +2674,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-native-conversations`
 
 - `inject`: `storageDomain` · `sessionProjections` · `sessionProjectionCache` · `sessionController` · `sessionTitle` · `sessionPersistence` · `sessions` · `workspaceRegistry` · `agents` · `llm` · `codexAppServer` · `tools` · `sandboxPolicy` · `approval` · `userQuestions`
-- `source`: [`packages/experimental/native-conversations/src/index.ts:39`](../packages/experimental/native-conversations/src/index.ts)
+- `source`: [`packages/experimental/native-conversations/src/index.ts:59`](../packages/experimental/native-conversations/src/index.ts)
 
 ```ts config-catalog
 /** Native bridges are enabled only in the isolated desktop fork. */
@@ -2689,11 +2689,11 @@ export interface Config {
   readonly codexLoginCancelTimeoutMs: number
   /** Maximum desktop original-page request lifetime in milliseconds. */
   readonly axiomRequestTimeoutMs: number
-  /** Interval between original Axiom page observations while its Session is idle. */
+  /** Legacy configuration retained for profile compatibility; unused by the dedicated Dot surface. */
   readonly axiomPollIntervalMs: number
-  /** Maximum original-page send and acknowledgement lifetime in milliseconds. */
+  /** Legacy configuration retained for profile compatibility; the dedicated Dot surface owns send deadlines. */
   readonly axiomResponseTimeoutMs: number
-  /** Fallback stream settling interval; source-owned desktop messages remain continuously observed. */
+  /** Legacy configuration retained for profile compatibility; unused by the dedicated Dot surface. */
   readonly axiomSettleMs: number
 }
 ```

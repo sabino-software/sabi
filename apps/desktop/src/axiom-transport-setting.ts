@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type { AxiomPreferences, AxiomTransportMode } from './axiom-protocol.ts'
+import { axiomConversationUrl } from './axiom-navigation.ts'
+import type { AxiomPreferences, AxiomSelection, AxiomTransportMode } from './axiom-protocol.ts'
 
 /** @param userData Preserved Electron profile. @returns Saved explicit choice; only an absent setting defaults to embedded. */
 export function readAxiomTransport(userData: string): AxiomTransportMode {
@@ -89,6 +90,51 @@ export function saveAxiomPreferences(userData: string, value: unknown): void {
     renameSync(temporary, destination)
   } catch (error: unknown) {
     try { unlinkSync(temporary) } catch (_uncreatedPreference: unknown) { /* Creation may have failed before the file existed. */ }
+    throw error
+  }
+}
+
+/** Saved selection accepts canonical conversation URLs and bounded source titles only. */
+export const axiomSelectionSchema = z.object({
+  url: z.string().max(4096).refine((value) => {
+    try { return axiomConversationUrl(value) === value } catch (_notCanonicalDot: unknown) { return false }
+  }),
+  title: z.string().min(1).max(300),
+}).strict()
+const savedSelectionSchema = axiomSelectionSchema.extend({ version: z.literal(1) }).strict()
+
+/** @param userData Preserved app profile. @returns The last observed Dot, or null when none was saved. */
+export function readAxiomSelection(userData: string): AxiomSelection | null {
+  const path = join(userData, 'axiom-selection.json')
+  try {
+    const info = lstatSync(path)
+    if (!info.isFile() || (process.platform !== 'win32' && (info.mode & 0o077) !== 0)
+      || (process.getuid !== undefined && info.uid !== process.getuid())) throw new Error('Invalid Dot selection file')
+    const { version: _version, ...selection } = savedSelectionSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
+    return selection
+  } catch (error: unknown) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return null
+    throw new Error('The Dot selection could not be read')
+  }
+}
+
+/** @param userData Preserved app profile. @param value Observed canonical selection. @returns After private atomic replacement. */
+export function saveAxiomSelection(userData: string, value: AxiomSelection): void {
+  const selection = axiomSelectionSchema.parse(value)
+  mkdirSync(userData, { recursive: true })
+  const path = join(userData, 'axiom-selection.json')
+  try {
+    const info = lstatSync(path)
+    if (!info.isFile() || (process.getuid !== undefined && info.uid !== process.getuid())) throw new Error('Invalid Dot selection file')
+  } catch (error: unknown) {
+    if (typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'ENOENT') throw error
+  }
+  const temporary = join(userData, `.axiom-selection-${randomUUID()}.tmp`)
+  try {
+    writeFileSync(temporary, JSON.stringify({ version: 1, ...selection }), { flag: 'wx', mode: 0o600 })
+    renameSync(temporary, path)
+  } catch (error: unknown) {
+    try { unlinkSync(temporary) } catch (_uncreatedSelection: unknown) { /* Creation may fail before the file exists. */ }
     throw error
   }
 }

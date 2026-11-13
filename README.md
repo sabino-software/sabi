@@ -12,7 +12,7 @@ The public CLI is `sabi`, backed by the existing Harness engine. The next packag
 
 Work Codex chats appear as ordinary Sessions in their workspaces. Opening history does not start inference. Sending continues the same original Codex thread through the work app-server. Harness tools are available through a scoped local MCP connection; sandbox selections and approval decisions remain enforced. Source activity appears alongside messages without re-executing imported operations.
 
-Dot is optional. Enable **Show Dot in sidebar** and **Enable Dot integration** in **Settings → General** to place **Dot** directly below **New Session**. Its default style matches New Session; Subtle and Outline are available. Select Dot to sign in to the original ChatGPT website and choose your Dot without entering a URL. The persistent in-app website session powers native history, sending, and observed replies without a browser extension. A regular-browser companion remains an optional fallback.
+Dot is optional. Enable **Show Dot in sidebar** and **Enable Dot integration** in **Settings → General** to place its dedicated button directly below **New Session**. It uses the selected Dot's name, such as Axiom. Its default style matches New Session; Subtle and Outline are available. The button opens a continuous conversation with its own website-inspired theme and older-history scrolling. Dot never appears as an ordinary session or search result. Select your Dot on the original ChatGPT website without entering a URL. The persistent in-app website session powers native history, sending, and observed replies without a browser extension. A regular-browser companion remains an optional fallback.
 
 The connected original page runs hidden while native chat remains usable. **Open ChatGPT** reveals it, and Reload refreshes it. **Close page** destroys the page and stops observation; only another explicit Dot selection reconnects it. Website sign-in survives closing and reopening the page. General Settings does not require a DeepSeek sign-in.
 
@@ -34,6 +34,14 @@ The unpacked application is `apps/desktop/.desktop-build/targets/mac-arm64/unsig
 Use the application's **Manage sabi Command…** menu item to manage the `sabi` command, then run `sabi --help` or `sabi --version`. The command uses the bundled Electron runtime; it does not require system Node or a checkout, including when its application path contains spaces. It preserves the existing `dsh` command and personal Codex installation.
 
 See the [development guide](docs/development.md), [architecture](docs/architecture.md), and [agent instructions](AGENTS.md) for contributor workflows. APIs remain in developer preview and can break compatibility.
+
+## Run
+
+For the engine's Web UI, use `sabi web` after installing the desktop CLI. The command prints its local URL. Native Codex and Dot integration require the macOS app.
+
+### Run from source
+
+With the [development prerequisites](docs/development.md) installed, run `pnpm install --frozen-lockfile` and `pnpm run build`, then `pnpm dsh web` from the repository root. The source launcher retains the upstream command name. See [source execution](apps/cli/reference/README.md#source-execution) for profiles and plugin development.
 
 ## Upstream and license
 

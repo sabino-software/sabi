@@ -6,14 +6,20 @@
   en: d97937e250dc3b30
   zh: eded909f2ae33988
 /sabi/native-conversations:
-  en: bdd1e3a96facf20e
-  zh: 46d8c8f4dd533bdb
+  en: 7c82ab6b60ff4464
+  zh: 2608ef891760ac9e
 /sabi/privacy-defaults:
   en: 3fe878e272aab2c4
   zh: 1be8c52658ee6492
 /sabi/build-and-cli:
   en: ebeecfdde43fc82c
   zh: d1aa40e4dcd02208
+/sabi/run:
+  en: 170ef2acff6a1f6b
+  zh: abd77fd296319df0
+/sabi/run/run-from-source:
+  en: 86491db517d19e15
+  zh: 4d87ea5d25572964
 /sabi/upstream-and-license:
   en: 8a016aead2944089
   zh: e79ef1e45e33c4ca

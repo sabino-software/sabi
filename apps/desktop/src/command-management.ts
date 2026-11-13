@@ -164,7 +164,7 @@ export class DesktopCommandManager {
     if (!object(response) || typeof response.ok !== 'boolean') throw new Error('Invalid command-manager response.')
     if (!response.ok) {
       const code = typeof response.code === 'string' ? response.code : 'EIO'
-      if (!elevated && process.platform === 'darwin' && operation !== 'inspect' && ['EACCES', 'EPERM'].includes(code)) {
+      if (!elevated && process.platform === 'darwin' && this.commandName === 'dsh' && operation !== 'inspect' && ['EACCES', 'EPERM'].includes(code)) {
         return this.worker(operation, expected, true)
       }
       throw new CommandWorkerError(code, typeof response.message === 'string' ? response.message : 'Command management failed.')

@@ -2,8 +2,9 @@
 import { type BrowserWindow, dialog, session, type WebContents } from 'electron'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import type { AxiomSendRequest, AxiomSendResult, AxiomSnapshot } from './axiom-protocol.ts'
+import type { AxiomHistoryPage, AxiomSendRequest, AxiomSendResult, AxiomSnapshot } from './axiom-protocol.ts'
 import { readAxiomPage, focusAxiomComposer, clickAxiomSend, findAxiomAcknowledgement } from './axiom-page.ts'
+import { DesktopAxiomHistory } from './axiom-history.ts'
 import { createAxiomWebsiteWindow } from './axiom-window.ts'
 import { axiomChooserNavigation, axiomConversationUrl, axiomNavigation, type AxiomNavigation } from './axiom-navigation.ts'
 
@@ -35,6 +36,12 @@ export class DesktopAxiomPage {
   private timer: ReturnType<typeof setTimeout> | undefined
   private refreshing: Promise<AxiomSnapshot> | undefined
   private sending = false
+  private readonly history = new DesktopAxiomHistory(() => createAxiomWebsiteWindow({ show: false, width: 1100, height: 800,
+    webPreferences: { session: session.fromPartition('persist:skeinlet-axiom'), nodeIntegration: false,
+      nodeIntegrationInWorker: false, nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: true,
+      webSecurity: true, allowRunningInsecureContent: false, webviewTag: false, navigateOnDragDrop: false,
+      backgroundThrottling: false, spellcheck: false },
+  }, this.locale()))
   private closedByUser = false
   private returnAfterChoice = false
   private readyUntil = 0
@@ -255,6 +262,14 @@ export class DesktopAxiomPage {
     return pending
   }
 
+  /** @param beforeId Original cursor. @returns An earlier bounded page without moving or editing the live source page. */
+  historyBefore(beforeId: string): Promise<AxiomHistoryPage> {
+    if (this.selected === null || !this.page || this.closedByUser || this.current.phase !== 'ready') {
+      return Promise.resolve({ messages: [], hasMore: true, status: 'unavailable' })
+    }
+    return this.history.before(this.selected, beforeId)
+  }
+
   /** Show the original page for direct OpenAI authentication; any approved login popup shares its isolated session. */
   showLogin(): void {
     this.returnAfterChoice = false
@@ -270,6 +285,7 @@ export class DesktopAxiomPage {
 
   /** Stop observation and destroy the page; retain the session's website-owned login state. */
   disconnect(): void {
+    this.history.disconnect()
     this.generation++
     clearTimeout(this.timer)
     this.timer = undefined
@@ -401,7 +417,7 @@ export class DesktopAxiomPage {
     if (this.pageRead?.page === page && this.pageRead.generation === generation
       && this.pageRead.documentEpoch === documentEpoch) return this.current
     try {
-      const reading = { page, generation, documentEpoch, promise: this.contents(page).executeJavaScript(`(${readAxiomPage.toString()})()`) }
+      const reading = { page, generation, documentEpoch, promise: this.contents(page).executeJavaScript(`location.href.replace(/\\/$/, '') === ${JSON.stringify(this.selected)} ? (${readAxiomPage.toString()})() : null`) }
       this.pageRead = reading
       const settled = (): void => { if (this.pageRead === reading) this.pageRead = undefined }
       void reading.promise.then(settled, settled)

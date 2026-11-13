@@ -11,6 +11,7 @@ import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import { SessionQueryError, type SessionRecord, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
+import { sessionPresentation } from '@deepseek-ai/dsh-workspace'
 import {
   SESSION_SEARCH_RESULT_LIMIT,
   SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
@@ -160,6 +161,7 @@ export class ApiSessionList {
     let yieldDeadline = performance.now() + this.workSliceMs
     for (const record of records) {
       signal?.throwIfAborted()
+      if ((await sessionPresentation(this.ctx, record.header.id, signal)).visibility === 'hidden') continue
       const live = this.ctx.sessions.get(record.header.id)
       if (live !== undefined) {
         items.push(this.summaryFor(live))
@@ -222,9 +224,10 @@ export class ApiSessionList {
     try {
       const visible = await provider.listSessions(signal)
       signal.throwIfAborted()
-      const visibleIds = new Set(visible
-        .filter(record => record.header.cwd !== undefined)
-        .map(record => record.header.id))
+      const visibleIds = new Set<SessionId>()
+      for (const record of visible) {
+        if (record.header.cwd !== undefined && (await sessionPresentation(this.ctx, record.header.id, signal)).visibility !== 'hidden') visibleIds.add(record.header.id)
+      }
       if (visibleIds.size === 0) return { items: [], hasMore: false }
       const authorized: SessionSearchItem[] = []
       const acceptedIds = new Set<SessionId>()

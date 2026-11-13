@@ -1038,6 +1038,9 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  SessionPresentation: 'packages/workspace/workspace/README.md',
+  SessionPresentationRequest: 'packages/api/session-controller/README.md',
+  SessionPresentationValue: 'packages/api/session-controller/README.md',
   CodexConnectionStatus: 'packages/host/codex-app-server/README.md',
   CodexJsonObject: 'packages/host/codex-app-server/README.md',
   CodexMethod: 'packages/host/codex-app-server/README.md',

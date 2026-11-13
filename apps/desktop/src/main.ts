@@ -2,7 +2,7 @@ import { DesktopAxiomPage } from './axiom-bridge.ts'
 import { BrowserAxiomPage } from './axiom-browser.ts'
 import { axiomBrowserCopy } from './axiom-browser-copy.ts'
 import { DesktopAxiomOwner } from './axiom-owner.ts'
-import { readAxiomPreferences, readAxiomTransport, saveAxiomPreferences, saveAxiomTransport } from './axiom-transport-setting.ts'
+import { readAxiomPreferences, readAxiomSelection, readAxiomTransport, saveAxiomPreferences, saveAxiomSelection, saveAxiomTransport } from './axiom-transport-setting.ts'
 import { AXIOM_EXTENSION_ID, AXIOM_NATIVE_HOST } from './axiom-browser-protocol.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
@@ -509,6 +509,7 @@ async function main(): Promise<void> {
   let hostCookie: string | undefined
   const browserGuests = new DesktopBrowserGuests(() => hostUrl)
   const publishAxiom = (snapshot: import('./axiom-protocol.ts').AxiomSnapshot): void => {
+    axiomPage.observe(snapshot)
     if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.webContents.send(DESKTOP_IPC.axiomChanged, snapshot)
   }
   const browserAxiom = new BrowserAxiomPage({ directory: join(app.getPath('userData'), 'axiom-browser'),
@@ -525,7 +526,8 @@ async function main(): Promise<void> {
   })
   const axiomPage = new DesktopAxiomOwner({ browser: browserAxiom, embedded: embeddedAxiom },
     readAxiomTransport(app.getPath('userData')), (mode) => { saveAxiomTransport(app.getPath('userData'), mode) },
-    readAxiomPreferences(app.getPath('userData')), (value) => { saveAxiomPreferences(app.getPath('userData'), value) })
+    readAxiomPreferences(app.getPath('userData')), (value) => { saveAxiomPreferences(app.getPath('userData'), value) },
+    readAxiomSelection(app.getPath('userData')), (value) => { saveAxiomSelection(app.getPath('userData'), value) })
   app.on('will-quit', () => { axiomPage.disconnect(); browserAxiom.dispose() })
   let injections: readonly unknown[] = []
   let welcomeBackend: DesktopWelcomeBackend | undefined
@@ -911,6 +913,13 @@ async function main(): Promise<void> {
       || !event.senderFrame.url.startsWith('dsh-app://app/')) throw new Error('Rejected Platform command')
     return owner
   }
+  ipcMain.handle(DESKTOP_IPC.axiomSelection, (event) => { assertMainApplication(event); return axiomPage.selection() })
+  ipcMain.handle(DESKTOP_IPC.axiomHistoryBefore, (event, beforeId: unknown) => {
+    assertMainApplication(event)
+    if (typeof beforeId !== 'string') throw new Error('Invalid original history cursor')
+    return axiomPage.historyBefore(beforeId)
+  })
+  void axiomPage.resume().catch((error: unknown) => { console.error('Original Dot startup failed', error) })
   ipcMain.handle(DESKTOP_IPC.axiomPreferences, (event) => { assertMainApplication(event); return axiomPage.preferences() })
   ipcMain.handle(DESKTOP_IPC.axiomSetPreferences, (event, value: unknown) => {
     assertMainApplication(event)

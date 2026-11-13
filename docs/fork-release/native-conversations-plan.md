@@ -4,9 +4,9 @@ English | [中文](native-conversations-plan.zh.md)
 
 Existing work Codex conversations become ordinary Harness Sessions in their workspace sidebar. Their original Codex thread remains authoritative. Opening history does not start a turn. Sending continues that thread through the work app-server, with scoped Harness tools provided through an authenticated loopback MCP endpoint. Existing Harness approvals and sandbox selections govern that endpoint and native Codex operations.
 
-Axiom uses the original authenticated ChatGPT page as its engine. The native conversation displays observed original messages and sends exact user-authored input through that page's real composer. Sign-in stays in the selected browser: either the dedicated Electron session or the optional companion in the regular work browser. Unsupported page states and ambiguous sends fail explicitly without retrying.
+Axiom uses the original authenticated ChatGPT page as its engine. A dedicated continuous view displays observed original messages in source order and sends exact user-authored input through that page's real composer. It creates no Harness Session or model turn. Older-history scrolling uses original message IDs and a separate hidden history page. Sign-in stays in the selected browser: either the dedicated Electron session or the optional companion in the regular work browser. Unsupported page states and ambiguous sends fail explicitly without retrying.
 
-Dot has a dedicated action directly below New Session, gated by independent General Settings preferences and the installed integration. In-app website sign-in is the primary flow; the browser companion is optional. The action discovers the selected original Dot without asking for its URL. Authentication windows need working input, visible Reload and Close controls, actual page destruction on Close, and explicit reopening without losing the website login. Successful selection returns to the native conversation once; opening the original website explicitly keeps it visible.
+Dot has a dedicated action directly below New Session, gated by independent General Settings preferences and the installed integration. It displays the selected name, such as Axiom, and is the only conversation entry. Legacy Dot mirrors are hidden from ordinary session lists, search, and pickers while their logs are preserved; saved navigation resolves to the dedicated view. Work Codex stays in ordinary Sessions. In-app website sign-in is the primary flow; the browser companion is optional. The action discovers the selected original Dot without asking for its URL. Authentication windows need working input, visible Reload and Close controls, actual page destruction on Close, and explicit reopening without losing the website login. Successful selection returns to the native conversation once; opening the original website explicitly keeps it visible.
 
 After installed runtime acceptance, the fork becomes Sabi while preserving its profile and existing work login. Release work includes the `sabi` CLI backed by the existing engine, an aligned fork version, privacy and feature documentation, transfer to `sabino-software/sabi`, and a verified GitHub Actions artifact build independent of upstream signing infrastructure. No PR is requested; external release work follows the runtime gate.
 
@@ -22,9 +22,9 @@ The installed context correction continued an existing clean Codex chat, execute
 
 Implementation and acceptance:
 
-1. Persist source bindings and hydrate original messages into ordinary Sessions without duplicating source messages on reopen.
+1. Persist Codex source bindings and hydrate original messages into ordinary Sessions without duplicating source messages on reopen.
 2. Stream owned Codex turns, route approvals, map permissions and models, and expose prepared Harness tools without double execution. Never interrupt another client's turn.
-3. Connect Axiom's native Session to the owned desktop page bridge; retain original identity, disclose the rendered history boundary, and provide sign-in only when required.
+3. Connect the dedicated Dot view directly to the owned desktop page bridge; retain original identity, source chronology and website-inspired styling. Load preceding history without disturbing the live source and provide sign-in only when required.
 4. Run focused transport, hydration, stream, approval, and desktop bridge tests. Verify real Codex continuation and a real Harness tool in a designated test thread. Verify original Axiom history and interaction in the installed Mac app.
 5. Rebuild and install locally, check source deduplication after restart, preserve the work grant and telemetry defaults, inspect the diff, and commit locally. No push or PR.
 

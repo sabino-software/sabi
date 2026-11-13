@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/fork-release/axiom-native-bridge.md
 /original-dot-page-adapter:
-  en: d20c6282ca14a85d
-  zh: d220d8e75c3c28e0
+  en: 58a2284d38ea0cef
+  zh: 7d58fa8e7d2f32b8
 /original-dot-page-adapter/selection-and-sign-in:
-  en: 76199eb234621c11
-  zh: b94603b4112c2881
+  en: 32c0819ece789d4a
+  zh: 7fe17542e3795304
 /original-dot-page-adapter/native-content-and-sending:
-  en: ee367bf2454ec1cb
-  zh: 27a5b2b650c1493d
+  en: 3334b72ced3b8421
+  zh: 04cfeab83beb0031
 /original-dot-page-adapter/navigation-and-verification:
   en: 0a2772d90ed3dba5
   zh: 84d18a86069085ed

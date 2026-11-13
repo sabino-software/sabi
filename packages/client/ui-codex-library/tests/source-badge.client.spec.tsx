@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Source identity decorates ordinary Sessions without creating a second conversation surface. */
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -33,16 +33,15 @@ it('labels a native row using its existing Session summary', () => {
   expect(screen.queryByRole('button')).toBeNull()
 })
 
-it('labels Axiom without inventing a model and leaves ordinary Harness headers alone', () => {
+it('leaves legacy Axiom and ordinary Harness headers empty instead of adding another Dot entrypoint', () => {
   type HeaderProps = Parameters<typeof NativeSourceHeader>[0]
-  const props = { t, showOriginal: vi.fn(async () => {}), useProjection: () => ({ ...binding, source: 'axiom' as const }) } as HeaderProps
+  const props = { t, useProjection: () => ({ ...binding, source: 'axiom' as const }) } as HeaderProps
   const view = render(<NativeSourceHeader {...props} />)
-  expect(screen.getByText('Axiom')).toBeTruthy()
-  expect(screen.queryByText(binding.model!)).toBeNull()
+  expect(view.container.textContent).toBe('')
+  expect(screen.queryByRole('button')).toBeNull()
   view.rerender(<NativeSourceHeader {...{ ...props, useProjection: () => null } as HeaderProps} />)
   expect(view.container.textContent).toBe('')
 })
-
 
 it('shows only the source badge for Codex and never invokes the original-page action', () => {
   type HeaderProps = Parameters<typeof NativeSourceHeader>[0]
@@ -51,34 +50,4 @@ it('shows only the source badge for Codex and never invokes the original-page ac
   expect(screen.getByText('Codex').title).toBe('Continues the original Codex thread.')
   expect(screen.queryByRole('button')).toBeNull()
   expect(showOriginal).not.toHaveBeenCalled()
-})
-
-it('opens the original ChatGPT page through the Host callback and disables repeated input while pending', async () => {
-  type HeaderProps = Parameters<typeof NativeSourceHeader>[0]
-  const pending = Promise.withResolvers<undefined>()
-  const showOriginal = vi.fn(() => pending.promise)
-  render(<NativeSourceHeader {...{ t, showOriginal, useProjection: () => ({ ...binding, source: 'axiom' }) } as HeaderProps} />)
-  const button = screen.getByRole('button', { name: 'Open ChatGPT' }) as HTMLButtonElement
-  fireEvent.click(button)
-  expect(showOriginal).toHaveBeenCalledOnce()
-  expect(button.disabled).toBe(true)
-  expect(screen.getByRole('button', { name: 'Opening ChatGPT…' })).toBe(button)
-  fireEvent.click(button)
-  expect(showOriginal).toHaveBeenCalledOnce()
-  await act(async () => { pending.resolve(undefined); await pending.promise })
-  expect(screen.getByRole('button', { name: 'Open ChatGPT' })).toBe(button)
-  expect(button.disabled).toBe(false)
-  expect(screen.queryByRole('alert')).toBeNull()
-})
-
-it('shows localized failure copy without provider details and permits an explicit retry', async () => {
-  type HeaderProps = Parameters<typeof NativeSourceHeader>[0]
-  const showOriginal = vi.fn().mockRejectedValueOnce(new Error('private provider diagnostics')).mockResolvedValueOnce(undefined)
-  render(<NativeSourceHeader {...{ t, showOriginal, useProjection: () => ({ ...binding, source: 'axiom' }) } as HeaderProps} />)
-  const button = screen.getByRole('button', { name: 'Open ChatGPT' })
-  fireEvent.click(button)
-  await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe(en.openOriginalError) })
-  expect(screen.queryByText('private provider diagnostics')).toBeNull()
-  fireEvent.click(button)
-  await waitFor(() => { expect(showOriginal).toHaveBeenCalledTimes(2); expect(screen.queryByRole('alert')).toBeNull() })
 })

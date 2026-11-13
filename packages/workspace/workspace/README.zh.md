@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+集成通过 `workspace/session-presentation` 注册进程内 Session 可见性和通用专用视图路由。`sessionPresentation(ctx, sessionId, signal)` 返回首个策略，未命中时默认可见。该操作不改变注册表成员关系或已存储日志；API 读取入口据此决定发现结果和常规打开准入。
+
 使用此包为产品提供项目列表：用户工作的命名目录、每个目录中运行的会话、稳定顺序，以及在不丢失会话的前提下将其隐藏或重新取回的能力。每项操作背后的 API 约定放在实现章节中。
 
 ### 何时使用

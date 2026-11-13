@@ -1,5 +1,6 @@
 /** Agent activation, composition, and initial model route owned by API Session. */
 
+import { requireVisibleSession } from './presentation.ts'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
@@ -165,6 +166,10 @@ export class ApiSessionAgentController {
     sessionId: SessionId,
     observation?: SessionObservation,
   ): Promise<ApiSessionAgentResult> {
+    try { await requireVisibleSession(this.ctx, sessionId) } catch (error) {
+      if (error instanceof RemoteError && error.code === 'session/not-found') return { error: new RemoteError('session/not-found', error.message, { sessionId }) }
+      throw error
+    }
     const live = this.liveAgent(sessionId)
     if (live !== undefined) return live
     const attached = this.ctx.sessions.get(sessionId)
@@ -228,6 +233,7 @@ export class ApiSessionAgentController {
    */
   async createSession(request: ApiSessionCreateRequest): Promise<ApiSessionCreated> {
     const named = request.sessionId
+    if (named !== undefined) await requireVisibleSession(this.ctx, named)
     if (named === undefined) return this.created(await this.createMinted(request.cwd, await this.composeAgent(request.agentPreset)))
     return this.inOrder(named, async () => this.created(await this.claim(named, request)))
   }

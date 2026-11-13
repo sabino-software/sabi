@@ -2,7 +2,8 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { sessionPresentation } from '@deepseek-ai/dsh-workspace'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { WorkspaceCommands } from './commands.ts'
@@ -27,7 +28,7 @@ import type {
   WorkspaceRenameRequest,
   WorkspaceUnarchiveSessionRequest,
   WorkspaceUnpinSessionRequest,
-  WorkspaceValue,
+  WorkspaceValue, WorkspaceView,
 } from './types.ts'
 
 export type * from './types.ts'
@@ -88,8 +89,9 @@ export class WorkspaceController extends TypertRemoteService {
    * @returns the Workspace and whether this call created it.
    */
   @Remote('create')
-  create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
-    return this.commands.create(request)
+  async create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
+    const result = await this.commands.create(request)
+    return { ...result, workspace: await this.visibleWorkspace(result.workspace) }
   }
 
   /**
@@ -108,7 +110,7 @@ export class WorkspaceController extends TypertRemoteService {
         this.config.documentsDirectory, AbortSignal.any([signal, timeout]),
       )
     })
-    return workspace === undefined ? undefined : { workspace: workspaceView(workspace) }
+    return workspace === undefined ? undefined : { workspace: await this.visibleWorkspace(workspaceView(workspace)) }
   }
 
   /**
@@ -117,8 +119,9 @@ export class WorkspaceController extends TypertRemoteService {
    * @returns the updated Workspace projection.
    */
   @Remote('rename')
-  rename(request: WorkspaceRenameRequest): Promise<WorkspaceValue> {
-    return this.commands.rename(request)
+  async rename(request: WorkspaceRenameRequest): Promise<WorkspaceValue> {
+    const result = await this.commands.rename(request)
+    return { ...result, workspace: await this.visibleWorkspace(result.workspace) }
   }
 
   /**
@@ -147,8 +150,10 @@ export class WorkspaceController extends TypertRemoteService {
    * @returns the updated Workspace projection.
    */
   @Remote('insertSessionBefore')
-  insertSessionBefore(request: WorkspaceInsertSessionBeforeRequest): Promise<WorkspaceValue> {
-    return this.commands.insertSessionBefore(request)
+  async insertSessionBefore(request: WorkspaceInsertSessionBeforeRequest): Promise<WorkspaceValue> {
+    await this.requireVisible(request.sessionId)
+    const result = await this.commands.insertSessionBefore(request)
+    return { ...result, workspace: await this.visibleWorkspace(result.workspace) }
   }
 
   /**
@@ -157,8 +162,10 @@ export class WorkspaceController extends TypertRemoteService {
    * @returns the complete resulting archive set.
    */
   @Remote('archiveSession')
-  archiveSession(request: WorkspaceArchiveSessionRequest): Promise<WorkspaceArchiveValue> {
-    return this.commands.archiveSession(request)
+  async archiveSession(request: WorkspaceArchiveSessionRequest): Promise<WorkspaceArchiveValue> {
+    await this.requireVisible(request.sessionId)
+    const result = await this.commands.archiveSession(request)
+    return { ...result, archivedSessionIds: await this.visibleSessions(result.archivedSessionIds) }
   }
 
   /**
@@ -167,8 +174,10 @@ export class WorkspaceController extends TypertRemoteService {
    * @returns the complete resulting archive set.
    */
   @Remote('unarchiveSession')
-  unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue> {
-    return this.commands.unarchiveSession(request)
+  async unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue> {
+    await this.requireVisible(request.sessionId)
+    const result = await this.commands.unarchiveSession(request)
+    return { ...result, archivedSessionIds: await this.visibleSessions(result.archivedSessionIds) }
   }
 
   /**
@@ -177,8 +186,10 @@ export class WorkspaceController extends TypertRemoteService {
    * @returns the complete resulting pin set, most recently pinned first.
    */
   @Remote('pinSession')
-  pinSession(request: WorkspacePinSessionRequest): Promise<WorkspacePinValue> {
-    return this.commands.pinSession(request)
+  async pinSession(request: WorkspacePinSessionRequest): Promise<WorkspacePinValue> {
+    await this.requireVisible(request.sessionId)
+    const result = await this.commands.pinSession(request)
+    return { ...result, pinnedSessionIds: await this.visibleSessions(result.pinnedSessionIds) }
   }
 
   /**
@@ -187,8 +198,27 @@ export class WorkspaceController extends TypertRemoteService {
    * @returns the complete resulting pin set, most recently pinned first.
    */
   @Remote('unpinSession')
-  unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue> {
-    return this.commands.unpinSession(request)
+  async unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue> {
+    await this.requireVisible(request.sessionId)
+    const result = await this.commands.unpinSession(request)
+    return { ...result, pinnedSessionIds: await this.visibleSessions(result.pinnedSessionIds) }
+  }
+
+  private async visibleSessions(ids: readonly SessionId[], signal?: AbortSignal): Promise<SessionId[]> {
+    const visible: SessionId[] = []
+    for (const id of ids) {
+      if (this.ctx.remoteAccess.allows({ kind: 'session', id })
+        && (await sessionPresentation(this.ctx, id, signal)).visibility !== 'hidden') visible.push(id)
+    }
+    return visible
+  }
+  private async visibleWorkspace(workspace: WorkspaceView): Promise<WorkspaceView> {
+    return { ...workspace, sessionIds: await this.visibleSessions(workspace.sessionIds) }
+  }
+  private async requireVisible(id: SessionId): Promise<void> {
+    if ((await sessionPresentation(this.ctx, id)).visibility === 'hidden') {
+      throw new RemoteError('gateway/bad-request', 'This conversation belongs to its dedicated view.', {})
+    }
   }
 
   /**
@@ -206,33 +236,32 @@ export class WorkspaceController extends TypertRemoteService {
   async *follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame> {
     const access = this.ctx.remoteAccess
     const visible = (workspaceId: WorkspaceId): boolean => access.allows({ kind: 'workspace', id: workspaceId })
-    const sessions = (sessionIds: readonly SessionId[]): SessionId[] =>
-      sessionIds.filter(sessionId => access.allows({ kind: 'session', id: sessionId }))
+    const sessions = (ids: readonly SessionId[]): Promise<SessionId[]> => this.visibleSessions(ids, signal)
     /** Workspaces this generation has delivered and not yet removed. */
     const delivered = new Set<WorkspaceId>()
     /** The admitted part of `value`; it becomes the delivered set. */
-    const filtered = (value: WorkspaceBaseline): WorkspaceBaseline => {
+    const filtered = async (value: WorkspaceBaseline): Promise<WorkspaceBaseline> => {
       const items = value.items.filter(item => visible(item.workspaceId))
       delivered.clear()
       for (const item of items) delivered.add(item.workspaceId)
       return {
-        items: items.map(item => ({ ...item, sessionIds: sessions(item.sessionIds) })),
-        archivedSessionIds: sessions(value.archivedSessionIds),
-        pinnedSessionIds: sessions(value.pinnedSessionIds),
+        items: await Promise.all(items.map(async item => ({ ...item, sessionIds: await sessions(item.sessionIds) }))),
+        archivedSessionIds: await sessions(value.archivedSessionIds),
+        pinnedSessionIds: await sessions(value.pinnedSessionIds),
       }
     }
     for await (const frame of this.feed.follow(signal)) {
       switch (frame.type) {
         case 'baseline':
-          yield { type: 'baseline', value: filtered(frame.value) }
+          yield { type: 'baseline', value: await filtered(frame.value) }
           break
         case 'upsert': {
           const workspaceId = frame.workspace.workspaceId
           if (visible(workspaceId)) {
             delivered.add(workspaceId)
-            yield { type: 'upsert', workspace: { ...frame.workspace, sessionIds: sessions(frame.workspace.sessionIds) } }
+            yield { type: 'upsert', workspace: { ...frame.workspace, sessionIds: await sessions(frame.workspace.sessionIds) } }
           } else if (delivered.has(workspaceId)) {
-            yield { type: 'replace', value: filtered(this.feed.baseline()) }
+            yield { type: 'replace', value: await filtered(this.feed.baseline()) }
           }
           break
         }
@@ -241,16 +270,16 @@ export class WorkspaceController extends TypertRemoteService {
           break
         case 'order':
           if (frame.workspaceIds.some(workspaceId => delivered.has(workspaceId) && !visible(workspaceId))) {
-            yield { type: 'replace', value: filtered(this.feed.baseline()) }
+            yield { type: 'replace', value: await filtered(this.feed.baseline()) }
           } else {
             yield { type: 'order', workspaceIds: frame.workspaceIds.filter(visible) }
           }
           break
         case 'archived':
-          yield { type: 'archived', archivedSessionIds: sessions(frame.archivedSessionIds) }
+          yield { type: 'archived', archivedSessionIds: await sessions(frame.archivedSessionIds) }
           break
         case 'pinned':
-          yield { type: 'pinned', pinnedSessionIds: sessions(frame.pinnedSessionIds) }
+          yield { type: 'pinned', pinnedSessionIds: await sessions(frame.pinnedSessionIds) }
           break
         /* v8 ignore next -- closed follow-frame union. */
         default:

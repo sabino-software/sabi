@@ -115,7 +115,7 @@ export function CodexLibraryPage({
     }
   }
   const disabled = busy !== null || transportBusy || status.value?.syncing === true
-  const axiomDisabled = disabled || status.value?.axiom.available !== true || transportError
+  const axiomDisabled = disabled || axiomCompanion === undefined || transportError
     || (axiomCompanion !== undefined && transport === null)
     || (transport === 'browser' && setup?.available !== true)
   return <section className={css.page} aria-label={t('title')}>
@@ -156,8 +156,8 @@ export function CodexLibraryPage({
     </section>
     <section className={css.connection} aria-labelledby="native-axiom-heading">
       <div><h2 id="native-axiom-heading">{t('axiom')}</h2><p>{t('axiomDescription')}</p></div>
-      {status.value !== undefined && <p>{t(status.value.axiom.available ? 'bridgeAvailable' : 'bridgeUnavailable')}
-        {status.value.axiom.phase !== '' && <> · <code>{status.value.axiom.phase}</code></>}</p>}
+      <p>{t(axiomCompanion !== undefined ? 'bridgeAvailable' : 'bridgeUnavailable')}
+        {dot.snapshot?.phase && <> · <code>{dot.snapshot.phase}</code></>}</p>
       {axiomCompanion !== undefined && <div className={css.form}>
         <label htmlFor="native-axiom-transport">{t('axiomTransport')}</label>
         <select id="native-axiom-transport" value={transport ?? ''} disabled={disabled || transportBusy}

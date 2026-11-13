@@ -101,6 +101,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'session/create': 'owner-only', // owner creates a Session
   'session/initializeDefaultModel': 'owner-only', // owner initializes a Session default model
   'session/openWorkspacePath': 'owner-only', // owner opens a Workspace path
+  'session/presentation': 'owner-only', // dedicated-view routing can identify a private original website conversation
   'session/search': 'owner-only', // owner searches across Sessions
   'session/selectModel': 'owner-only', // owner selects a Session model
   'session/updateQueue': 'owner-only', // owner edits queued input

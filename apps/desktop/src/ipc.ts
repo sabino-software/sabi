@@ -24,6 +24,8 @@ export const DESKTOP_IPC = {
   onboardingActive: 'dsh-desktop:onboarding-active',
   onboardingApiKey: 'dsh-desktop:onboarding-api-key',
   bootFailed: 'dsh-desktop:boot-failed',
+  axiomSelection: 'dsh:axiom-selection',
+  axiomHistoryBefore: 'dsh:axiom-history-before',
   axiomPreferences: 'dsh:axiom-preferences',
   axiomSetPreferences: 'dsh:axiom-set-preferences',
   axiomChoose: 'dsh:axiom-choose',

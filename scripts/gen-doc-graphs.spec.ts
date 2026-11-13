@@ -27,7 +27,7 @@ const FIXTURE: Record<string, string> = {
     },
     include: ['vendor/**/*.ts', 'packages/**/*.ts'],
   }),
-  'vendor/cordis/src/context.ts': 'export class Context { private brand!: void }\n',
+  'vendor/cordis/src/context.ts': 'export class Context { private brand!: void; bail(_event: string): void {} }\n',
   'vendor/cordis/src/events.ts': [
     'export class EventsService {',
     '  dispatch(type: string, args: unknown[]): unknown[] { return [type, args] }',
@@ -53,6 +53,13 @@ const FIXTURE: Record<string, string> = {
     "import { aliased } from '../../pkga/src/index.ts'",
     "aliased(['pkgb/aliased-event'])",
     '',
+  ].join('\n'),
+  'packages/fix/pkgd/src/index.ts': [
+    "import { Context } from '../../../../vendor/cordis/src/context.ts'",
+    'declare const ctx: Context',
+    "ctx.bail('pkgd/content-policy')",
+    'const other = { bail(_event: string): void {} }',
+    "other.bail('pkgd/not-an-event')",
   ].join('\n'),
   // Global script files (no import/export): scriptFire is program-visible, so
   // the cross-file call in caller.ts leaves no same-file reference. Only the
@@ -84,6 +91,10 @@ function dispatchersOf(pkgs: readonly string[], event: string): string[] {
 }
 
 describe('event relation call-site indexing', () => {
+  it('recognizes synchronous Cordis bail dispatch without treating unrelated methods as events', () => {
+    expect(dispatchersOf(['pkgd'], 'pkgd/content-policy')).toEqual(['pkgd'])
+    expect(dispatchersOf(['pkgd'], 'pkgd/not-an-event')).toEqual([])
+  })
   it('recovers a proven-local helper through the single-file fast path', () => {
     expect(dispatchersOf(['pkga', 'pkgb'], 'pkga/local-event')).toEqual(['pkga'])
   })

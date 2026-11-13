@@ -898,6 +898,14 @@ resolveAgent(sessionId: SessionId): Promise<ApiSessionAgentResult>
 @Remote('list') async list(_request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue>
 
 /**
+ * Read extension-owned visibility and routing without reading a transcript or activating an Agent.
+ * @param request Session whose presentation is requested; resource authorization still applies.
+ * @param signal Optional caller cancellation.
+ * @returns Generic presentation metadata; ordinary presentation does not establish existence.
+ */
+@Remote('presentation') presentation(request: SessionPresentationRequest, signal: AbortSignal): Promise<SessionPresentationValue>
+
+/**
  * Search visible Session content without resuming an Agent. A non-owner
  * receives only the hits whose Session `allows()` admits; `hasMore`
  * describes the bounded result before that filtering.
@@ -1030,7 +1038,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @param signal - subscription cancellation.
  * @returns readiness followed by one projection change frame per committed event.
  */
-@Remote({ mode: 'stream' }) observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame>
+@Remote({ mode: 'stream' }) async *observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame>
 
 /**
  * Read passive Session state.
@@ -1038,7 +1046,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @param signal - read cancellation.
  * @returns current passive state.
  */
-@Remote state(request: SessionStateRequest, signal: AbortSignal): Promise<SessionState>
+@Remote async state(request: SessionStateRequest, signal: AbortSignal): Promise<SessionState>
 
 /**
  * Subscribe to complete Session state replacements.
@@ -1046,7 +1054,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @param signal - subscription cancellation.
  * @returns complete passive state replacements.
  */
-@Remote({ mode: 'stream' }) observeState(request: SessionStateRequest, signal: AbortSignal): AsyncIterable<SessionState>
+@Remote({ mode: 'stream' }) async *observeState(request: SessionStateRequest, signal: AbortSignal): AsyncIterable<SessionState>
 
 /**
  * Wait for Session quiescence or pending input with bounded assistant output.
@@ -1054,7 +1062,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @param signal - caller cancellation.
  * @returns stopping state and bounded assistant output.
  */
-@Remote wait(request: SessionWaitRequest, signal: AbortSignal): Promise<SessionWaitValue>
+@Remote async wait(request: SessionWaitRequest, signal: AbortSignal): Promise<SessionWaitValue>
 
 /**
  * Follow one Session log from its opening or resume cursor.
@@ -1071,7 +1079,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @param signal - cancellation for the Session read.
  * @returns a sequenced baseline, cached hints when migration is deferred, or null when absent.
  */
-@Remote('projections') projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue>
+@Remote('projections') async projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue>
 
 /**
  * Stream a complete live-control baseline followed by replacement frames.

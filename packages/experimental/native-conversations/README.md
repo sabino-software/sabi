@@ -1,5 +1,5 @@
 ---
-description: "Continue original work Codex and ChatGPT Dot conversations through ordinary Harness Sessions."
+description: "Continue work Codex Sessions and retain compatibility metadata for the dedicated Dot view."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Continue original work Codex and selected ChatGPT Dot conversations from the ordinary Harness sidebar, transcript, and composer. Source badges identify the original conversation. Inference and source history remain with the original application and account.
+Continue original work Codex conversations through ordinary Harness Sessions. Dot uses its dedicated desktop view; legacy Axiom mirrors are hidden without deleting their logs.
 
 ## Table of Contents
 
@@ -26,11 +26,11 @@ The isolated desktop fork enables this service with `DSH_NATIVE_CONVERSATIONS=1`
 
 A signed-out work account can sign in through the native connection panel using the regular browser. The explicit managed login uses `account/login/start`; Codex owns its localhost callback and credentials. The service matches the login ID and connection generation, verifies `account/read`, and then selects the work model and refreshes source metadata. Status contains no authorization URL or credentials. Cancellation targets only the pending login created by this service. Existing signed-in accounts are preserved; Codex authorization does not grant ChatGPT conversation history or authenticate Axiom’s website session.
 
-Open **Native conversations** to refresh Codex metadata. Enable Dot and its sidebar option in General Settings to place **Dot** directly below New Session. The Dot action reuses an existing selection or lets the user sign in and choose on the original website; it never asks for a URL. Codex synchronization also runs when the service starts. Source identities map to stable local Session IDs, so refresh attaches existing rows instead of importing the same conversation again. Source user and assistant text is hydrated when its Agent opens, with original message IDs retained in ingestion checkpoints. Historical operations render as inert source activity cards. An idle open Codex chat also refreshes completed source turns without starting inference.
+Open **Native conversations** to refresh work Codex metadata. Synchronization attaches original Codex threads to stable Harness Session IDs and hydrates source messages only when opened. Dot does not participate in this import.
 
 Codex uses the connected work daemon, independently of the personal Codex home. A direct text or image turn resumes the bound original thread or starts a thread for a new native Codex Session. It refuses an original thread with an unfinished turn in another client. Harness exposes the current Agent's declared tools through a temporary authenticated loopback MCP endpoint, dispatching calls through its existing execution and approval services. Cancellation interrupts only the exact turn acknowledged for that operation; it does not stop unrelated Codex work.
 
-Axiom uses the desktop-owned original ChatGPT page. Sign in directly through **Open ChatGPT login** when needed; cookies and token storage stay in that dedicated Electron session. In-app sign-in needs no browser extension. The optional regular-browser companion discovers only the explicitly paired Dot when that connection is selected. Website windows provide Reload and Close controls; Close destroys their content and stops observation until an explicit Dot action reopens it, preserving website login storage. The adapter sends only the exact user-composed text through the original website's composer and observes new original assistant message IDs. It never calls a ChatGPT model API or creates an imitation Dot. Refused or uncertain submissions are not retried automatically. Canceling Harness observation does not click an unobserved website Stop control.
+Dot is a dedicated continuous view opened from the top Dot button, not a Harness Session or an LLM provider. Its trusted desktop page bridge owns selection, website authentication, snapshots and sends. Existing Axiom mirror logs and their persisted readers remain intact. Their presentation policy hides them from normal Session discovery and refuses ordinary opening; saved identities redirect to the dedicated Dot view. The deprecated `connectAxiom(url)` selects the original page and returns `{ url, phase }`, never a Session id.
 
 <a id="configure-the-service"></a>
 ## Configure the service
@@ -42,9 +42,9 @@ Axiom uses the desktop-owned original ChatGPT page. Sign in directly through **O
 | `codexLoginTimeoutMs` | `300000` | Maximum wait for the managed Codex browser callback. |
 | `codexLoginCancelTimeoutMs` | `5000` | Deadline for cancelling this app’s exact pending Codex login. |
 | `axiomRequestTimeoutMs` | `30000` | Desktop page operation deadline. |
-| `axiomPollIntervalMs` | `750` | Original-page observation interval. |
-| `axiomResponseTimeoutMs` | `300000` | Maximum acknowledged-send operation lifetime. |
-| `axiomSettleMs` | `1500` | Fallback stream adapter settling interval; the desktop uses continuous source observation instead. |
+| `axiomPollIntervalMs` | `750` | Legacy compatibility field; unused by the dedicated Dot surface. |
+| `axiomResponseTimeoutMs` | `300000` | Legacy compatibility field; unused by the dedicated Dot surface. |
+| `axiomSettleMs` | `1500` | Legacy compatibility field; unused by the dedicated Dot surface. |
 
 The owner-only Remote surface contains `status`, `syncCodex`, `connectAxiom`, `showAxiomLogin`, and `useCodex`. The welcome action selects the already authenticated work subscription without creating or copying a grant. The Session projection `nativeConversation` identifies its source; source message checkpoints prevent duplicate ingestion. See the [session-query subsystem reference](../../../docs/subsystems/session-query.md) for the surrounding conversation services.
 
@@ -59,7 +59,7 @@ Codex retains its original thread. `turn/start` receives direct user text and ad
 
 #### Token effect
 
-Native turns use the original Codex or ChatGPT account. Metadata synchronization and history hydration do not generate model replies. Harness tool schemas, instructions, and tool results may add input to a Codex turn.
+Codex turns use the original Codex account. Dot does not run Harness model turns. Metadata reads and Codex history hydration do not generate model replies; Harness tool schemas and results may add input to Codex.
 
 #### KV Cache effect
 
@@ -73,7 +73,7 @@ The original service owns cache behavior. Keeping the source conversation does n
 - Axiom history contains only the bounded rendered page window, with truncation reported. It does not include unloaded or virtualized history.
 - Direct OpenAI login is supported. External social or enterprise identity-provider navigation requires an admitted destination.
 - Copied or forked Harness Sessions are not silently rebound to the original source. Create a fork in the source application before continuing that copy.
-- Native adapters reject auxiliary title and compaction requests. Axiom accepts text only; its bridge does not replay historical tools, fetch images automatically, or expose arbitrary website interactions.
+- Codex rejects auxiliary title and compaction requests. Dot sends belong to the dedicated website bridge, not the Harness model loop.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -7,6 +7,11 @@ A service can be a core spine service, a swappable capability seam, a bundle/com
 
 ```mermaid
 flowchart LR
+  pkg_host_codex_app_server["host-codex-app-server"]
+  svc_codexAppServer["ctx.codexAppServer<br/>Work Codex app-server connection"]
+  pkg_native_conversations["native-conversations"]
+  svc_nativeConversations["ctx.nativeConversations<br/>Original conversation integration"]
+  pkg_client_ui_codex_library["client-ui-codex-library"]
   pkg_action_cards["action-cards"]
   svc_actionCards["ctx.actionCards<br/>Optional action cards"]
   pkg_creation_recommendations["creation-recommendations"]
@@ -392,6 +397,7 @@ flowchart LR
   pkg_goal --> svc_goals
   pkg_headless --> svc_headlessStartup
   pkg_hmr --> svc_hmr
+  pkg_host_codex_app_server --> svc_codexAppServer
   pkg_host_directory_picker --> svc_directoryPicker
   pkg_host_directory_picker_browse --> svc_directoryPicker
   pkg_host_directory_picker_native --> svc_directoryPicker
@@ -410,6 +416,7 @@ flowchart LR
   pkg_mcp_manager --> svc_mcpManager
   pkg_mcp_resources --> svc_mcpResources
   pkg_message_feedback --> svc_messageFeedback
+  pkg_native_conversations --> svc_nativeConversations
   pkg_office_kit --> svc_officeKit
   pkg_otel --> svc_otel
   pkg_permission_presets --> svc_permissionPresets
@@ -509,6 +516,7 @@ flowchart LR
   svc_browserUse --> pkg_experimental_browser_use_playwright_mcp
   svc_browserUse --> pkg_experimental_browser_use_stagehand_native
   svc_clientModules --> pkg_client_hmr
+  svc_codexAppServer --> pkg_native_conversations
   svc_compaction --> pkg_compaction_basic
   svc_computerUse --> pkg_experimental_computer_use_cua_driver_mcp
   svc_computerUse --> pkg_experimental_computer_use_cua_driver_native
@@ -542,6 +550,7 @@ flowchart LR
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
   svc_mcpResources --> pkg_mcp_resources
+  svc_nativeConversations --> pkg_client_ui_codex_library
   svc_officeKit --> pkg_client_ui_sidebar_documentpreview
   svc_officeKit --> pkg_tool_office
   svc_otel --> pkg_host_product_telemetry_otel
@@ -657,6 +666,8 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.codexAppServer` | `service` | [`host-codex-app-server`](../packages/host/codex-app-server) | - | [`native-conversations`](../packages/experimental/native-conversations) | - | Owns the work app-server connection, requests and notifications; the native conversation adapter continues original Codex threads. |
+| `ctx.nativeConversations` | `service` | [`native-conversations`](../packages/experimental/native-conversations) | - | [`client-ui-codex-library`](../packages/client/ui-codex-library) | - | Imports and continues original work Codex chats with scoped Harness tools and preserves legacy Dot bindings for dedicated-view navigation. |
 | `ctx.actionCards` | `service` | [`action-cards`](../packages/experimental/action-cards) | - | [`creation-recommendations`](../packages/experimental/creation-recommendations), [`client-ui-action-cards`](../packages/experimental/client-ui-action-cards) | - | Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers. |
 | `ctx.pluginRecommendations` | `service` | [`plugin-recommendations`](../packages/experimental/plugin-recommendations) | - | [`client-ui-plugin-recommendations`](../packages/experimental/client-ui-plugin-recommendations) | - | Reads the current catalog text of an official plugin card and enables the plugin through the profile plugin manager after a click. |
 | `ctx.headlessStartup` | `core` | [`headless`](../packages/bundle/headless) | - | [`headless`](../packages/bundle/headless) | - | Supplies parsed task and run options to the headless runner and its sandbox-policy configuration. |

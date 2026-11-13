@@ -7,12 +7,13 @@ import { isAbsolute, join } from 'node:path'
 import { mkdir, stat } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { Session, SESSION_FORMAT_VERSION, appendPluginRecord, pluginRecordOf, type SessionId, type SessionHeader, type SessionSeq, type UserMessage } from '@deepseek-ai/dsh-session'
+import { Session, SESSION_FORMAT_VERSION, appendPluginRecord, pluginRecordOf, type SessionId, type SessionHeader, type SessionSeq } from '@deepseek-ai/dsh-session'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { CodexJsonObject } from '@deepseek-ai/dsh-host-codex-app-server'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
-import type {} from '@deepseek-ai/dsh-session-persistence'
+import type { SessionPersistenceRevision, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionPresentation } from '@deepseek-ai/dsh-workspace/types'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -25,11 +26,10 @@ import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { BINDING_RECORD, bindingSchema, nativeConversationProjection, nativeBindingSequenceProjection,
   nativeCodexCutProjection, appendCodexCut, nativeStepInputProjection, admittedNativeInputIds, type NativeStepInputState, type NativeCodexCutState } from './projection.ts'
-import { CHECKPOINT_RECORD, appendCodexHistoryTurns, appendSourceMessages, parseCodexHistoryEntries, sourceCheckpointProjection, sourceSessionId, type SourceCheckpoint, type SourceHistoryEntry } from './history.ts'
+import { CHECKPOINT_RECORD, appendCodexHistoryTurns, parseCodexHistoryEntries, sourceCheckpointProjection, sourceSessionId, type SourceCheckpoint, type SourceHistoryEntry } from './history.ts'
 import { CODEX_PROVIDER, CodexConversationAdapter } from './codex.ts'
-import { AxiomAdapter, readAxiomHistory } from './axiom.ts'
-import type { AxiomMessagesState, AxiomSnapshot, AxiomTransport } from './axiom-types.ts'
-import { appendAxiomMessage, axiomMessagesProjection } from './axiom-messages.ts'
+import type { AxiomTransport } from './axiom-types.ts'
+import { axiomMessagesProjection } from './axiom-messages.ts'
 import { createCodexActivityRecorder, type CodexActivityRecorder } from './codex-activity.ts'
 import type { NativeConversationBinding, NativeConversationId, NativeConversationStatus } from './types.ts'
 import { NativeCodexLoginController } from './codex-login.ts'
@@ -67,11 +67,11 @@ export interface Config {
   readonly codexLoginCancelTimeoutMs: number
   /** Maximum desktop original-page request lifetime in milliseconds. */
   readonly axiomRequestTimeoutMs: number
-  /** Interval between original Axiom page observations while its Session is idle. */
+  /** Legacy configuration retained for profile compatibility; unused by the dedicated Dot surface. */
   readonly axiomPollIntervalMs: number
-  /** Maximum original-page send and acknowledgement lifetime in milliseconds. */
+  /** Legacy configuration retained for profile compatibility; the dedicated Dot surface owns send deadlines. */
   readonly axiomResponseTimeoutMs: number
-  /** Fallback stream settling interval; source-owned desktop messages remain continuously observed. */
+  /** Legacy configuration retained for profile compatibility; unused by the dedicated Dot surface. */
   readonly axiomSettleMs: number
 }
 declare module '@deepseek-ai/cordis' { interface Context { nativeConversations: NativeConversations } }
@@ -101,9 +101,11 @@ export default class NativeConversations extends TypertRemoteService {
   private sourceCuts!: ProjectionHandle<NativeCodexCutState | null>
   private stepInputs!: ProjectionHandle<NativeStepInputState>
   private checkpoints!: ProjectionHandle<SourceCheckpoint>
-  private axiomMessages!: ProjectionHandle<AxiomMessagesState>
   private codexActivity!: CodexActivityRecorder
   private sourceSessions!: KvTable<SessionId, SourceSessionAssignment>
+  private readonly metadataStats = new Set<Promise<SessionPersistenceSnapshot | undefined>>()
+  private readonly bindingReads = new Map<SessionId, Map<SessionPersistenceRevision, Promise<NativeConversationBinding | null>>>()
+  private readonly coldBindings = new Map<SessionId, { revision: SessionPersistenceRevision; binding: NativeConversationBinding | null }>()
   private readonly observedCodex = new WeakSet<Agent>()
   private axiom: AxiomTransport | undefined
   private axiomPhase = 'disconnected'
@@ -137,7 +139,12 @@ export default class NativeConversations extends TypertRemoteService {
     this.sourceCuts = await this.ctx.sessionProjections.register(nativeCodexCutProjection)
     this.stepInputs = await this.ctx.sessionProjections.register(nativeStepInputProjection)
     this.checkpoints = await this.ctx.sessionProjections.register(sourceCheckpointProjection)
-    this.axiomMessages = await this.ctx.sessionProjections.register(axiomMessagesProjection)
+    await this.ctx.sessionProjections.register(axiomMessagesProjection)
+    this.ctx.on('workspace/session-presentation', async (id, signal) => {
+      const binding = await this.readBinding(id, signal)
+      if (binding?.source !== 'axiom') return undefined
+      return { visibility: 'hidden', route: { view: 'dot', params: { url: binding.sourceId } } } satisfies SessionPresentation
+    })
     const savedDots = new Set<string>()
     for (const { header } of await this.ctx.sessionPersistence.list()) {
       if (header.isSeeded || header.parentSession !== undefined
@@ -187,34 +194,10 @@ export default class NativeConversations extends TypertRemoteService {
       activity: (agent, activity) => { this.codexActivity.append(agent.session, activity) },
     })
     this.ctx.effect(() => this.ctx.llm.registerAdapter([CODEX_PROVIDER], codex))
-    const axiom = new AxiomAdapter({
-      bindingOf: (id) => { const binding = bindingOf(id); return binding?.source === 'axiom' ? { sourceId: binding.sourceId, url: binding.sourceId } : undefined },
-      transport: () => this.axiom,
-      userInput: (id, messages) => {
-        const session = this.ctx.sessions.get(id)
-        const log = this.requestLogs.get(id)
-        if (!session || !log) return []
-        const admitted = new Set(admittedNativeInputIds(this.stepInputs.stateOf(session), log))
-        return messages.filter((message): message is UserMessage => message.role === 'user'
-          && 'id' in message && typeof message.id === 'string' && admitted.has(message.id))
-          .filter(message => message.source.kind === 'user')
-      },
-      renderObserved: true,
-      onSnapshot: (id, snapshot) => {
-        const session = this.ctx.sessions.get(id)
-        if (session) this.observeAxiom(session, snapshot, false)
-      },
-      pollIntervalMs: this.config.axiomPollIntervalMs,
-      responseTimeoutMs: this.config.axiomResponseTimeoutMs, settleMs: this.config.axiomSettleMs,
-      onCommitted: (id, snapshot, userId, assistantIds) => {
-        const session = this.ctx.sessions.get(id)
-        if (session) this.markObserved(session, [...userId ? [userId] : [], ...assistantIds], snapshot.limited)
-      },
-    })
-    this.ctx.effect(() => this.ctx.llm.registerAdapter(['axiom-original'], axiom))
     this.ctx.on('agent/created', async ({ agent, signal }) => {
       if (this.rebuilding.ids.has(agent.id)) throw new Error('This local Codex mirror is being explicitly rebuilt.')
       let binding = this.bindings.stateOf(agent.session)
+      if (binding?.source === 'axiom') throw new Error('Open this original conversation with the dedicated Dot view.')
       const bindingSeq = this.bindingSequences.stateOf(agent.session)
       let forked = false
       if (binding && bindingSeq !== null && !agent.session.isOwnSeq(bindingSeq)) {
@@ -237,7 +220,6 @@ export default class NativeConversations extends TypertRemoteService {
         forked = true
       }
       if (binding && !forked) await this.hydrate(agent, binding, signal)
-      if (binding?.source === 'axiom') this.watchAxiom(agent, binding)
       if (binding?.source === 'codex') this.watchCodex(agent, binding)
       return undefined
     })
@@ -259,7 +241,12 @@ export default class NativeConversations extends TypertRemoteService {
     this.ctx.effect(() => {
       // List metadata in the background; failure is visible through the connection panel.
       const startup = this.syncCodex().catch(() => {})
-      return async () => { this.lifetime.abort(); await startup; await this.synchronization.task?.catch(() => {}) }
+      return async () => {
+        this.lifetime.abort()
+        await startup
+        await this.synchronization.task?.catch(() => {})
+        await Promise.allSettled([...this.metadataStats, ...[...this.bindingReads.values()].flatMap(reads => [...reads.values()])])
+      }
     })
   }
 
@@ -380,7 +367,64 @@ export default class NativeConversations extends TypertRemoteService {
     await mkdir(this.config.fallbackCwd, { recursive: true })
     return this.config.fallbackCwd
   }
+  private async readBinding(id: SessionId, signal?: AbortSignal): Promise<NativeConversationBinding | null> {
+    signal?.throwIfAborted()
+    this.lifetime.signal.throwIfAborted()
+    const live = this.ctx.sessions.get(id)
+    if (live) return this.bindings.stateOf(live)
+    const activeSignal = signal ? AbortSignal.any([signal, this.lifetime.signal]) : this.lifetime.signal
+    const pendingStat = this.ctx.sessionPersistence.stat(id, { signal: activeSignal })
+    this.metadataStats.add(pendingStat)
+    let stored: SessionPersistenceSnapshot | undefined
+    try { stored = await pendingStat } finally { this.metadataStats.delete(pendingStat) }
+    signal?.throwIfAborted()
+    this.lifetime.signal.throwIfAborted()
+    if (!stored) return null
+    const prior = this.coldBindings.get(id)
+    if (prior?.revision === stored.revision) return prior.binding
+    const cached = this.ctx.sessionProjectionCache.cachedSnapshot(stored.header, ['nativeConversation'])
+    if (cached?.values.nativeConversation?.source === 'axiom') return cached.values.nativeConversation
+    if (cached && stored.eventCount !== undefined && cached.asOfSeq === stored.eventCount - 1
+      && Object.hasOwn(cached.values, 'nativeConversation')) return cached.values.nativeConversation ?? null
+    if (stored.formatStatus === 'migration-required') return null
+    let reads = this.bindingReads.get(id)
+    if (!reads) { reads = new Map(); this.bindingReads.set(id, reads) }
+    let task = reads.get(stored.revision)
+    if (!task) {
+      const revisionReads = reads
+      task = (async () => {
+        const owned = this.lifetime.signal
+        const handle = await this.ctx.sessionPersistence.open(id, 'read', { signal: owned })
+        try {
+          const snapshot = await handle.read(undefined, undefined, { signal: owned })
+          owned.throwIfAborted()
+          let binding: NativeConversationBinding | null = null
+          for (const event of snapshot.events) {
+            owned.throwIfAborted()
+            const record = pluginRecordOf(event)
+            if (record?.type === BINDING_RECORD) binding = bindingSchema.parse(record.data)
+          }
+          this.coldBindings.set(id, { revision: stored.revision, binding })
+          return binding
+        } finally { await handle.close() }
+      })()
+      reads.set(stored.revision, task)
+      const clear = () => {
+        revisionReads.delete(stored.revision)
+        if (revisionReads.size === 0 && this.bindingReads.get(id) === revisionReads) this.bindingReads.delete(id)
+      }
+      void task.then(clear, clear)
+    }
+    if (!signal) return task
+    return new Promise((resolve, reject) => {
+      const abort = () => { reject(signal.reason) }
+      signal.addEventListener('abort', abort, { once: true })
+      void task.then((value) => {signal.removeEventListener('abort', abort); resolve(value)}, (error) => {signal.removeEventListener('abort', abort); reject(error)})
+      if (signal.aborted) abort()
+    })
+  }
   private async ensureStored(binding: NativeConversationBinding, createdAt = Date.now()): Promise<boolean> {
+    if (binding.source !== 'codex') throw new Error('Dot conversations do not create Harness Sessions.')
     const sourceKey = sourceSessionId(binding.source, binding.sourceId)
     const assignment = this.sourceSessions.get(sourceKey)
     const id = assignment?.sessionId ?? sourceKey
@@ -426,21 +470,22 @@ export default class NativeConversations extends TypertRemoteService {
     return true
   }
   /**
-   * Connect the original selected Dot and open it as an ordinary Session.
-   * @param url Exact original ChatGPT Dot URL selected by the user.
-   * @returns The ordinary Session assigned to that original conversation.
+   * Select the original Dot without creating, attaching or resuming a Harness Session.
+   * @deprecated Use the dedicated desktop Dot surface; this endpoint remains only as a selection compatibility call.
+   * @param url Exact original ChatGPT Dot URL chosen by the user.
+   * @returns Selected page identity and availability, never a Session id.
    */
   @Remote
-  async connectAxiom(url: string): Promise<{ sessionId: SessionId }> {
+  async connectAxiom(url: string): Promise<{ url: string; phase: string }> {
     const transport = this.axiom
-    if (!transport) throw new RemoteError('gateway/internal', 'Open the Mac app to connect the original Axiom page.', {})
-    const binding = { sourceId: brandString<NativeConversationId>(url), url }
-    const history = await readAxiomHistory(transport, binding, this.lifetime.signal)
-    this.axiomPhase = history.phase
-    const value: NativeConversationBinding = { source: 'axiom', sourceId: brandString<NativeConversationId>(history.url), title: history.phase === 'ready' ? history.title || 'Axiom' : 'Axiom', model: 'original-dot', cwd: null }
-    await this.ensureStored(value)
-    this.axiomSelection.preferredUrl = history.url
-    return { sessionId: sourceSessionId('axiom', value.sourceId) }
+    if (!transport) throw new RemoteError('gateway/internal', 'Open the Mac app to select the original Dot.', {})
+    const release = await transport.acquire(this.lifetime.signal)
+    try {
+      const snapshot = await transport.connect(url, this.lifetime.signal)
+      this.axiomPhase = snapshot.phase
+      this.axiomSelection.preferredUrl = snapshot.url
+      return { url: snapshot.url ?? url, phase: snapshot.phase }
+    } finally { release() }
   }
   /** Show the dedicated original-page login surface when authentication is required. */
   @Remote
@@ -489,33 +534,6 @@ export default class NativeConversations extends TypertRemoteService {
       appendCodexHistoryTurns(agent.session, this.checkpoints.stateOf(agent.session), await this.codexHistory(binding.sourceId, signal),
         binding.sourceId, binding.model ?? 'unknown', this.ctx.agents.turnBoundaryOf(agent.session).lastTurn + 1,
         (activity) => { this.codexActivity.append(agent.session, activity) })
-    } else if (this.axiom) {
-      const history = await readAxiomHistory(this.axiom, { sourceId: binding.sourceId, url: binding.sourceId }, signal)
-      this.observeAxiom(agent.session, history, true)
-    }
-  }
-  private observeAxiom(session: Session, snapshot: Pick<AxiomSnapshot, 'phase' | 'messages' | 'limited'>, includeUsers: boolean): void {
-    this.axiomPhase = snapshot.phase
-    // Site messages keep their original order. Assistant edits update their original-id node.
-    const seen = new Set(this.checkpoints.stateOf(session).ids)
-    let pendingUser = false
-    for (const message of snapshot.messages) {
-      if (message.role === 'user') {
-        const parsedTime = message.timestamp === null ? Number.NaN : Date.parse(message.timestamp)
-        const timestamp = Number.isSafeInteger(parsedTime) && parsedTime >= 0 ? parsedTime : null
-        if (includeUsers) appendSourceMessages(session, this.checkpoints.stateOf(session),
-          [{ id: message.id, role: 'user', text: message.text, timestamp }], 'axiom-original', 'original-dot', snapshot.limited,
-          this.ctx.agents.turnBoundaryOf(session).lastTurn + 1)
-        else if (!seen.has(message.id)) pendingUser = true
-      } else {
-        // A concurrent original-site user belongs before its reply. Reconcile the
-        // complete ordered batch under idle maintenance instead of anchoring it early.
-        if (pendingUser) continue
-        const prior = this.axiomMessages.stateOf(session).byId[message.id]
-        if (!prior || prior.text !== message.text || prior.timestamp !== message.timestamp || prior.truncated !== message.truncated) {
-          appendAxiomMessage(session, { id: message.id, text: message.text, timestamp: message.timestamp, truncated: message.truncated })
-        }
-      }
     }
   }
   private watchCodex(agent: Agent, binding: NativeConversationBinding): void {
@@ -549,34 +567,5 @@ export default class NativeConversations extends TypertRemoteService {
       return async () => { lifetime.abort(); await pending }
     }, 'native-conversations.observe-original-codex')
   }
-  private watchAxiom(agent: Agent, binding: NativeConversationBinding): void {
-    agent.ctx.effect(() => {
-      const lifetime = new AbortController()
-      const signal = AbortSignal.any([lifetime.signal, this.lifetime.signal])
-      const observe = async (): Promise<void> => {
-        while (!signal.aborted) {
-          await delay(this.config.axiomPollIntervalMs, undefined, { signal })
-          if (agent.status !== 'idle' || !this.axiom) continue
-          try {
-            await agent.runMaintenance(async (maintenance) => {
-              const transport = this.axiom
-              if (!transport) return
-              try {
-                const history = await readAxiomHistory(
-                  transport, { sourceId: binding.sourceId, url: binding.sourceId }, AbortSignal.any([signal, maintenance]),
-                )
-                this.observeAxiom(agent.session, history, true)
-              } catch (_unavailableObservation: unknown) {
-                if (!signal.aborted) this.axiomPhase = 'unavailable'
-              }
-            })
-          } catch (_busyMaintenance: unknown) {
-            // A busy Agent did not admit a source read; retry when it becomes idle.
-          }
-        }
-      }
-      const pending = observe().catch((_cancelledObservation: unknown) => { if (!signal.aborted) this.axiomPhase = 'unavailable' })
-      return async () => { lifetime.abort(); await pending }
-    }, 'native-conversations.observe-original-axiom')
-  }
+
 }

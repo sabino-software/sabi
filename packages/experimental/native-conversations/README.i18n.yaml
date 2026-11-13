@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/native-conversations/README.md
 /:
-  en: 40ddd4291c263fc0
-  zh: e31f38d98c0e6b52
+  en: 13226bd35330e223
+  zh: 5a1493a902660568
 /deepseek-ai-dsh-native-conversations:
   en: 2ce720be6e5df373
   zh: 24a82ec6d292bec6
 /deepseek-ai-dsh-native-conversations/summary:
-  en: 1652e1de089cd767
-  zh: ad7510556015949d
+  en: 71c7e89c3ab4dcb8
+  zh: 995d20054192cc54
 /deepseek-ai-dsh-native-conversations/table-of-contents:
   en: 6beb0300a387965b
   zh: 3bd540d24d1ad1d0
 /deepseek-ai-dsh-native-conversations/use-this-package:
-  en: 7cd488d161bb52c9
-  zh: d31bbf31f2c85f2f
+  en: cd3b3a05c92a14dc
+  zh: 245b2cd8880cb380
 /deepseek-ai-dsh-native-conversations/configure-the-service:
-  en: 76f9648cf4d6268f
-  zh: 1bc02465f8776b60
+  en: 0ae23c66ceb9ed83
+  zh: be3e8002867a928e
 /deepseek-ai-dsh-native-conversations/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -30,14 +30,14 @@
   en: 2194d07c2beb7e6a
   zh: fee81d96284bf291
 /deepseek-ai-dsh-native-conversations/model-experience/native-source-turns/token-effect:
-  en: d88eecd31efd42c6
-  zh: 4548603323ac6f52
+  en: 6dda562c48c19a58
+  zh: 1c48a579a46561eb
 /deepseek-ai-dsh-native-conversations/model-experience/native-source-turns/kv-cache-effect:
   en: f7b8f22005d11738
   zh: c8ea3c806b5f3063
 /deepseek-ai-dsh-native-conversations/known-limitations-and-deferred-work:
-  en: a96856dffb66ec7b
-  zh: 3ec1b9c37968f237
+  en: 266af3cd45eec42a
+  zh: 58959142bcf2f5cd
 /deepseek-ai-dsh-native-conversations/known-limitations-and-deferred-work/dev-note:
   en: b836f01bd0bceb4a
   zh: 25e979141fbe5501

@@ -1,5 +1,7 @@
 /** Session Remote owner: cold reads, explicit Agent commands, and live control state. */
 
+import { requireVisibleSession } from './presentation.ts'
+import { sessionPresentation } from '@deepseek-ai/dsh-workspace'
 import { hostname } from 'node:os'
 import { resolve } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -46,6 +48,7 @@ import type {
   SessionFollowRequest,
   SessionForkRequest,
   SessionForkValue,
+  SessionPresentationRequest, SessionPresentationValue,
   SessionListRequest,
   SessionListValue,
   SessionOpenWorkspacePathRequest,
@@ -158,6 +161,8 @@ export class SessionController extends TypertRemoteService {
   private stateController!: StateController
   private webController!: WebController
 
+  private readonly presentationLifetime = new AbortController()
+  private readonly presentationTasks = new Set<Promise<void>>()
   private agents!: ApiSessionAgentController
   private commands!: SessionCommandController
   private controlState!: SessionControlController
@@ -201,7 +206,8 @@ export class SessionController extends TypertRemoteService {
     // Registered before history so reverse-order teardown closes every
     // follower before waiting for already-admitted promotions.
     ctx.effect(() => async () => {
-      await Promise.allSettled([...this.promotions])
+      this.presentationLifetime.abort()
+      await Promise.allSettled([...this.promotions, ...this.presentationTasks])
     }, 'session-controller.promotions')
     // Assistant-stream observation must be live before the list read yields: an Agent's
     // opening frame arriving during that await would otherwise have no listener.
@@ -222,28 +228,33 @@ export class SessionController extends TypertRemoteService {
     ctx.plugin(ArchivedSessionGate)
 
     ctx.on('session/created', (session) => {
-      ctx.emit('api-session/added', this.listState.summaryFor(session))
+      this.publishVisible(session.id, () => {
+        if (ctx.sessions.get(session.id) === session) ctx.emit('api-session/added', this.listState.summaryFor(session))
+      })
     })
     ctx.on('session/disposed', (session) => {
       ctx.emit('api-session/removed', session.id)
     })
     const publishAgentAvailability = ({ agent }: { agent: Agent }): undefined => {
       if (ctx.sessions.get(agent.id) === agent.session) {
-        ctx.emit('api-session/added', this.listState.summaryFor(agent.session))
+        this.publishVisible(agent.id, () => {
+          if (ctx.sessions.get(agent.id) === agent.session) ctx.emit('api-session/added', this.listState.summaryFor(agent.session))
+        })
       }
     }
     ctx.on('agent/created', publishAgentAvailability)
     ctx.on('agent/disposed', publishAgentAvailability)
     ctx.on('agent/status', ({ agent, status }) => {
-      ctx.emit('api-session/status', agent.id, status === 'running')
+      this.publishVisible(agent.id, () => { ctx.emit('api-session/status', agent.id, status === 'running') })
     })
     ctx.on('agent/error', ({ agent, error }) => {
-      ctx.emit('api-session/error', agent.id, errorChain(error))
+      this.publishVisible(agent.id, () => { ctx.emit('api-session/error', agent.id, errorChain(error)) })
     })
     ctx.on('session/event', (session, event) => {
       if (event.type !== 'user/message' || event.data.source.kind !== 'user') return
       if (event.data.authoredAt === null) return
-      ctx.emit('api-session/activity', session.id, event.data.authoredAt ?? event.time)
+      const updatedAt = event.data.authoredAt ?? event.time
+      this.publishVisible(session.id, () => { ctx.emit('api-session/activity', session.id, updatedAt) })
     })
   }
 
@@ -262,6 +273,17 @@ export class SessionController extends TypertRemoteService {
     })
     this.promotions.add(task)
     void task.finally(() => { this.promotions.delete(task) })
+  }
+
+  private publishVisible(id: SessionId, publish: () => void): void {
+    const signal = this.presentationLifetime.signal
+    const task = sessionPresentation(this.ctx, id, signal).then((value) => {
+      if (!signal.aborted && value.visibility !== 'hidden') publish()
+    }).catch((error: unknown) => {
+      if (!signal.aborted) this.ctx.logger.warn(`session presentation unavailable for "${id}": ${errorChain(error)}`)
+    })
+    this.presentationTasks.add(task)
+    void task.finally(() => { this.presentationTasks.delete(task) })
   }
 
   /**
@@ -283,6 +305,17 @@ export class SessionController extends TypertRemoteService {
   async list(_request: SessionListRequest, signal: AbortSignal): Promise<SessionListValue> {
     const items = await this.listState.list(signal)
     return { items: items.filter(item => this.ctx.remoteAccess.allows({ kind: 'session', id: item.sessionId })) }
+  }
+
+  /**
+   * Read extension-owned visibility and routing without reading a transcript or activating an Agent.
+   * @param request Session whose presentation is requested; resource authorization still applies.
+   * @param signal Optional caller cancellation.
+   * @returns Generic presentation metadata; ordinary presentation does not establish existence.
+   */
+  @Remote('presentation')
+  presentation(request: SessionPresentationRequest, signal: AbortSignal): Promise<SessionPresentationValue> {
+    return sessionPresentation(this.ctx, request.sessionId, signal)
   }
 
   /**
@@ -563,8 +596,9 @@ export class SessionController extends TypertRemoteService {
    * @returns readiness followed by one projection change frame per committed event.
    */
   @Remote({ mode: 'stream' })
-  observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame> {
-    return this.historyController.observeProjections(request, signal)
+  async *observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame> {
+    await requireVisibleSession(this.ctx, request.sessionId, signal)
+    yield* this.historyController.observeProjections(request, signal)
   }
 
   /**
@@ -574,7 +608,8 @@ export class SessionController extends TypertRemoteService {
    * @returns current passive state.
    */
   @Remote
-  state(request: SessionStateRequest, signal: AbortSignal): Promise<SessionState> {
+  async state(request: SessionStateRequest, signal: AbortSignal): Promise<SessionState> {
+    await requireVisibleSession(this.ctx, request.sessionId, signal)
     return this.stateController.state(request, signal)
   }
 
@@ -585,8 +620,9 @@ export class SessionController extends TypertRemoteService {
    * @returns complete passive state replacements.
    */
   @Remote({ mode: 'stream' })
-  observeState(request: SessionStateRequest, signal: AbortSignal): AsyncIterable<SessionState> {
-    return this.stateController.observeState(request, signal)
+  async *observeState(request: SessionStateRequest, signal: AbortSignal): AsyncIterable<SessionState> {
+    await requireVisibleSession(this.ctx, request.sessionId, signal)
+    yield* this.stateController.observeState(request, signal)
   }
 
   /**
@@ -596,7 +632,8 @@ export class SessionController extends TypertRemoteService {
    * @returns stopping state and bounded assistant output.
    */
   @Remote
-  wait(request: SessionWaitRequest, signal: AbortSignal): Promise<SessionWaitValue> {
+  async wait(request: SessionWaitRequest, signal: AbortSignal): Promise<SessionWaitValue> {
+    await requireVisibleSession(this.ctx, request.sessionId, signal)
     return this.stateController.wait(request, signal)
   }
 
@@ -619,7 +656,8 @@ export class SessionController extends TypertRemoteService {
    * @returns a sequenced baseline, cached hints when migration is deferred, or null when absent.
    */
   @Remote('projections')
-  projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue> {
+  async projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue> {
+    await requireVisibleSession(this.ctx, request.sessionId, signal)
     return this.historyController.projections(request, signal)
   }
 
@@ -633,13 +671,19 @@ export class SessionController extends TypertRemoteService {
     for await (const frame of this.controlState.control(signal)) {
       switch (frame.type) {
         case 'baseline': {
-          const projections = Object.fromEntries(Object.entries(frame.value.projections)
-            .filter(([sessionId]) => this.ctx.remoteAccess.allows({ kind: 'session', id: sessionId as SessionId })))
+          const visibleProjections = []
+          for (const entry of Object.entries(frame.value.projections)) {
+            const id = entry[0] as SessionId
+            if (this.ctx.remoteAccess.allows({ kind: 'session', id })
+              && (await sessionPresentation(this.ctx, id, signal)).visibility !== 'hidden') visibleProjections.push(entry)
+          }
+          const projections = Object.fromEntries(visibleProjections)
           yield { type: 'baseline', value: { ...frame.value, projections } }
           break
         }
         case 'projection':
-          if (this.ctx.remoteAccess.allows({ kind: 'session', id: frame.sessionId })) yield frame
+          if (this.ctx.remoteAccess.allows({ kind: 'session', id: frame.sessionId })
+            && (await sessionPresentation(this.ctx, frame.sessionId, signal)).visibility !== 'hidden') yield frame
           break
         /* v8 ignore next -- closed control-frame union. */
         default:

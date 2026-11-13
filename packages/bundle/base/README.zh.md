@@ -11,8 +11,6 @@ kind: "package-bundle"
 
 每个基于 base 的 `dsh --profile` 表层都运行在 `dsh-base` 上，因此这些表层共享模型连接、完整工具集、持久会话历史和 workspace 安全默认值。随附的 `sdk-minimal` profile 刻意改用完整的独立配置树。你通常不直接操作本组合包——随发行版交付的基于 base 的 profile 已经包含它，自定义的基于 base 的 profile 则把它放在第一位。需要其他默认值时，应修改自己的 profile patch 或添加后续组合包；本包不是供导入的库。
 
-设置 `DSH_PROVIDER_NEUTRAL=1` 时，固定的 DeepSeek API 密钥与账号模型路由不挂载；现有 pi-ai 目录仍提供可选的 DeepSeek 配置。配置保留及旧路由限制见[本地 Desktop 策略](../../../apps/desktop/README.zh.md#terminal-command)。
-
 ## 目录
 
 - [使用本包](#use-this-package)
@@ -26,6 +24,8 @@ kind: "package-bundle"
 
 <a id="use-this-package"></a>
 ## 使用本包
+
+设置 `DSH_PROVIDER_NEUTRAL=1` 时，固定的 DeepSeek API 密钥与账号模型路由不挂载；现有 pi-ai 目录仍提供可选的 DeepSeek 配置。配置保留及旧路由限制见[本地 Desktop 策略](../../../apps/desktop/README.zh.md#terminal-command)。
 
 你会自动获得 dsh 核心：随发行版交付的 `web`、`headless`、`sdk` 与 `acp` profile 已包含它，自定义 profile 则把它列为第一个组合包。之后一切无需任何额外配置即可工作。
 

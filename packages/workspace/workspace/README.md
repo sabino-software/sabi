@@ -25,6 +25,8 @@ Use this package to keep an ordered, persistent list of project directories and 
 <a id="use-this-package"></a>
 ## Use this package
 
+Integrations register `workspace/session-presentation` to select process-local Session visibility and a generic dedicated-view route. `sessionPresentation(ctx, sessionId, signal)` returns the first policy or visible presentation by default. This does not change registry membership or stored logs; API readers apply it to discovery and normal-opening decisions.
+
 Use this package to give the product a project list: named directories the user works in, the sessions that ran in each, a stable order, and a way to hide sessions without losing them or bring them back. The API contracts behind each action live in the implementation section.
 
 ### When to use it

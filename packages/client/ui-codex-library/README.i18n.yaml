@@ -3,20 +3,20 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-codex-library/README.md
 /:
-  en: b4fdfcb4ab8905d8
-  zh: ff0c93f46794a36e
+  en: 85e836ba94b5ab5b
+  zh: 0c6d3d4a5c9736c5
 /deepseek-ai-dsh-client-ui-codex-library:
   en: 1bacf381283cd992
   zh: 170f1ea278138210
 /deepseek-ai-dsh-client-ui-codex-library/summary:
-  en: f41cea04c83d79ab
-  zh: 3394090e7f5c06b2
+  en: 5e23737912012b71
+  zh: 79baaa136d454fa4
 /deepseek-ai-dsh-client-ui-codex-library/table-of-contents:
   en: dca43fc4c4defe34
   zh: 419885861655dd47
 /deepseek-ai-dsh-client-ui-codex-library/use-this-package:
-  en: 688edd7be47518c0
-  zh: 269179fc0b667a36
+  en: 16ce7e6ed4e3cd2e
+  zh: fc7f137b9b8a3212
 /deepseek-ai-dsh-client-ui-codex-library/model-experience:
   en: d6911fad5418b8d4
   zh: 205665e076fa8a45
@@ -24,8 +24,8 @@
   en: 5255b2538fe640d0
   zh: fbbc57b13c656f33
 /deepseek-ai-dsh-client-ui-codex-library/known-limitations-and-deferred-work:
-  en: eb916ac1b886a295
-  zh: af4ff5f99fc1e19a
+  en: 9c9e5ea533524fe0
+  zh: 20333a265ffca6d7
 /deepseek-ai-dsh-client-ui-codex-library/known-limitations-and-deferred-work/dev-note:
-  en: 21a78694fc1da5e2
-  zh: c7780916c140a59a
+  en: f493522d8e50da54
+  zh: 31778e9855f4eba1

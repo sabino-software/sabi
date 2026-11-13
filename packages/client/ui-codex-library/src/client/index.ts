@@ -1,6 +1,7 @@
 /** Native conversation connections and source badges over ordinary Harness Sessions. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { createDotController } from './dot-controller.ts'
+import { DotPage, type DotPageInjected } from './dot-page.tsx'
+import { createDotController, emptyDotState } from './dot-controller.ts'
 import { DotSidebarRow, DotSettingsRow, type DotControlsInjected } from './dot-controls.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-general/client'
 import type { Context } from '@deepseek-ai/cordis'
@@ -18,8 +19,7 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { NativeConversationStatus } from '../types.ts'
 import { desktopAxiomCompanion } from './desktop-axiom.ts'
 import { CodexLibraryPage, CodexLibraryIcon, type NativeConnectionsInjected } from './page.tsx'
-import { NativeSourceHeader, NativeSourceRow, type NativeSourceHeaderInjected } from './source-badge.tsx'
-import { registerAxiomMessages } from './axiom-messages.tsx'
+import { NativeSourceHeader, NativeSourceRow } from './source-badge.tsx'
 import { registerCodexActivity } from './codex-activity.tsx'
 import { en, zh, pt, type CodexLibraryKey } from './locales.ts'
 
@@ -47,33 +47,50 @@ function valueOf<T>(result: RemoteResult<T>): T {
  * @param ctx - Browser plugin context.
  */
 export function apply(ctx: Context): void {
-  registerAxiomMessages(ctx)
   registerCodexActivity(ctx)
   const panel = 'codex-library' as MainPanelId
   const companion = desktopAxiomCompanion()
-  const dot = companion === undefined ? undefined : createDotController(companion, {
-    preferredUrl: async () => valueOf(await ctx.remote.nativeConversations.status()).axiom.preferredUrl ?? null,
-    connect: async (url, isCurrent) => {
-      const result = valueOf(await ctx.remote.nativeConversations.connectAxiom(url))
-      await ctx.sessions.refresh()
-      if (isCurrent()) ctx.uiWorkspace.openSession(result.sessionId)
-    },
-  })
+  const dotPanel = 'dot' as MainPanelId
+  const dot = companion === undefined ? undefined : createDotController(companion)
   ctx.effect(() => () => { dot?.dispose() }, 'native-conversations.dot-selection')
   const dotInjected = (): DotControlsInjected => ({
     hooks: { dot: dot?.store ?? unavailableDot },
-    chooseDot: async () => { await dot?.choose() },
+    chooseDot: async () => { await dot?.configure() },
     setDotPreferences: async (preferences) => { await dot?.setPreferences(preferences) },
   })
-  const unavailableDot = createSnapshotStore({ preferences: null, busy: false, pending: false, failed: false, preferencesFailed: false })
+  const unavailableDot = createSnapshotStore(emptyDotState)
   if (dot !== undefined) {
+    ctx.effect(() => ctx.uiWorkspace.registerSessionOpenInterceptor((target, signal) => {
+      const sessionId = typeof target === 'string' ? target : target.childSessionId
+      const summary = ctx.sessions.list.getSnapshot().byId[sessionId]
+      if (summary !== undefined && summary.projectionValues?.nativeConversation?.source !== 'axiom') return false
+      return ctx.remote.session.presentation({ sessionId }, signal).then((response) => {
+        const presentation = valueOf(response)
+        if (signal.aborted) return true
+        if (presentation.visibility === 'visible') return false
+        // Hidden logs are never opened as regular Sessions, even if their view is unavailable.
+        if (presentation.route?.view === 'dot') {
+          ctx.layout.selectPanel(dotPanel)
+          void dot.open(presentation.route.params.url)
+          return true
+        }
+        throw new Error(t('dotLegacyUnavailable'))
+      })
+    }), 'native-conversations.legacy-dot-route')
     ctx.slots.inject('sidebar.primary.action', () => ctx.slots.register({
       name: 'sidebar.primary.action', id: 'dot', locale: 'codexLibrary',
       inject: () => ({ ...dotInjected(), chooseDot: async () => {
-        ctx.layout.selectPanel(panel)
-        await dot.choose()
+        ctx.layout.selectPanel(dotPanel)
+        await dot.open()
       } }),
     }, DotSidebarRow))
+    ctx.slots.inject('main', () => ctx.slots.register({
+      name: 'main', key: dotPanel, locale: 'codexLibrary',
+      inject: (): DotPageInjected => ({ hooks: { dot: dot.store },
+        setDotDraft: (text) => { dot.setDraft(text) }, sendDot: async () => { await dot.send() },
+        loadDotHistory: async () => { await dot.loadOlder() }, showDotOriginal: async () => { await dot.showOriginal() },
+      }),
+    }, DotPage))
     ctx.slots.inject('settings.general.item', () => ctx.slots.register({
       name: 'settings.general.item', id: 'dot', order: 20, locale: 'codexLibrary', inject: dotInjected,
     }, DotSettingsRow))
@@ -97,7 +114,7 @@ export function apply(ctx: Context): void {
         await ctx.sessions.refresh()
         return result
       },
-      showAxiomLogin: async () => { valueOf(await ctx.remote.nativeConversations.showAxiomLogin()) },
+      showAxiomLogin: async () => { await companion?.showLogin() },
     }),
   }, CodexLibraryPage))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
@@ -108,8 +125,5 @@ export function apply(ctx: Context): void {
   }, NativeSourceRow))
   ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
     name: 'conversation.session.header.actions', id: 'native-conversation-source', order: -20, locale: 'codexLibrary',
-    inject: (): NativeSourceHeaderInjected => ({
-      showOriginal: async () => { valueOf(await ctx.remote.nativeConversations.showAxiomLogin()) },
-    }),
   }, NativeSourceHeader))
 }

@@ -1,89 +1,148 @@
-/** Website events only navigate while an explicit user selection is armed. */
+/** The continuous Dot surface never creates a Harness Session or synthetic message. */
 import { expect, it, vi } from 'vitest'
 import { createDotController } from '../src/client/dot-controller.ts'
-import type { DesktopAxiomCompanion, DotSelection } from '../src/client/desktop-axiom.ts'
+import type { DesktopAxiomCompanion, DotMessage, DotSnapshot, DotSendResult, DotPreferences, DotHistoryPage } from '../src/client/desktop-axiom.ts'
 
-const ready: DotSelection = { phase: 'ready', url: 'https://chatgpt.com/dots/original~opaque' }
-function fixture(chooseState: DotSelection = { phase: 'login-required', url: null }) {
-  let listener = (_state: DotSelection): void => {}
+const message = (id: string, role: 'user' | 'assistant' = 'assistant', text = id): DotMessage =>
+  ({ id, role, text, timestamp: null, truncated: false })
+const snapshot: DotSnapshot = { source: 'chatgpt-web', url: 'https://chatgpt.com/dots/original~opaque', title: 'Axiom',
+  phase: 'ready', revision: 1, messages: [message('u1', 'user'), message('a1')], canSend: true,
+  draftPresent: false, siteStatus: null, limited: true }
+function fixture() {
+  let listener = (_snapshot: DotSnapshot): void => {}
   const off = vi.fn()
-  const choose = vi.fn(async (_hint: string | null) => chooseState)
-  const setPreferences = vi.fn(async () => {})
   const companion: DesktopAxiomCompanion = {
-    preferences: async () => ({ enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' }), setPreferences, choose,
-    subscribe: (callback) => { listener = callback; return off }, transport: async () => 'browser',
-    selectTransport: vi.fn(), browserSetup: vi.fn(),
+    preferences: vi.fn(async (): Promise<DotPreferences> => ({ enabled: true, showInSidebar: true, sidebarStyle: 'sameNewSession' })),
+    setPreferences: vi.fn(async () => {}), selection: vi.fn(async () => ({ url: snapshot.url!, title: 'Axiom' })),
+    snapshot: vi.fn(async () => snapshot), choose: vi.fn(async () => snapshot),
+    subscribe: (callback) => { listener = callback; return off },
+    historyBefore: vi.fn(async (): Promise<DotHistoryPage> => ({ messages: [message('old')], hasMore: false, status: 'ready' })),
+    send: vi.fn(async (): Promise<DotSendResult> => ({ status: 'confirmed', snapshot: { ...snapshot, revision: 2,
+      messages: [...snapshot.messages, message('u2', 'user', 'exact text')] }, messageId: 'u2' })),
+    showLogin: vi.fn(async () => {}), transport: vi.fn(async () => 'embedded' as const),
+    selectTransport: vi.fn(async () => {}), browserSetup: vi.fn(),
   }
-  const connect = vi.fn(async (_url: string, _isCurrent: () => boolean) => {})
-  const preferredUrl = vi.fn(async () => ready.url)
-  const controller = createDotController(companion, { connect, preferredUrl })
-  return { controller, connect, companion, choose, setPreferences, off, publish: (state: DotSelection) => { listener(state) } }
+  const controller = createDotController(companion)
+  return { controller, companion, off, publish: (value: DotSnapshot) => { listener(value) } }
 }
 
-it('waits for sign-in after explicit URL-free selection and opens once after a ready reload', async () => {
+it('reads the actual selected title without opening a page, then opens the connected original directly', async () => {
   const f = fixture()
-  f.publish(ready)
-  expect(f.connect).not.toHaveBeenCalled()
-  await f.controller.choose()
-  expect(f.choose).toHaveBeenCalledExactlyOnceWith(ready.url)
-  expect(f.controller.store.getSnapshot().pending).toBe(true)
-  f.publish(ready); f.publish(ready)
-  await vi.waitFor(() => { expect(f.connect).toHaveBeenCalledOnce() })
-  expect(f.connect.mock.calls[0]?.[0]).toBe(ready.url)
-  expect(f.companion.selectTransport).not.toHaveBeenCalled()
+  await vi.waitFor(() => { expect(f.controller.store.getSnapshot().selection?.title).toBe('Axiom') })
+  expect(f.companion.choose).not.toHaveBeenCalled()
+  expect(f.companion.snapshot).not.toHaveBeenCalled()
+  await f.controller.open()
+  expect(f.controller.store.getSnapshot().messages.map(value => value.id)).toEqual(['u1', 'a1'])
+  expect(f.companion.choose).not.toHaveBeenCalled()
   f.controller.dispose()
   expect(f.off).toHaveBeenCalledOnce()
 })
-
-it('accepts immediate ready selection and disarms on feature disable or disposal', async () => {
-  const immediate = fixture(ready)
-  await immediate.controller.choose()
-  expect(immediate.connect).toHaveBeenCalledOnce()
-  immediate.controller.dispose()
+it('chooses only after an explicit open when disconnected and preserves source chronology while loading older pages', async () => {
   const f = fixture()
-  await f.controller.choose()
-  await f.controller.setPreferences({ enabled: false, showInSidebar: true, sidebarStyle: 'sameNewSession' })
-  f.publish(ready)
-  await f.controller.choose()
-  expect(f.connect).not.toHaveBeenCalled()
-  expect(f.setPreferences).toHaveBeenCalledWith({ enabled: false, showInSidebar: true, sidebarStyle: 'sameNewSession' })
+  vi.mocked(f.companion.snapshot).mockResolvedValue({ ...snapshot, phase: 'disconnected', url: null, messages: [] })
+  await f.controller.open()
+  expect(f.companion.choose).toHaveBeenCalledWith(snapshot.url)
+  await f.controller.loadOlder()
+  expect(f.companion.historyBefore).toHaveBeenCalledWith('u1')
+  f.publish({ ...snapshot, revision: 2, messages: [message('a1', 'assistant', 'streamed'), message('u2', 'user')] })
+  expect(f.controller.store.getSnapshot().messages.map(value => value.id)).toEqual(['old', 'u1', 'a1', 'u2'])
+  expect(f.controller.store.getSnapshot().messages[2]?.text).toBe('streamed')
+  expect(f.controller.store.getSnapshot().hasMore).toBe(false)
   f.controller.dispose()
-  f.publish(ready)
-  expect(f.connect).not.toHaveBeenCalled()
 })
-
-it('uses the chooser result after transient old-page teardown instead of cancelling the new selection', async () => {
+it('sends exact authored text at the source revision once and admits only observed original messages', async () => {
   const f = fixture()
-  f.choose.mockImplementation(async () => {
-    f.publish({ phase: 'disconnected', url: null })
-    f.publish(ready)
-    return { phase: 'login-required', url: null }
-  })
-  await f.controller.choose()
-  expect(f.controller.store.getSnapshot()).toMatchObject({ pending: true, failed: false })
-  expect(f.connect).not.toHaveBeenCalled()
-  f.publish(ready)
-  await vi.waitFor(() => { expect(f.connect).toHaveBeenCalledOnce() })
+  await f.controller.open()
+  f.controller.setDraft('exact text')
+  await f.controller.send()
+  expect(f.companion.send).toHaveBeenCalledOnce()
+  const sent = vi.mocked(f.companion.send).mock.calls[0]?.[0]
+  expect(sent?.text).toBe('exact text')
+  expect(sent?.revision).toBe(1)
+  expect(sent?.requestId).toMatch(/^[a-f0-9-]{36}$/)
+  expect(f.controller.store.getSnapshot().draft).toBe('')
+  expect(f.controller.store.getSnapshot().messages.at(-1)?.id).toBe('u2')
+  expect(f.controller.store.getSnapshot().sendOutcome).toBe('confirmed')
+  f.controller.dispose()
+})
+it('retains an unknown submission without retrying or appending an invented user/assistant message', async () => {
+  const f = fixture()
+  vi.mocked(f.companion.send).mockRejectedValue(new Error('acknowledgement unavailable'))
+  await f.controller.open()
+  f.controller.setDraft('uncertain send')
+  await f.controller.send()
+  f.publish({ ...snapshot, revision: 2 })
+  expect(f.companion.send).toHaveBeenCalledOnce()
+  expect(f.controller.store.getSnapshot().sendOutcome).toBe('unknown')
+  expect(f.controller.store.getSnapshot().draft).toBe('uncertain send')
+  expect(f.controller.store.getSnapshot().messages).toEqual(snapshot.messages)
+  f.controller.dispose()
+})
+it('reports unsupported history without fake exhaustion and permits an explicit retry', async () => {
+  const f = fixture()
+  vi.mocked(f.companion.historyBefore).mockResolvedValueOnce({ messages: [], status: 'unavailable', hasMore: true })
+  await f.controller.open()
+  await f.controller.loadOlder()
+  expect(f.controller.store.getSnapshot()).toMatchObject({ history: 'unavailable', hasMore: true })
+  await f.controller.loadOlder()
+  expect(f.companion.historyBefore).toHaveBeenCalledTimes(2)
+  expect(f.controller.store.getSnapshot().hasMore).toBe(false)
+  f.controller.dispose()
+})
+it('preserves loaded history across explicit page close and prevents sending while disabled', async () => {
+  const f = fixture()
+  await f.controller.open()
+  await f.controller.loadOlder()
+  f.publish({ ...snapshot, phase: 'disconnected', url: null, messages: [], revision: 2, canSend: false })
+  await f.controller.open()
+  expect(f.controller.store.getSnapshot().messages[0]?.id).toBe('old')
+  await f.controller.setPreferences({ enabled: false, showInSidebar: true, sidebarStyle: 'outline' })
+  f.controller.setDraft('disabled')
+  await f.controller.send()
+  expect(f.companion.send).not.toHaveBeenCalled()
   f.controller.dispose()
 })
 
-it('rejects unrelated pages and disarms failed selection without repeated navigation', async () => {
-  const f = fixture({ ...ready, url: 'https://chatgpt.com/c/unrelated' })
-  await f.controller.choose()
-  expect(f.controller.store.getSnapshot().failed).toBe(true)
-  f.publish(ready)
-  expect(f.connect).not.toHaveBeenCalled()
+it('does not reconfigure or invalidate an outstanding original send when the top view is reopened', async () => {
+  const f = fixture()
+  const pending = Promise.withResolvers<DotSendResult>()
+  vi.mocked(f.companion.send).mockImplementation(() => pending.promise)
+  await f.controller.open()
+  f.controller.setDraft('pending send')
+  const sending = f.controller.send()
+  await f.controller.open()
+  await f.controller.configure()
+  expect(f.companion.snapshot).toHaveBeenCalledOnce()
+  expect(f.companion.choose).not.toHaveBeenCalled()
+  expect(f.controller.store.getSnapshot().sending).toBe(true)
+  pending.resolve({ status: 'unknown', snapshot })
+  await sending
+  expect(f.controller.store.getSnapshot()).toMatchObject({ sending: false, sendOutcome: 'unknown', draft: 'pending send' })
+  expect(f.companion.send).toHaveBeenCalledOnce()
   f.controller.dispose()
 })
-
-it('suppresses navigation if disabled while the connection is completing', async () => {
-  const f = fixture(ready)
-  const waiting = Promise.withResolvers<undefined>()
-  f.connect.mockImplementation(async (_url, isCurrent) => { await waiting.promise; expect(isCurrent()).toBe(false) })
-  const selecting = f.controller.choose()
-  await vi.waitFor(() => { expect(f.connect).toHaveBeenCalledOnce() })
-  await f.controller.setPreferences({ enabled: false, showInSidebar: false, sidebarStyle: 'sameNewSession' })
-  waiting.resolve(undefined)
-  await selecting
+it('keeps a newer ready source event emitted while an older snapshot request is pending', async () => {
+  const f = fixture()
+  const pending = Promise.withResolvers<DotSnapshot>()
+  vi.mocked(f.companion.snapshot).mockImplementation(() => pending.promise)
+  const opening = f.controller.open()
+  await vi.waitFor(() => { expect(f.companion.snapshot).toHaveBeenCalledOnce() })
+  f.publish({ ...snapshot, revision: 3, messages: [...snapshot.messages, message('autonomous')] })
+  pending.resolve({ ...snapshot, revision: 2 })
+  await opening
+  expect(f.controller.store.getSnapshot().snapshot?.revision).toBe(3)
+  expect(f.controller.store.getSnapshot().messages.at(-1)?.id).toBe('autonomous')
+  f.controller.dispose()
+})
+it('does not let an old rejected history page overwrite a newly selected source state', async () => {
+  const f = fixture()
+  const pending = Promise.withResolvers<DotHistoryPage>()
+  vi.mocked(f.companion.historyBefore).mockImplementation(() => pending.promise)
+  await f.controller.open()
+  const older = f.controller.loadOlder()
+  f.publish({ ...snapshot, url: 'https://chatgpt.com/dots/another', title: 'Another', revision: 1, messages: [message('new')] })
+  pending.reject(new Error('old source page failed'))
+  await older
+  expect(f.controller.store.getSnapshot()).toMatchObject({ selection: { title: 'Another' }, history: 'idle', hasMore: true })
   f.controller.dispose()
 })

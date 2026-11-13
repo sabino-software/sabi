@@ -22,6 +22,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { DraftInitializationOptions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { RowToast } from './contract/slots.ts'
+import { SessionOpenInterceptors, type SessionOpenInterceptor } from './session-open-interceptors.ts'
 import { pinOrderAccounts, pinOrderSource } from './pin-order.ts'
 import type { WorkspaceViewStoreActions } from './stores.ts'
 
@@ -38,6 +39,12 @@ export interface StartSessionOptions extends DraftInitializationOptions {
 
 /** Workspace archive and directory operations consumed by Client UI domains. */
 export interface UiWorkspace {
+  /**
+   * Register a feature-owned legacy-address route before a Session is retained or activated.
+   * @param handler - Return true to consume the navigation; honor its cancellation signal.
+   * @returns Registration disposer.
+   */
+  registerSessionOpenInterceptor(handler: SessionOpenInterceptor): () => void
   /**
    * Select a Session and show its Conversation as one UI navigation action.
    * @param target - known Session identity or durable direct-parent subagent address to display.
@@ -173,6 +180,8 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   private readonly selection = createSnapshotStore<MainSelection>(
     {}, { persist: { name: 'dsh.sessions.current' } },
   )
+  private readonly openInterceptors = new SessionOpenInterceptors()
+  private openSequence = 0
   private mainReference: SessionReference | undefined
   private restorationNavigation: AbortSignal | undefined
 
@@ -290,8 +299,22 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     }
   }
 
+  registerSessionOpenInterceptor(handler: SessionOpenInterceptor): () => void {
+    const off = this.openInterceptors.register(handler)
+    const saved = this.selection.getSnapshot()
+    const target = saved.subagentAddress ?? saved.sessionId
+    if (target !== undefined) {
+      const sequence = this.openSequence
+      const signal = AbortSignal.any([this.lifetime.signal, this.ctx.layout.beginNavigation()])
+      void Promise.resolve(this.openInterceptors.inspect(target, signal)).then((consumed) => {
+        if (consumed && sequence === this.openSequence && !signal.aborted) this.releaseMainSelection()
+      }).catch((reason: unknown) => { this.notify({ kind: 'createFailed', message: creationFailureMessage(reason) }) })
+    }
+    return off
+  }
+
   openSession(target: SessionTarget): void {
-    this.replaceMain(target, this.lifetime.signal, 'reveal')
+    this.replaceMain(target, AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal]), 'reveal')
   }
 
   openWorkspace(
@@ -464,15 +487,25 @@ class UiWorkspaceService extends Service implements UiWorkspace {
 
   private async restoreSelection(workspaces: WorkspaceSnapshot, sessions: SessionListState): Promise<void> {
     const saved = this.selection.getSnapshot()
+    const restoreSignal = this.openInterceptors.registered
+      ? AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal]) : this.lifetime.signal
+    if (this.openInterceptors.registered) this.restorationNavigation = restoreSignal
     if (saved.subagentAddress !== undefined) {
-      this.replaceMain(saved.subagentAddress, this.lifetime.signal, 'preserve')
+      this.replaceMain(saved.subagentAddress, restoreSignal, 'preserve')
       return
     }
     const summary = saved.sessionId === undefined ? undefined : sessions.byId[saved.sessionId]
+    if (saved.sessionId !== undefined && summary === undefined && this.openInterceptors.registered) {
+      const sequence = this.openSequence
+      if (await this.openInterceptors.inspect(saved.sessionId, restoreSignal)) {
+        if (sequence === this.openSequence) this.releaseMainSelection()
+        return
+      }
+    }
     const workspace = summary === undefined ? undefined
       : workspaces.items.find(item => item.sessionIds.includes(summary.id))
     if (summary !== undefined && (!summary.blank || workspace === undefined)) {
-      this.replaceMain(summary.id, this.lifetime.signal, 'preserve')
+      this.replaceMain(summary.id, restoreSignal, 'preserve')
       return
     }
     const navigation = AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal])
@@ -520,7 +553,34 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     this.ctx.layout.selectPanel(null)
   }
 
+  private releaseMainSelection(): void {
+    const previous = this.mainReference
+    this.mainReference = undefined
+    this.selection.set({})
+    previous?.release()
+  }
+
   private replaceMain(
+    target: SessionTarget,
+    signal: AbortSignal,
+    panel: 'reveal' | 'preserve',
+    beforeOpen?: (sessionId: SessionId) => void,
+  ): void {
+    signal.throwIfAborted()
+    const sequence = ++this.openSequence
+    const result = this.openInterceptors.inspect(target, signal)
+    const complete = (consumed: boolean): void => {
+      if (sequence !== this.openSequence) return
+      if (consumed) { this.releaseMainSelection(); return }
+      if (!signal.aborted) this.commitMain(target, signal, panel, beforeOpen)
+    }
+    if (typeof result === 'boolean') complete(result)
+    else void result.then(complete).catch((reason: unknown) => {
+      if (sequence === this.openSequence && !signal.aborted) this.notify({ kind: 'createFailed', message: creationFailureMessage(reason) })
+    })
+  }
+
+  private commitMain(
     target: SessionTarget,
     signal: AbortSignal,
     panel: 'reveal' | 'preserve',

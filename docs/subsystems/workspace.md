@@ -356,7 +356,7 @@ Host service backing the generated `ctx.remote.workspace` namespace.
  * @param request - directory path to register.
  * @returns the Workspace and whether this call created it.
  */
-@Remote('create') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>
+@Remote('create') async create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>
 
 /**
  * Initialize or reuse the default Workspace during first-use startup. The
@@ -373,7 +373,7 @@ Host service backing the generated `ctx.remote.workspace` namespace.
  * @param request - Workspace identity and proposed title.
  * @returns the updated Workspace projection.
  */
-@Remote('rename') rename(request: WorkspaceRenameRequest): Promise<WorkspaceValue>
+@Remote('rename') async rename(request: WorkspaceRenameRequest): Promise<WorkspaceValue>
 
 /**
  * Remove one Workspace registration while retaining files and Sessions.
@@ -394,35 +394,35 @@ Host service backing the generated `ctx.remote.workspace` namespace.
  * @param request - Workspace, Session, and optional anchor identities.
  * @returns the updated Workspace projection.
  */
-@Remote('insertSessionBefore') insertSessionBefore(request: WorkspaceInsertSessionBeforeRequest): Promise<WorkspaceValue>
+@Remote('insertSessionBefore') async insertSessionBefore(request: WorkspaceInsertSessionBeforeRequest): Promise<WorkspaceValue>
 
 /**
  * Hide one known Session from Workspace grouping surfaces.
  * @param request - Session identity to archive.
  * @returns the complete resulting archive set.
  */
-@Remote('archiveSession') archiveSession(request: WorkspaceArchiveSessionRequest): Promise<WorkspaceArchiveValue>
+@Remote('archiveSession') async archiveSession(request: WorkspaceArchiveSessionRequest): Promise<WorkspaceArchiveValue>
 
 /**
  * Restore one archived Session to Workspace grouping surfaces.
  * @param request - Session identity to unarchive.
  * @returns the complete resulting archive set.
  */
-@Remote('unarchiveSession') unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue>
+@Remote('unarchiveSession') async unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue>
 
 /**
  * Surface one known unarchived Session ahead of unpinned Sessions.
  * @param request - Session identity to pin.
  * @returns the complete resulting pin set, most recently pinned first.
  */
-@Remote('pinSession') pinSession(request: WorkspacePinSessionRequest): Promise<WorkspacePinValue>
+@Remote('pinSession') async pinSession(request: WorkspacePinSessionRequest): Promise<WorkspacePinValue>
 
 /**
  * Remove one Session's pin without changing its saved Session order.
  * @param request - Session identity to unpin.
  * @returns the complete resulting pin set, most recently pinned first.
  */
-@Remote('unpinSession') unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue>
+@Remote('unpinSession') async unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue>
 
 /**
  * Stream a complete Workspace baseline followed by ordered increments. A
@@ -692,6 +692,26 @@ Admit optional follow-up work after durable archival and any stop requests. Disp
 ```
 
 Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
+
+<a id="workspacesession-presentation--serial"></a>
+
+#### `workspace/session-presentation` — serial
+
+Resolve a Session's discovery and normal-open policy without activating it.
+
+```ts cordis-catalog
+/**
+ * Resolve a Session's discovery and normal-open policy without activating it.
+ * @mode serial
+ * @param sessionId Session whose process-local presentation is requested.
+ * @param signal Optional cancellation for read-only metadata work.
+ */
+'workspace/session-presentation'(sessionId: SessionId, signal?: AbortSignal): SessionPresentation | void | Promise<SessionPresentation | void>
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/workspace/workspace/src/types.ts`](../../packages/workspace/workspace/src/types.ts)
 
 <a id="workspacesession-stop--parallel"></a>
 

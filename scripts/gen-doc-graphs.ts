@@ -108,6 +108,22 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'codexAppServer',
+    pkg: 'host-codex-app-server',
+    title: 'Work Codex app-server connection',
+    mode: 'service',
+    consumers: ['native-conversations'],
+    note: 'Owns the work app-server connection, requests and notifications; the native conversation adapter continues original Codex threads.',
+  },
+  {
+    key: 'nativeConversations',
+    pkg: 'native-conversations',
+    title: 'Original conversation integration',
+    mode: 'service',
+    consumers: ['client-ui-codex-library'],
+    note: 'Imports and continues original work Codex chats with scoped Harness tools and preserves legacy Dot bindings for dedicated-view navigation.',
+  },
+  {
     key: 'actionCards',
     pkg: 'action-cards',
     title: 'Optional action cards',
@@ -1179,7 +1195,7 @@ type CallSiteIndex = Map<ts.SignatureDeclaration | ts.JSDocSignature, ts.CallExp
  * must appear here — the prefilter drops non-members before any branch runs,
  * so a branch for an unlisted name is silently dead.
  */
-const EVENT_API_METHODS = new Set(['on', 'once', 'emit', 'parallel', 'serial', 'waterfall', 'dispatch'])
+const EVENT_API_METHODS = new Set(['on', 'once', 'emit', 'parallel', 'serial', 'waterfall', 'bail', 'dispatch'])
 
 /**
  * Collect event dispatch/listener relations from real cross-file receiver types.
@@ -1337,7 +1353,7 @@ export class EventRelationCollector {
             const eventNames = this.eventNamesFromCall(node, receiverKind)
             if (method === 'on' || method === 'once') {
               for (const event of eventNames) this.ensure(event).listeners.add(source.pkg)
-            } else if (method === 'emit' || method === 'parallel' || method === 'serial' || method === 'waterfall') {
+            } else if (method === 'emit' || method === 'parallel' || method === 'serial' || method === 'waterfall' || method === 'bail') {
               for (const event of eventNames) this.addDispatcher(event, source.pkg, method)
             }
           }

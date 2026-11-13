@@ -101,10 +101,11 @@ describe('Native conversation connections', () => {
   })
 
   it('selects Dot without a URL field and opens login only on request', async () => {
-    const actions = mount()
+    const actions = mount({ axiomCompanion: companion('embedded') })
     expect(actions.chooseDot).not.toHaveBeenCalled()
     expect(actions.showAxiomLogin).not.toHaveBeenCalled()
     expect(screen.queryByRole('textbox')).toBeNull()
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Connect Dot' }).hasAttribute('disabled')).toBe(false) })
     fireEvent.click(screen.getByRole('button', { name: 'Connect Dot' }))
     await waitFor(() => { expect(actions.chooseDot).toHaveBeenCalledExactlyOnceWith() })
     await waitFor(() =>{  expect(screen.getByRole('button', { name: 'Open ChatGPT login' }).hasAttribute('disabled')).toBe(false) })
@@ -114,7 +115,7 @@ describe('Native conversation connections', () => {
 
   it('keeps unavailable bridge operations disabled and reports source failures', async () => {
     const actions = mount({ available: false, failSync: true })
-    expect(screen.getByText((_text, element) => element?.tagName === 'P' && element.textContent === 'Desktop bridge unavailable · needs-login')).toBeTruthy()
+    expect(screen.getByText((_text, element) => element?.tagName === 'P' && element.textContent === 'Desktop bridge unavailable')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Connect Dot' }).hasAttribute('disabled')).toBe(true)
     expect(screen.getByRole('button', { name: 'Open ChatGPT login' }).hasAttribute('disabled')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Sync Codex conversations' }))
@@ -170,9 +171,14 @@ function companion(initial: 'browser' | 'embedded' = 'browser', available = true
   const transport = vi.fn(async () => mode)
   const selectTransport = vi.fn(async (next: 'browser' | 'embedded') => { mode = next })
   const browserSetup = vi.fn(async () => metadata)
+  const source = { source: 'chatgpt-web' as const, url: null, title: '', revision: 0, phase: 'loading' as const,
+    messages: [], canSend: false, draftPresent: false, siteStatus: null, limited: true }
   return { transport, selectTransport, browserSetup,
+    selection: async () => null, snapshot: async () => source, showLogin: async () => {},
+    historyBefore: async () => ({ messages: [], status: 'unavailable' as const, hasMore: true }),
+    send: async () => ({ status: 'refused' as const, snapshot: source }),
     preferences: async () => ({ enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' as const }),
-    setPreferences: async () => {}, choose: async () => ({ url: null, phase: 'loading' as const }), subscribe: () => () => {} }
+    setPreferences: async () => {}, choose: async () => source, subscribe: () => () => {} }
 }
 
 describe('optional Axiom browser companion controls', () => {

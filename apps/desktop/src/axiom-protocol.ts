@@ -26,6 +26,16 @@ export interface AxiomSnapshot {
   readonly errorCode?: 'page-unavailable' | 'unsupported-page'
 }
 
+/** Canonical original conversation and its observed website name; no authentication state. */
+export interface AxiomSelection { readonly url: string; readonly title: string }
+
+/** One bounded earlier page in chronological source order; unknown boundaries stay retryable. */
+export interface AxiomHistoryPage {
+  readonly messages: readonly AxiomMessage[]
+  readonly hasMore: boolean
+  readonly status: 'ready' | 'unavailable'
+}
+
 /** One explicit user submission, never retried after an ambiguous acknowledgement. */
 export interface AxiomSendRequest {
   readonly requestId: string
@@ -69,6 +79,10 @@ export interface AxiomPreferences {
 
 /** Desktop original-page adapter; website authentication remains with the selected browser owner. */
 export interface DesktopAxiomBridge {
+  /** @returns Saved canonical Dot and actual observed name, without opening a page. */
+  selection(): Promise<AxiomSelection | null>
+  /** @param beforeId Original ID preceding which older messages are requested. @returns An observed bounded earlier page. */
+  historyBefore(beforeId: string): Promise<AxiomHistoryPage>
   /** @returns Saved feature availability and optional sidebar visibility. */
   preferences(): Promise<AxiomPreferences>
   /** @param preferences Exact feature choices. @returns After saving and revoking disabled connections. */

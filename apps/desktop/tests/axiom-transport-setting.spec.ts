@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
-import { readAxiomPreferences, readAxiomTransport, saveAxiomPreferences, saveAxiomTransport } from '../src/axiom-transport-setting.ts'
+import { readAxiomPreferences, readAxiomSelection, readAxiomTransport, saveAxiomPreferences, saveAxiomSelection, saveAxiomTransport } from '../src/axiom-transport-setting.ts'
 
 it('defaults only when unset, reopens the saved browser choice and preserves unrelated profile state', () => {
   const root = mkdtempSync(join(tmpdir(), 'axiom-mode-'))
@@ -76,4 +76,36 @@ it.each(['sameNewSession', 'subtle', 'outline'] as const)('reopens the private %
   expect(readAxiomPreferences(root)).toEqual({ enabled: true, showInSidebar: true, sidebarStyle })
   expect(() => { saveAxiomPreferences(root, { enabled: true, showInSidebar: true, sidebarStyle: 'invented' }) }).toThrow()
   expect(readAxiomPreferences(root)).toEqual({ enabled: true, showInSidebar: true, sidebarStyle })
+})
+
+it('retains only canonical original identity and actual title in a separate private selection file', () => {
+  const root = mkdtempSync(join(tmpdir(), 'axiom-selection-'))
+  onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+  expect(readAxiomSelection(root)).toBeNull()
+  saveAxiomTransport(root, 'browser')
+  const selected = { url: 'https://chatgpt.com/dots/actual~source', title: 'Axiom' }
+  saveAxiomSelection(root, selected)
+  expect(readAxiomSelection(root)).toEqual(selected)
+  expect(readAxiomTransport(root)).toBe('browser')
+  if (process.platform !== 'win32') expect(statSync(join(root, 'axiom-selection.json')).mode & 0o077).toBe(0)
+  expect(() => { saveAxiomSelection(root, { ...selected, url: `${selected.url}?private=opaque` }) }).toThrow()
+  expect(readAxiomSelection(root)).toEqual(selected)
+})
+
+
+it.skipIf(process.platform === 'win32')('refuses selection symlinks and public files without touching unrelated targets', () => {
+  const root = mkdtempSync(join(tmpdir(), 'axiom-selection-link-'))
+  onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+  const target = join(root, 'other-file')
+  const selected = { url: 'https://chatgpt.com/dots/actual~source', title: 'Axiom' }
+  const content = JSON.stringify({ version: 1, ...selected })
+  writeFileSync(target, content)
+  const path = join(root, 'axiom-selection.json')
+  symlinkSync(target, path)
+  expect(() => readAxiomSelection(root)).toThrow('could not be read')
+  expect(() => { saveAxiomSelection(root, selected) }).toThrow('Invalid Dot selection')
+  expect(readFileSync(target, 'utf8')).toBe(content)
+  rmSync(path)
+  writeFileSync(path, content, { mode: 0o644 })
+  expect(() => readAxiomSelection(root)).toThrow('could not be read')
 })

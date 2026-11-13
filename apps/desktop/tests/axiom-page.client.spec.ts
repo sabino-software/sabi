@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Original message DOM is projected without actions, hidden content, or active media. */
 import { beforeAll, afterAll, describe, expect, it } from 'vitest'
-import { clickAxiomSend, findAxiomAcknowledgement, focusAxiomComposer, readAxiomPage } from '../src/axiom-page.ts'
+import { clickAxiomSend, findAxiomAcknowledgement, focusAxiomComposer, readAxiomHistoryPage, readAxiomPage } from '../src/axiom-page.ts'
 
 const nativeInnerText = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'innerText')
 beforeAll(() => {
@@ -92,4 +92,48 @@ describe('original Dot DOM projection', () => {
     expect(state.messages.reduce((size, message) => size + message.text.length, 0)).toBe(131072)
     expect(state.limited).toBe(true)
   })
+})
+
+it('reads every original message across chronological bounded pages without a total-message ceiling', () => {
+  document.body.innerHTML = '<section class="messages-scroll"><div class="message-list"></div></section>'
+  const list = document.querySelector('.message-list')!
+  for (let index = 0; index < 288; index++) {
+    const row = document.createElement('article')
+    row.className = index % 2 === 0 ? 'message-row self' : 'message-row'
+    row.dataset.messageId = `original/${index}`
+    row.innerHTML = '<div class="message-body"><div class="message-surface"><div class="message-bubble"><div class="message-text"></div></div></div></div>'
+    row.querySelector('.message-text')!.textContent = `Observed original ${index}`
+    list.append(row)
+  }
+  let messages = [...readAxiomPage().messages]
+  expect(messages).toHaveLength(100)
+  const pageUrl = location.href.replace(/\/$/u, '')
+  for (let count = 0; count < 2; count++) {
+    const older = readAxiomHistoryPage(readAxiomPage, pageUrl, messages[0]!.id, false)
+    expect(older.supported).toBe(true)
+    expect(older.anchorFound).toBe(true)
+    expect(older.messages.length).toBeLessThanOrEqual(100)
+    messages = [...older.messages, ...messages]
+  }
+  expect(messages.map(message => message.id)).toEqual(Array.from({ length: 288 }, (_, index) => `original/${index}`))
+  const top = readAxiomHistoryPage(readAxiomPage, pageUrl, messages[0]!.id, true)
+  expect(top.messages).toEqual([])
+  expect(top.startVerified).toBe(false)
+  expect(readAxiomHistoryPage(readAxiomPage, 'https://chatgpt.com/dots/wrong', messages[0]!.id, true).supported).toBe(false)
+})
+
+it('keeps own-row timestamps and source IDs while excluding quoted or nested message clones', () => {
+  fixture()
+  const user = document.querySelector('article.self')!
+  const quote = document.createElement('div')
+  quote.className = 'quoted-reply'
+  quote.innerHTML = '<article class="message-row" data-message-id="quoted-clone"><time datetime="2000-01-01T00:00:00Z"></time><div class="message-body"><div class="message-surface"><div class="message-bubble"><div class="message-text">Quoted duplicate</div></div></div></div></article>'
+  user.prepend(quote)
+  document.body.append(user.cloneNode(true))
+  const state = readAxiomPage()
+  expect(state.messages.map(message => message.id)).toEqual(['original/user~1', 'original/assistant~2'])
+  expect(state.messages[0]?.timestamp).toBe('2026-11-12T10:00:00Z')
+  const composer = document.querySelector('[role="textbox"]')!
+  Object.defineProperty(composer, 'innerText', { configurable: true, get: () => { throw new Error('History must not inspect drafts') } })
+  expect(readAxiomPage('original/assistant~2').messages.map(message => message.id)).toEqual(['original/user~1'])
 })

@@ -22,12 +22,13 @@ export function DotSidebarRow({
   PropsRuntime<'sidebar.primary.action'> & PropsLocale<'codexLibrary'> & InjectFace<DotControlsInjected>) {
   const state = useDot(value => value)
   if (!state.preferences?.enabled || !state.preferences.showInSidebar) return null
-  return <Tooltip label={t('dot')} disabled={wide}>
+  const title = state.selection?.title || t('dot')
+  return <Tooltip label={title} disabled={wide}>
     <button className={buttonClasses[state.preferences.sidebarStyle]} data-wide={wide} type="button"
-      aria-label={t('dot')} disabled={state.busy}
+      aria-label={title} disabled={state.busy}
       onClick={() => { void chooseDot() }}>
       <span className={labelMaskClassName}><span className={contentClassName}>
-        <IconLayersOutlineRegular size={iconSize} />{wide && <span className={labelClassName}>{t('dot')}</span>}
+        <IconLayersOutlineRegular size={iconSize} />{wide && <span className={labelClassName}>{title}</span>}
       </span></span>
     </button>
   </Tooltip>

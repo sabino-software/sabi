@@ -1,79 +1,56 @@
-/** Optional desktop operations are detected structurally and their manual-setup metadata is validated. */
+/** Validate the trusted main-frame website API without importing Electron or exposing credentials. */
 import { afterEach, expect, it, vi } from 'vitest'
-import { desktopAxiomCompanion } from '../src/client/desktop-axiom.ts'
-
-const selection = { preferences: async () => ({ enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' }),
-  setPreferences: async () => {},
-  choose: async () => ({ url: null, phase: 'loading' }), subscribe: () => () => {} }
+import { desktopAxiomCompanion, type DotSnapshot } from '../src/client/desktop-axiom.ts'
 
 const setup = { protocolVersion: 1, available: true, extensionDirectory: '/app/extension', registrationScript: '/app/registration.mjs',
   nativeHostScript: '/app/native-host.sh', nodeExecutable: '/app/node', hostName: 'fixture-host', extensionId: 'fixture-extension',
   permissions: ['activeTab', 'scripting', 'nativeMessaging'] }
-
+const snapshot: DotSnapshot = { source: 'chatgpt-web', url: 'https://chatgpt.com/dots/original', title: 'Axiom', revision: 1,
+  phase: 'ready', messages: [{ id: 'u1', role: 'user', text: 'observed', timestamp: null, truncated: false }],
+  canSend: true, draftPresent: false, siteStatus: null, limited: true }
+const bridge = () => ({
+  preferences: async () => ({ enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' }),
+  setPreferences: vi.fn(async () => {}), choose: vi.fn(async () => snapshot), snapshot: async () => snapshot,
+  send: vi.fn(async () => ({ status: 'confirmed', snapshot, messageId: 'u1' })), showLogin: vi.fn(async () => {}),
+  selection: async () => ({ url: snapshot.url, title: 'Axiom' }), transport: async () => 'embedded',
+  selectTransport: vi.fn(async () => {}), browserSetup: async () => setup,
+  historyBefore: vi.fn(async () => ({ messages: [], hasMore: false, status: 'ready' })), subscribe: () => () => {},
+})
 afterEach(() => { vi.unstubAllGlobals() })
-
-it('stays absent for ordinary Web, incompatible protocol versions, and partial older bridges', () => {
+it('stays absent for Web, incompatible versions, and bridges without direct source operations', () => {
   vi.stubGlobal('dshDesktop', undefined)
   expect(desktopAxiomCompanion()).toBeUndefined()
-  vi.stubGlobal('dshDesktop', { protocolVersion: 2, axiom: {} })
+  vi.stubGlobal('dshDesktop', { protocolVersion: 2, axiom: bridge() })
   expect(desktopAxiomCompanion()).toBeUndefined()
   vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: { transport: async () => 'browser' } })
   expect(desktopAxiomCompanion()).toBeUndefined()
 })
-
-it('reads saved mode and returns only declared setup metadata without selecting or installing', async () => {
-  const selectTransport = vi.fn(async () => {})
-  vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: {
-    ...selection, transport: async () => 'browser', selectTransport, browserSetup: async () => ({ ...setup, privateExtra: 'not-exported' }),
-  } })
-  const bridge = desktopAxiomCompanion()!
-  expect(await bridge.transport()).toBe('browser')
-  const metadata = await bridge.browserSetup()
-  expect(metadata.extensionDirectory).toBe('/app/extension')
-  expect(metadata).not.toHaveProperty('privateExtra')
-  expect(selectTransport).not.toHaveBeenCalled()
-  await bridge.selectTransport('embedded')
-  expect(selectTransport).toHaveBeenCalledExactlyOnceWith('embedded')
+it('preserves full observed messages, selection, revision, original send result and history semantics', async () => {
+  const native = bridge()
+  vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: native })
+  const client = desktopAxiomCompanion()!
+  expect(await client.selection()).toEqual({ url: snapshot.url, title: 'Axiom' })
+  expect(await client.snapshot()).toEqual(snapshot)
+  expect(await client.choose(null)).toEqual(snapshot)
+  const request = { requestId: 'once', revision: 1, text: 'exact input' }
+  expect(await client.send(request)).toEqual({ status: 'confirmed', snapshot, messageId: 'u1' })
+  expect(native.send).toHaveBeenCalledExactlyOnceWith(request)
+  expect(await client.historyBefore('u1')).toEqual({ messages: [], hasMore: false, status: 'ready' })
+  expect(native.historyBefore).toHaveBeenCalledExactlyOnceWith('u1')
+  expect(native.selectTransport).not.toHaveBeenCalled()
+  expect((await client.preferences()).sidebarStyle).toBe('sameNewSession')
 })
-
-it('rejects incompatible modes and unexpected extension permissions at the preload boundary', async () => {
-  vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: {
-    ...selection, transport: async () => 'invented-mode', selectTransport: async () => {},
-    browserSetup: async () => ({ ...setup, permissions: [...setup.permissions, 'cookies'] }),
-  } })
-  const bridge = desktopAxiomCompanion()!
-  await expect(bridge.transport()).rejects.toThrow()
-  await expect(bridge.browserSetup()).rejects.toThrow()
+it('reports older-history capability absence without claiming exhaustion', async () => {
+  const { historyBefore: _unsupported, selection: _olderSelection, ...native } = bridge()
+  vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: native })
+  expect(await desktopAxiomCompanion()!.historyBefore('u1')).toEqual({ messages: [], status: 'unavailable', hasMore: true })
+  expect(await desktopAxiomCompanion()!.selection()).toBeNull()
 })
-
-it('validates persisted independent preferences and URL-free selection events', async () => {
-  let publish = (_state: unknown): void => {}
-  const off = vi.fn()
-  const choose = vi.fn(async (_hint: string | null) => ({ phase: 'login-required', url: null, messages: [] }))
-  const setPreferences = vi.fn(async (_value: { enabled: boolean; showInSidebar: boolean; sidebarStyle: 'sameNewSession' | 'subtle' | 'outline' }) => {})
-  vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: {
-    ...selection, choose, setPreferences, transport: async () => 'embedded', selectTransport: async () => {},
-    browserSetup: async () => setup,
-    subscribe: (listener: (state: unknown) => void) => { publish = listener; return off },
+it('rejects malformed source states and unknown sidebar style enums at the preload boundary', async () => {
+  vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: { ...bridge(),
+    snapshot: async () => ({ ...snapshot, messages: [{ id: 'bad', role: 'system', text: 'invented' }] }),
+    preferences: async () => ({ enabled: true, showInSidebar: true, sidebarStyle: 'invented' }),
   } })
-  const bridge = desktopAxiomCompanion()!
-  expect(await bridge.preferences()).toEqual({ enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' })
-  await bridge.setPreferences({ enabled: false, showInSidebar: true, sidebarStyle: 'sameNewSession' })
-  expect(setPreferences).toHaveBeenCalledExactlyOnceWith({ enabled: false, showInSidebar: true, sidebarStyle: 'sameNewSession' })
-  expect(await bridge.choose(null)).toEqual({ phase: 'login-required', url: null })
-  expect(choose).toHaveBeenCalledExactlyOnceWith(null)
-  const listener = vi.fn()
-  const unsubscribe = bridge.subscribe(listener)
-  publish({ phase: 'ready', url: 'https://chatgpt.com/dots/selected', messages: ['private'] })
-  expect(listener).toHaveBeenCalledExactlyOnceWith({ phase: 'ready', url: 'https://chatgpt.com/dots/selected' })
-  unsubscribe()
-  expect(off).toHaveBeenCalledOnce()
-})
-
-it('rejects an unknown sidebar style at the desktop boundary', async () => {
-  vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: {
-    ...selection, preferences: async () => ({ enabled: true, showInSidebar: true, sidebarStyle: 'invented' }),
-    transport: async () => 'embedded', selectTransport: async () => {}, browserSetup: async () => setup,
-  } })
+  await expect(desktopAxiomCompanion()!.snapshot()).rejects.toThrow()
   await expect(desktopAxiomCompanion()!.preferences()).rejects.toThrow()
 })

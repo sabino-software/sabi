@@ -4,7 +4,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AxiomSendResult, AxiomSnapshot } from './axiom-protocol.ts'
+import type { AxiomHistoryPage, AxiomSendResult, AxiomSnapshot } from './axiom-protocol.ts'
 import { axiomConversationUrl } from './axiom-navigation.ts'
 import { BrowserFrameDecoder, encodeBrowserFrame } from './axiom-browser-framing.ts'
 import { browserAuthenticationSchema, browserPairSchema, browserResponseSchema, browserSendResultSchema,
@@ -139,6 +139,14 @@ export class BrowserAxiomPage {
     }).catch((_unconfirmedSend: unknown): AxiomSendResult => ({ status: 'unknown', snapshot: this.current }))
     this.submissions.set(request.requestId, { digest, result })
     return result
+  }
+
+  /**
+   * @param _beforeId Source cursor.
+   * @returns Explicitly unsupported history without expanding extension permissions or moving the live tab.
+   */
+  historyBefore(_beforeId: string): Promise<AxiomHistoryPage> {
+    return Promise.resolve({ messages: [], hasMore: true, status: 'unavailable' })
   }
 
   /** Reveal only the selected regular-browser Dot, leaving its normal login flow under browser ownership. */

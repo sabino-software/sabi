@@ -151,3 +151,22 @@ export interface Workspace {
    */
   status(): Promise<'ok' | 'missing-dir'>
 }
+
+/** Process-local presentation chosen by an integration; membership and stored logs are unchanged. */
+export interface SessionPresentation {
+  readonly visibility: 'visible' | 'hidden'
+  /** Generic client view contribution; interpretation belongs to its registered owner. */
+  readonly route?: { readonly view: string; readonly params: Readonly<Record<string, string>> }
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Resolve a Session's discovery and normal-open policy without activating it.
+     * @mode serial
+     * @param sessionId Session whose process-local presentation is requested.
+     * @param signal Optional cancellation for read-only metadata work.
+     */
+    'workspace/session-presentation'(sessionId: SessionId, signal?: AbortSignal): SessionPresentation | void | Promise<SessionPresentation | void>
+  }
+}

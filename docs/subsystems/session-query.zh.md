@@ -499,13 +499,6 @@ attachAxiomTransport(transport: AxiomTransport): () => void
  */
 @Remote async rebuildCodexMirror(sessionId: SessionId): Promise<{ sessionId: SessionId; archivedSessionId: SessionId }>
 
-/**
- * Connect the original selected Dot and open it as an ordinary Session.
- * @param url Exact original ChatGPT Dot URL selected by the user.
- * @returns The ordinary Session assigned to that original conversation.
- */
-@Remote async connectAxiom(url: string): Promise<{ sessionId: SessionId }>
-
 /** Show the dedicated original-page login surface when authentication is required. */
 @Remote async showAxiomLogin(): Promise<void>
 ```

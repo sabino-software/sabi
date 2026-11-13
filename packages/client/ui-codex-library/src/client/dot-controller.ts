@@ -1,89 +1,155 @@
-/** Explicit Dot selection and accepted desktop preferences shared by Settings and navigation. */
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { DesktopAxiomCompanion, DotPreferences, DotSelection } from './desktop-axiom.ts'
+/** Dedicated original-site conversation state; no Agent, Session, Host send, or LLM request is created. */
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { DesktopAxiomCompanion, DotIdentity, DotMessage, DotPreferences, DotSnapshot } from './desktop-axiom.ts'
+import { mergeDotMessages } from './dot-history.ts'
 
-/** Accepted preferences and shared interaction feedback; no website messages are stored here. */
+/** Source observations and shared interaction state for the continuous Dot surface. */
 export interface DotState {
   readonly preferences: DotPreferences | null
+  readonly selection: DotIdentity | null
+  readonly snapshot: DotSnapshot | null
+  readonly messages: readonly DotMessage[]
   readonly busy: boolean
   readonly pending: boolean
   readonly failed: boolean
   readonly preferencesFailed: boolean
+  readonly history: 'idle' | 'loading' | 'ready' | 'unavailable'
+  readonly hasMore: boolean
+  readonly draft: string
+  readonly sending: boolean
+  readonly sendOutcome: 'confirmed' | 'unknown' | 'refused' | 'failed' | null
+}
+
+/** Read-only empty state for a Web client without the desktop capability. */
+export const emptyDotState: DotState = { preferences: null, selection: null, snapshot: null, messages: [], busy: false,
+  pending: false, failed: false, preferencesFailed: false, history: 'idle', hasMore: true, draft: '', sending: false, sendOutcome: null }
+
+/** Dedicated Dot actions, independent of the regular workspace/session navigation. */
+export interface DotController {
+  readonly store: SnapshotStore<DotState>
+  setPreferences(preferences: DotPreferences): Promise<void>
+  open(fallbackUrl?: string): Promise<void>
+  configure(): Promise<void>
+  loadOlder(): Promise<void>
+  setDraft(text: string): void
+  send(): Promise<void>
+  showOriginal(): Promise<void>
+  dispose(): void
 }
 
 /**
- * Own the armed selection for one plugin lifetime; page observation alone never navigates.
- * @param companion - Desktop preference storage and explicit website chooser.
- * @param operations - Canonical binding reader and guarded native Session connection.
- * @returns Shared interaction state, preference and selection actions, and a lifetime disposer.
+ * Observe and operate the selected original Dot directly through the trusted desktop bridge.
+ * @param companion - Validated desktop website operations and private preferences.
+ * @returns The continuous source conversation and explicit user actions; observations never navigate.
  */
-export function createDotController(companion: DesktopAxiomCompanion, operations: {
-  preferredUrl(): Promise<string | null>
-  connect(url: string, isCurrent: () => boolean): Promise<void>
-}): {
-  store: ReturnType<typeof createSnapshotStore<DotState>>
-  setPreferences(preferences: DotPreferences): Promise<void>
-  choose(): Promise<void>
-  dispose(): void
-} {
-  const store = createSnapshotStore<DotState>({ preferences: null, busy: false, pending: false, failed: false, preferencesFailed: false })
+export function createDotController(companion: DesktopAxiomCompanion): DotController {
+  const store = createSnapshotStore<DotState>(emptyDotState)
   let active = true
-  let armed = false
-  let opening = false
   let generation = 0
-  let startingAttempt: number | null = null
+  let choosing = false
+  let queuedSnapshot: DotSnapshot | null = null
+  const queuedObservation = (): DotSnapshot | null => queuedSnapshot
+  const currentAttempt = (attempt: number, url?: string | null): boolean =>
+    active && attempt === generation && (url === undefined || store.getSnapshot().snapshot?.url === url)
   const update = (patch: Partial<DotState>): void => { if (active) store.set({ ...store.getSnapshot(), ...patch }) }
-  const fail = (): void => { armed = false; update({ busy: false, pending: false, failed: true }) }
-  const isCurrent = (attempt: number): boolean => active && armed && attempt === generation
-  const accept = async (snapshot: DotSelection, attempt: number): Promise<void> => {
-    if (!isCurrent(attempt) || opening) return
-    if (snapshot.phase !== 'ready' || snapshot.url === null) {
-      if (snapshot.phase === 'unavailable' || snapshot.phase === 'disconnected') fail()
-      else update({ busy: false, pending: true })
-      return
-    }
-    const url = new URL(snapshot.url)
-    if (url.origin !== 'https://chatgpt.com' || !/^\/dots\/[A-Za-z0-9_~-]+\/?$/.test(url.pathname)
-      || url.search || url.hash || url.username || url.password) { fail(); return }
-    opening = true
-    armed = false
-    try {
-      await operations.connect(url.href, () => active && attempt === generation && store.getSnapshot().preferences?.enabled === true)
-      update({ busy: false, pending: false })
-    }
-    catch (_connectionFailed: unknown) { fail() }
-    finally { opening = false }
+  const observe = (snapshot: DotSnapshot): void => {
+    if (!active) return
+    const state = store.getSnapshot()
+    if (state.preferences?.enabled === false) return
+    const same = snapshot.url === state.selection?.url
+    if (same && state.snapshot?.phase === 'ready' && snapshot.phase === 'ready'
+      && snapshot.revision < state.snapshot.revision) return
+    if (snapshot.phase === 'disconnected' && state.snapshot?.phase !== 'disconnected'
+      || snapshot.url !== null && state.selection !== null && !same) generation++
+    const selection = snapshot.url === null ? state.selection : { url: snapshot.url, title: snapshot.title || state.selection?.title || '' }
+    update({ snapshot, selection,
+      messages: snapshot.url === null ? state.messages : mergeDotMessages(same ? state.messages : [], snapshot.messages, 'live'),
+      ...snapshot.phase === 'disconnected' ? { sending: false,
+        sendOutcome: state.sending ? 'unknown' : state.sendOutcome,
+        history: state.history === 'loading' ? 'unavailable' : state.history } : {},
+      pending: snapshot.phase === 'loading' || snapshot.phase === 'login-required',
+      failed: snapshot.phase === 'unavailable',
+      ...snapshot.url !== null && state.selection !== null && !same
+        ? { history: 'idle', hasMore: true, draft: '', sending: false, sendOutcome: state.sending ? 'unknown' : null } : {},
+    })
   }
   const off = companion.subscribe((snapshot) => {
-    // The chooser's result supersedes transient teardown events from replacing its previous page.
-    if (startingAttempt === generation) return
-    void accept(snapshot, generation).catch(fail)
+    if (!choosing) { observe(snapshot); return }
+    if (snapshot.phase === 'ready' && snapshot.url !== null
+      && (queuedSnapshot?.url !== snapshot.url || queuedSnapshot.revision <= snapshot.revision)) queuedSnapshot = snapshot
   })
-  const ready = companion.preferences().then((preferences) => { update({ preferences }) })
-    .catch(() => { update({ preferencesFailed: true }) })
+  const ready = Promise.all([companion.preferences(), companion.selection()]).then(([preferences, selection]) => {
+    update({ preferences, selection })
+  }).catch(() => { update({ preferencesFailed: true }) })
+  const configure = async (reuse: boolean, fallbackUrl?: string): Promise<void> => {
+    await ready
+    if (!active || choosing || store.getSnapshot().sending || store.getSnapshot().history === 'loading'
+      || !store.getSnapshot().preferences?.enabled) return
+    choosing = true
+    queuedSnapshot = null
+    const attempt = ++generation
+    update({ busy: true, failed: false, sendOutcome: null })
+    try {
+      const current = reuse ? await companion.snapshot() : null
+      const snapshot = current?.phase === 'ready' && current.url !== null
+        ? current : await companion.choose(store.getSnapshot().selection?.url ?? fallbackUrl ?? null)
+      const selected = snapshot.url === null && queuedObservation() !== null ? await companion.selection() : null
+      if (currentAttempt(attempt)) {
+        const queued = queuedObservation()
+        observe(snapshot)
+        if (queued !== null && queued.url === (snapshot.url ?? selected?.url)
+          && (snapshot.phase !== 'ready' || queued.revision >= snapshot.revision)) observe(queued)
+      }
+    } catch (_selectionFailed: unknown) { update({ failed: true, pending: false }) }
+    finally { choosing = false; update({ busy: false }) }
+  }
   return {
     store,
-    async setPreferences(preferences: DotPreferences): Promise<void> {
-      if (!preferences.enabled) { armed = false; generation++; update({ pending: false }) }
+    async setPreferences(preferences): Promise<void> {
       await companion.setPreferences(preferences)
+      if (!preferences.enabled) { generation++; update({ pending: false, snapshot: null, sending: false }) }
       update({ preferences })
     },
-    async choose(): Promise<void> {
-      await ready
-      if (!active || opening || armed || !store.getSnapshot().preferences?.enabled) return
-      armed = true
-      const attempt = ++generation
-      startingAttempt = attempt
-      update({ busy: true, pending: false, failed: false, preferencesFailed: false })
+    open: async (fallbackUrl) => { await configure(true, fallbackUrl) },
+    configure: async () => { await configure(false) },
+    setDraft(text): void { update({ draft: text }) },
+    async loadOlder(): Promise<void> {
+      const state = store.getSnapshot()
+      const first = state.messages[0]
+      if (!active || first === undefined || !state.hasMore || state.history === 'loading' || state.snapshot?.phase !== 'ready') return
+      const selected = state.snapshot.url
+      const attempt = generation
+      update({ history: 'loading' })
       try {
-        const hint = await operations.preferredUrl()
-        if (!isCurrent(attempt)) return
-        const snapshot = await companion.choose(hint)
-        if (startingAttempt === attempt) startingAttempt = null
-        await accept(snapshot, attempt)
-      } catch (_selectionFailed: unknown) { if (attempt === generation) fail() }
-      finally { if (startingAttempt === attempt) startingAttempt = null }
+        const page = await companion.historyBefore(first.id)
+        if (!currentAttempt(attempt, selected)) return
+        const messages = mergeDotMessages(store.getSnapshot().messages, page.messages, 'older')
+        const status = page.status === 'ready' && page.hasMore && messages[0]?.id === first.id ? 'unavailable' : page.status
+        update({ messages, history: status, hasMore: status === 'unavailable' ? true : page.hasMore })
+      } catch (_historyFailed: unknown) {
+        if (currentAttempt(attempt, selected)) {
+          update({ history: 'unavailable', hasMore: true })
+        }
+      }
     },
-    dispose(): void { active = false; armed = false; generation++; off() },
+    async send(): Promise<void> {
+      const state = store.getSnapshot()
+      const snapshot = state.snapshot
+      if (!active || state.sending || !state.preferences?.enabled || !state.draft.trim()
+        || snapshot?.phase !== 'ready' || !snapshot.canSend || snapshot.draftPresent) return
+      const text = state.draft
+      const attempt = generation
+      update({ sending: true, sendOutcome: null })
+      try {
+        const result = await companion.send({ requestId: randomUUID(), revision: snapshot.revision, text })
+        if (!currentAttempt(attempt)) return
+        observe(result.snapshot)
+        update({ sendOutcome: result.status, ...result.status === 'confirmed' && store.getSnapshot().draft === text ? { draft: '' } : {} })
+      } catch (_sendFailed: unknown) { if (currentAttempt(attempt)) update({ sendOutcome: 'unknown' }) }
+      finally { if (currentAttempt(attempt)) update({ sending: false }) }
+    },
+    showOriginal: async () => { await companion.showLogin() },
+    dispose(): void { active = false; generation++; off() },
   }
 }

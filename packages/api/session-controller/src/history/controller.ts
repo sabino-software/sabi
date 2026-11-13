@@ -1,5 +1,6 @@
 /** Independent Session snapshots and passive event subscriptions. */
 
+import { requireVisibleSession } from '../presentation.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { SessionLogOffset, SessionSeq, isAppendSurfaceEvent } from '@deepseek-ai/dsh-session'
 import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
@@ -55,6 +56,7 @@ export class HistoryController {
    * @returns subscription readiness followed by event frames; readiness does not establish existence.
    */
   async *observeEvent(request: SessionObserveEventRequest, signal: AbortSignal): AsyncIterable<SessionEventFrame> {
+    await requireVisibleSession(this.ctx, addressId(request.address), signal)
     using listener = new EventListener(this.ctx, addressId(request.address), signal)
     yield { type: 'ready' }
     yield* listener.events()
@@ -167,6 +169,7 @@ export class HistoryController {
     { sessionId, projection }: { readonly sessionId: SessionId; readonly projection: boolean }, signal: AbortSignal,
     callback?: (observation: SessionObservation) => T,
   ): Promise<SessionObservation | Awaited<T>> {
+    await requireVisibleSession(this.ctx, sessionId, signal)
     let observation: SessionObservation
     try {
       observation = await this.ctx.sessionQuery.observeSession(sessionId, { signal, projectionMode: projection ? 'all' : 'none' })

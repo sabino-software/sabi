@@ -1,5 +1,5 @@
 ---
-description: "通过普通 Harness Session 继续原始工作 Codex 和 ChatGPT Dot 对话。"
+description: "继续工作 Codex Session，并保留专用 Dot 视图的兼容元数据。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-从常规 Harness 侧边栏、对话记录和输入框继续原始工作 Codex 与选定的 ChatGPT Dot 对话。来源标记注明原始对话。推理与来源历史仍由原始应用和账户负责。
+通过普通 Harness Session 继续原始工作 Codex 对话。Dot 使用独立桌面视图；已有 Axiom 镜像被隐藏，但其日志不会删除。
 
 ## 目录
 
@@ -26,11 +26,11 @@ kind: "package-reference"
 
 未登录的工作账户可通过原生连接面板在常规浏览器中登录。显式托管登录使用 `account/login/start`，Codex 负责 localhost 回调和凭据。服务匹配登录 ID 与连接代次，验证 `account/read` 后选择工作模型并刷新来源元数据。状态不包含授权网址或凭据。取消仅针对本服务创建的等待中登录。保留现有已登录账户；Codex 授权不授予 ChatGPT 对话历史，也不认证 Axiom 的网站会话。
 
-打开**原生对话**以刷新 Codex 元数据。在通用设置中启用 Dot 及其侧栏选项后，**Dot** 会显示在新建 Session 的正下方。该操作复用已有选择，或让用户在原始网站登录并选择 Dot，不要求输入网址。服务启动时也会同步 Codex。持久化来源映射同时复用导入的 Session ID 和通过 Harness 首次创建的对话，因此刷新不会重复导入。打开其 Agent 时才载入原始用户和助手文本，摄取检查点保留原始消息 ID，历史操作显示为不会重新执行的来源活动卡片。空闲且打开的 Codex 对话也会刷新已完成的来源轮次，不启动推理。
+打开 **Native conversations** 刷新工作 Codex 元数据。同步将原始 Codex 对话关联到稳定的 Harness Session 标识，仅在打开时载入来源消息。Dot 不参与此导入。
 
 Codex 使用已连接的工作守护进程，与个人 Codex 主目录分离。直接文本或图像轮次继续绑定的原始对话，或为新的原生 Codex Session 创建对话。若原始对话在其他客户端存在未完成轮次，则拒绝继续。Harness 通过临时、经过身份验证的回环 MCP 端点暴露当前 Agent 声明的工具，并由已有执行和审批服务处理调用。取消只中断当前操作已确认的精确轮次，不停止无关 Codex 工作。
 
-Axiom 使用桌面拥有的原始 ChatGPT 页面。需要时通过**打开 ChatGPT 登录**直接登录，Cookie 和令牌存储保留在独立的 Electron 会话内，应用内登录不需要浏览器扩展。可选的常规浏览器伴随扩展仅在选择该连接时发现用户显式配对的 Dot。网站窗口提供重新加载与关闭控件；关闭会销毁页面内容并停止观察，直到用户再次通过 Dot 操作打开，同时保留网站登录存储。适配器只通过原始网站输入框发送用户编写的原文，并观察新的原始助手消息 ID。它不调用 ChatGPT 模型 API，也不创建仿制 Dot。被拒绝或结果不确定的提交不会自动重试。取消 Harness 观察不会点击未被观察确认的网站停止控件。
+Dot 是由顶部 Dot 按钮打开的专用连续视图，不是 Harness Session 或 LLM 提供方。可信桌面页面桥接负责选择、网站认证、快照与发送。已有 Axiom 镜像日志及其持久化读取器保持不变。呈现策略从普通 Session 发现入口隐藏这些镜像并拒绝常规打开；已保存的标识转向专用 Dot 视图。已弃用的 `connectAxiom(url)` 仅选择原始页面并返回 `{ url, phase }`，不再返回 Session 标识。
 
 <a id="configure-the-service"></a>
 ## 配置服务
@@ -42,9 +42,9 @@ Axiom 使用桌面拥有的原始 ChatGPT 页面。需要时通过**打开 ChatG
 | `codexLoginTimeoutMs` | `300000` | 等待托管 Codex 浏览器回调的最长时间。 |
 | `codexLoginCancelTimeoutMs` | `5000` | 取消本应用指定 Codex 登录的期限。 |
 | `axiomRequestTimeoutMs` | `30000` | 桌面页面操作期限。 |
-| `axiomPollIntervalMs` | `750` | 原始页面观察间隔。 |
-| `axiomResponseTimeoutMs` | `300000` | 发送确认操作的最长生命周期。 |
-| `axiomSettleMs` | `1500` | 后备流适配器的稳定间隔；桌面使用持续来源观察。 |
+| `axiomPollIntervalMs` | `750` | 保留的旧配置字段；专用 Dot 视图不使用。 |
+| `axiomResponseTimeoutMs` | `300000` | 保留的旧配置字段；专用 Dot 视图不使用。 |
+| `axiomSettleMs` | `1500` | 保留的旧配置字段；专用 Dot 视图不使用。 |
 
 仅所有者可用的 Remote 接口包括 `status`、`syncCodex`、`connectAxiom`、`showAxiomLogin` 和 `useCodex`。欢迎操作选择已完成身份验证的工作订阅，不创建或复制授权。Session 投影 `nativeConversation` 标识来源，来源消息检查点防止重复摄取。周边对话服务参见 [session-query 子系统参考](../../../docs/subsystems/session-query.zh.md)。
 
@@ -59,7 +59,7 @@ Codex 保留原始对话。`turn/start` 接收直接用户文本和准入图像�
 
 #### Token 影响
 
-原生轮次使用原始 Codex 或 ChatGPT 账户。元数据同步和历史载入不生成模型回复。Harness 工具 schema、指令和工具结果可能增加 Codex 轮次输入。
+Codex 轮次使用原始 Codex 账户。Dot 不运行 Harness 模型轮次。元数据读取和 Codex 历史载入不生成模型回复；Harness 工具 schema 和结果可能增加 Codex 输入。
 
 #### KV Cache 影响
 
@@ -73,7 +73,7 @@ Codex 保留原始对话。`turn/start` 接收直接用户文本和准入图像�
 - Axiom 历史只包含有界的已渲染页面窗口，并报告截断情况；不包括未加载或虚拟化的历史。
 - 支持直接 OpenAI 登录。外部社交或企业身份提供方导航需要获准的目标地址。
 - 复制或分叉的 Harness Session 不会静默重绑到原始来源。继续该副本前需在来源应用中创建分叉。
-- 原生适配器拒绝辅助标题和压缩请求。Axiom 只接受文本；其桥接不重放历史工具、不自动获取图片，也不暴露任意网站交互。
+- Codex 拒绝辅助标题和压缩请求。Dot 发送由专用网站桥接负责，不经过 Harness 模型循环。
 
 <a id="dev-note"></a>
 ### 开发备注

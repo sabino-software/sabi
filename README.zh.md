@@ -12,7 +12,7 @@ Sabi 是基于 DeepSeek Harness 的独立 macOS 编程工作区。它支持在�
 
 工作 Codex 聊天作为常规会话出现在所属工作区。打开历史不会启动推理。发送消息通过工作 app-server 继续同一个原始 Codex 对话。Harness 工具通过限定范围的本地 MCP 连接提供，沙箱选择与审批决定仍受执行约束。来源活动与消息一起显示，不会重新执行导入的操作。
 
-Dot 为可选功能。在**设置 → 常规**中同时启用**在侧边栏显示 Dot**与**启用 Dot 集成**，即可将 **Dot** 放在**新会话**正下方。默认样式与新会话一致，也可选择简洁或轮廓。选择 Dot 即可登录原始 ChatGPT 网站并选择 Dot，无需输入网址。持久化的应用内网站会话支持原生历史、发送与观察到的回复，无需浏览器扩展。常规浏览器伴随扩展仍为可选后备方式。
+Dot 为可选功能。在**设置 → 常规**中同时启用**在侧边栏显示 Dot**与**启用 Dot 集成**，即可将专用按钮放在**新会话**正下方。按钮使用选定 Dot 的名称，如 Axiom。默认样式与新会话一致，也可选择简洁或轮廓。按钮打开连续对话，使用网站主题并支持向上滚动旧历史。Dot 不出现在普通会话或搜索结果中。在原始 ChatGPT 网站选择 Dot，无需输入网址。持久化的应用内网站会话支持原生历史、发送与观察到的回复，无需浏览器扩展。常规浏览器伴随扩展仍为可选后备方式。
 
 原始页面连接后在隐藏状态运行，原生聊天仍可使用。**打开 ChatGPT**会显示它，重新加载会刷新它。**关闭页面**会销毁页面并停止观察；只有再次明确选择 Dot 才会重新连接。关闭并重新打开页面后，网站登录状态保留。常规设置不要求 DeepSeek 登录。
 
@@ -34,6 +34,14 @@ pnpm --dir apps/desktop run package:local-fork --dir
 通过应用菜单中的 **Manage sabi Command…** 管理 `sabi` 命令，然后运行 `sabi --help` 或 `sabi --version`。该命令使用内嵌 Electron 运行时，不依赖系统 Node 或检出目录，应用路径包含空格时也可使用。它保留现有 `dsh` 命令和个人 Codex 安装。
 
 贡献者工作流见[开发指南](docs/development.zh.md)、[架构](docs/architecture.zh.md)与[智能体说明](AGENTS.md)。API 仍处于开发者预览阶段，可能出现兼容性破坏。
+
+## Run
+
+安装桌面 CLI 后，使用 `sabi web` 启动引擎的 Web UI。命令会打印本地网址。原生 Codex 和 Dot 集成需要 macOS 应用。
+
+### Run from source
+
+安装[开发前提条件](docs/development.zh.md)后，在仓库根目录运行 `pnpm install --frozen-lockfile` 和 `pnpm run build`，然后运行 `pnpm dsh web`。源码启动器保留上游命令名称。配置与插件开发见[源码执行](apps/cli/reference/README.zh.md#source-execution)。
 
 ## 上游与许可证
 

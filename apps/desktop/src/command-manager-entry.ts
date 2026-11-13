@@ -2,6 +2,7 @@
 
 import { readDesktopCommandName } from './command-identity.ts'
 import { spawn } from 'node:child_process'
+import { userInfo } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CommandInstallationError, inspectFileCommand, installFileCommand, removeFileCommand } from './command-installation.ts'
@@ -17,7 +18,7 @@ try {
   if (operation !== 'inspect' && !/^[a-f0-9]{64}$/u.test(fingerprint)) throw new CommandInstallationError('EINVAL', 'Missing command confirmation.')
   if (process.platform === 'darwin') {
     const name = readDesktopCommandName(resources)
-    const options = { destination: `/usr/local/bin/${name}`, launcher: join(resources, 'runtime', 'cli', 'bin', name),
+    const options = { destination: name === 'sabi' ? join(userInfo().homedir, '.local', 'bin', name) : `/usr/local/bin/${name}`, launcher: join(resources, 'runtime', 'cli', 'bin', name),
       allowReplacement: name === 'dsh',
       linkHelper: join(resources, 'runtime', 'cli', 'link-entry') }
     const state = operation === 'inspect' ? await inspectFileCommand(options)

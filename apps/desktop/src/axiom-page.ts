@@ -17,22 +17,36 @@ export interface AxiomPageState {
 /**
  * Read rendered message bodies without page storage, application state, or network interception.
  * This function is serialized into the original page and therefore has no module references.
+ * @param beforeId Optional original cursor; a history read returns only preceding messages and never reads the composer.
  * @returns Original-page text in source order, retaining the newest messages within the bounds, and observed composer state.
  */
-export function readAxiomPage(): AxiomPageState {
-  const rows = [...document.querySelectorAll('article.message-row[data-message-id]')]
+export function readAxiomPage(beforeId?: string): AxiomPageState {
+  const seen = new Set<string>()
+  const rows = [...document.querySelectorAll('article.message-row[data-message-id]')].filter((row) => {
+    const id = row.getAttribute('data-message-id')
+    if (!id || seen.has(id) || row.parentElement?.closest('article.message-row[data-message-id]')
+      || row.closest('.quoted-reply,blockquote,[hidden],[aria-hidden="true"]')) return false
+    const style = getComputedStyle(row)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+    seen.add(id)
+    return true
+  })
+  const cursor = beforeId === undefined ? rows.length : rows.findIndex(row => row.getAttribute('data-message-id') === beforeId)
+  const preceding = cursor < 0 ? [] : rows.slice(0, cursor)
   const messages: AxiomMessage[] = []
   let remaining = 131072
-  let limited = rows.length > 100
-  for (const row of rows.slice(-100).reverse()) {
+  let limited = preceding.length > 100
+  for (const row of preceding.slice(-100).reverse()) {
     const id = row.getAttribute('data-message-id')
-    const body = row.querySelector('.message-body > .message-surface .message-bubble .message-text')
-    if (id === null || id.length > 512 || body === null) continue
+    const body = [...row.querySelectorAll('.message-body > .message-surface .message-bubble .message-text')]
+      .find(candidate => candidate.closest('article.message-row[data-message-id]') === row
+        && !candidate.closest('.quoted-reply,blockquote,[hidden],[aria-hidden="true"]'))
+    if (id === null || id.length > 512 || body === undefined) continue
     const escape = (text: string): string => text.replaceAll(/([\\`*_[\]<>|~])/gu, '\\$1')
     const serialize = (node: Node, depth = 0): string => {
       if (node.nodeType === Node.TEXT_NODE) return escape(node.textContent ?? '')
       if (!(node instanceof HTMLElement)) return ''
-      if (node.matches('script,style,button,.message-inline-actions,[hidden],[aria-hidden="true"]')) return ''
+      if (node.matches('script,style,button,.message-inline-actions,.quoted-reply,article.message-row,[hidden],[aria-hidden="true"]')) return ''
       const style = getComputedStyle(node)
       if (style.display === 'none' || style.visibility === 'hidden') return ''
       const children = (): string => [...node.childNodes].map(child => serialize(child, depth)).join('')
@@ -91,11 +105,13 @@ export function readAxiomPage(): AxiomPageState {
     limited ||= truncated
     remaining -= text.length
     if (text !== '') messages.push({ id, role: row.classList.contains('self') ? 'user' : 'assistant', text,
-      timestamp: row.querySelector('time')?.getAttribute('datetime')?.slice(0, 100) ?? null, truncated })
+      timestamp: [...row.querySelectorAll('time')].find(time => time.closest('article.message-row[data-message-id]') === row
+        && !time.closest('.quoted-reply,blockquote'))?.getAttribute('datetime')?.slice(0, 100) ?? null, truncated })
   }
   messages.reverse()
-  const composer = document.querySelector('div[role="textbox"][contenteditable="true"][aria-label="Message"]')
-  const send = document.querySelector('button[aria-label="Send"]')
+  const composer = beforeId === undefined
+    ? document.querySelector('div[role="textbox"][contenteditable="true"][aria-label="Message"]') : null
+  const send = beforeId === undefined ? document.querySelector('button[aria-label="Send"]') : null
   const status = document.querySelector('[role="status"].typing-indicator[aria-live="polite"]')
   return {
     url: location.href, title: document.title.slice(0, 300), messages,
@@ -148,4 +164,48 @@ export function findAxiomAcknowledgement(text: string, before: readonly string[]
         || body.innerText.replaceAll('\r\n', '\n').trim() === text.trim())) return id
   }
   return null
+}
+
+/** One bounded original history observation; absence of a start marker never means exhaustion. */
+export interface AxiomHistoryObservation {
+  readonly url: string
+  readonly supported: boolean
+  readonly anchorFound: boolean
+  readonly messages: readonly AxiomMessage[]
+  readonly hasEarlier: boolean
+  readonly startVerified: boolean
+}
+
+/**
+ * Observe earlier original rows and optionally reveal older rows through the site's own scroll container.
+ * @param read Shared sanitized reader, serialized alongside this function.
+ * @param url Exact selected canonical Dot; other documents are never read or scrolled.
+ * @param beforeId Stable original message cursor.
+ * @param scroll Whether to scroll the separate history page toward its oldest loaded rows.
+ * @returns A bounded chronological page and explicit source-boundary evidence.
+ */
+export function readAxiomHistoryPage(
+  read: (beforeId?: string) => AxiomPageState, url: string, beforeId: string, scroll: boolean,
+): AxiomHistoryObservation {
+  const empty: AxiomHistoryObservation = { url, supported: false, anchorFound: false, messages: [],
+    hasEarlier: false, startVerified: false }
+  if (location.href.replace(/\/$/u, '') !== url) return empty
+  const scroller = document.querySelector('.messages-scroll')
+  const list = scroller?.querySelector('.message-list')
+  if (!(scroller instanceof HTMLElement) || !(list instanceof HTMLElement)) return empty
+  const ids = new Set<string>()
+  const rows = [...list.querySelectorAll('article.message-row[data-message-id]')].filter((row) => {
+    const id = row.getAttribute('data-message-id')
+    if (!id || ids.has(id) || row.parentElement?.closest('article.message-row[data-message-id]')
+      || row.closest('.quoted-reply,blockquote,[hidden],[aria-hidden="true"]')) return false
+    ids.add(id)
+    return true
+  })
+  const cursor = rows.findIndex(row => row.getAttribute('data-message-id') === beforeId)
+  if (scroll) scroller.scrollTop = 0
+  if (cursor < 0) return { ...empty, supported: true }
+  const messages = read(beforeId).messages
+  const first = messages[0]
+  const firstIndex = first === undefined ? cursor : rows.findIndex(row => row.getAttribute('data-message-id') === first.id)
+  return { url, supported: true, anchorFound: true, messages, hasEarlier: firstIndex > 0, startVerified: false }
 }

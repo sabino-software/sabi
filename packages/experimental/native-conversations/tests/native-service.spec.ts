@@ -1,15 +1,15 @@
 /** Real source transport, JSONL persistence and workspace ownership exercise native Session assembly. */
 import { Context } from '@deepseek-ai/cordis'
 import { createServer } from 'node:http'
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { Session, SessionId, SessionLogOffset, appendPluginRecord, buildForkSeed, pluginRecordOf } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, SessionLogOffset, SESSION_FORMAT_VERSION, appendPluginRecord, buildForkSeed, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
@@ -25,7 +25,7 @@ import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-
 import { createSessionTestController } from '../../../api/session-controller/tests/test-remote.ts'
 import NativeConversations from '../src/index.ts'
 import { BINDING_RECORD, CODEX_CUT_RECORD } from '../src/projection.ts'
-import { sourceSessionId } from '../src/history.ts'
+import { sourceSessionId, appendSourceMessages } from '../src/history.ts'
 import type { NativeConversationId } from '../src/types.ts'
 import type { AxiomSnapshot, AxiomTransport } from '../src/axiom-types.ts'
 
@@ -128,7 +128,7 @@ function authoredText(session: Session): string[] {
 }
 
 describe.skipIf(process.platform === 'win32')('native conversation service', () => {
-  it('restores one assigned Dot selection from cached metadata and leaves several Dots for an explicit choice', async () => {
+  it('selects a Dot through the compatibility endpoint without creating a Session or source assignment', async () => {
     const h = await fixture()
     let page: AxiomSnapshot = { source: 'chatgpt-web', url: null, title: 'Axiom', revision: 0, phase: 'disconnected',
       messages: [], canSend: false, draftPresent: false, siteStatus: null, limited: true }
@@ -143,11 +143,13 @@ describe.skipIf(process.platform === 'win32')('native conversation service', () 
     expect((await first.ctx.nativeConversations.status()).axiom.preferredUrl).toBeNull()
     first.ctx.nativeConversations.attachAxiomTransport(transport)
     const one = 'https://chatgpt.com/dots/fixture~one'
-    await first.ctx.nativeConversations.connectAxiom(one)
+    const before = await first.ctx.sessionPersistence.list()
+    expect(await first.ctx.nativeConversations.connectAxiom(one)).toEqual({ url: one, phase: 'ready' })
+    expect(await first.ctx.sessionPersistence.list()).toEqual(before)
     expect((await first.ctx.nativeConversations.status()).axiom.preferredUrl).toBe(one)
     await first.ctx.fiber.dispose()
     const second = await h.open()
-    expect((await second.ctx.nativeConversations.status()).axiom.preferredUrl).toBe(one)
+    expect((await second.ctx.nativeConversations.status()).axiom.preferredUrl).toBeNull()
     second.ctx.nativeConversations.attachAxiomTransport(transport)
     const two = 'https://chatgpt.com/dots/fixture~two'
     await second.ctx.nativeConversations.connectAxiom(two)
@@ -270,12 +272,166 @@ describe.skipIf(process.platform === 'win32')('native conversation service', () 
     appendPluginRecord(seed, BINDING_RECORD, { source: 'axiom', sourceId: brandString<NativeConversationId>('https://chatgpt.com/dots/fixture~source'),
       title: 'Original Dot fixture', model: 'original-dot', cwd: null })
     seed.append('model/selection', { provider: 'axiom-original', model: 'original-dot' })
-    const bound = await ctx.agents.create({ sessionId: SessionId('bound-axiom-fixture'), seed: seed.snapshotEvents(), meta: { cwd: h.workspacePath } })
-    const before = bound.agent.session.snapshotEvents()
-    expect(() => { bound.agent.model.select({ provider: 'codex-app-server', model: 'fixture-model' }) }).toThrow('original Axiom page owns its model')
-    expect(() => { ctx.permissionPresets.set(bound.agent.session, 'danger-full-access') }).toThrow('original Axiom page owns its permissions')
-    expect(bound.agent.session.snapshotEvents()).toEqual(before)
-    expect(ctx.permissionPresets.current(bound.agent.session)).toBe('workspace-write')
+    await expect(ctx.agents.create({ sessionId: SessionId('bound-axiom-fixture'), seed: seed.snapshotEvents(), meta: { cwd: h.workspacePath } }))
+      .rejects.toThrow('dedicated Dot view')
+    expect(ctx.llm.listProviders().some(provider => provider.id === 'axiom-original')).toBe(false)
     expect(h.frames.some(frame => frame.method === 'turn/start' || frame.method === 'thread/resume')).toBe(false)
   })
+})
+
+it.skipIf(process.platform === 'win32')('hides cached and uncached legacy Dot mirrors while preserving logs and ordinary Creator/Codex Sessions', async () => {
+  const h = await fixture()
+  const { ctx, controller } = await h.open()
+  const signal = new AbortController().signal
+  const workspace = await ctx.workspaceRegistry.create(h.workspacePath)
+  const original = new Map<string, Buffer>()
+  const dots: Session[] = []
+  const url = 'https://chatgpt.com/dots/fixture~legacy'
+  for (const name of ['legacy-dot-active', 'legacy-dot-archived', 'creator']) {
+    const id = SessionId(name)
+    const session = Session.create(id, undefined, {
+      version: SESSION_FORMAT_VERSION, id, createdAt: 123, isSeeded: false, cwd: h.workspacePath,
+    })
+    if (name !== 'creator') {
+      appendPluginRecord(session, BINDING_RECORD, { source: 'axiom', sourceId: brandString<NativeConversationId>(url), title: 'Legacy Dot', model: 'original-dot', cwd: null })
+      dots.push(session)
+    }
+    session.append('session/title', { title: name === 'creator' ? 'Creator' : 'Legacy Dot', messageSeqs: [], source: { kind: 'user' } })
+    appendSourceMessages(session, { ids: [], hydrated: false, historyLimited: false }, [{ id: name + '-question', role: 'user', text: 'Preserved original question', timestamp: 1000 }], 'fixture', 'fixture', true, 1)
+    const handle = await ctx.sessionPersistence.create(session.header)
+    try {await handle.append(session.snapshotEvents()); await handle.flush()} finally {await handle.close()}
+    await workspace.attachSession(id)
+    const location = (await ctx.sessionPersistence.stat(id))!.location!
+    original.set(location.path, await readFile(location.path))
+  }
+  await ctx.workspaceRegistry.archiveSession(dots[1]!.id)
+  expect(ctx.sessionProjectionCache.cachedSnapshot(dots[0]!.header, ['nativeConversation'])).toBeUndefined()
+  const listed = await controller.list({}, signal)
+  expect(listed.items.map(item => item.sessionId)).toContain('creator')
+  expect(listed.items.map(item => item.sessionId)).toContain(sourceSessionId('codex', 'source-one'))
+  for (const dot of dots) {
+    expect(listed.items.some(item => item.sessionId === dot.id)).toBe(false)
+    expect(await controller.presentation({ sessionId: dot.id }, signal)).toEqual({ visibility: 'hidden', route: { view: 'dot', params: { url } } })
+    await expect(controller.page({ address: { kind: 'session', sessionId: dot.id } }, signal)).rejects.toMatchObject({ code: 'session/not-found' })
+    await expect(controller.state({ sessionId: dot.id }, signal)).rejects.toMatchObject({ code: 'session/not-found' })
+    expect(await controller.resolveAgent(dot.id)).toMatchObject({ error: { code: 'session/not-found' } })
+    expect(ctx.agents.get(dot.id)).toBeUndefined()
+  }
+  await ctx.sessionProjectionCache.write(dots[0]!)
+  expect(await controller.presentation({ sessionId: dots[0]!.id }, signal)).toMatchObject({ visibility: 'hidden' })
+  ctx.sessions.create(dots[0]!.id, { seed: dots[0]!.snapshotEvents(), meta: dots[0]!.header })
+  const control = controller.control(signal)[Symbol.asyncIterator]()
+  const first = await control.next()
+  expect(first.value).toMatchObject({ type: 'baseline' })
+  if (first.value?.type !== 'baseline') throw new Error('Expected a control baseline')
+  expect(first.value.value.projections).not.toHaveProperty(dots[0]!.id)
+  await control.return?.()
+  expect(await controller.presentation({ sessionId: SessionId('creator') }, signal)).toEqual({ visibility: 'visible' })
+  for (const [path, bytes] of original) expect(await readFile(path)).toEqual(bytes)
+  expect(h.frames.some(frame => frame.method === 'turn/start')).toBe(false)
+})
+
+it.skipIf(process.platform === 'win32')('shares cold binding reads, memoizes ordinary negatives, and cancels callers independently', async () => {
+  const h = await fixture()
+  const { ctx, controller } = await h.open()
+  const id = SessionId('ordinary-negative-policy')
+  const session = Session.create(id, undefined, {
+    version: SESSION_FORMAT_VERSION, id, createdAt: 77, isSeeded: false, cwd: h.workspacePath,
+  })
+  const writer = await ctx.sessionPersistence.create(session.header)
+  try {await writer.flush()} finally {await writer.close()}
+  const entered = Promise.withResolvers<undefined>()
+  const gate = Promise.withResolvers<undefined>()
+  const open = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
+  let reads = 0
+  let closes = 0
+  const io = vi.spyOn(ctx.sessionPersistence, 'open').mockImplementation(async (target, access, options) => {
+    const handle = await open(target, access, options)
+    if (target !== id || access !== 'read') return handle
+    const read = handle.read.bind(handle)
+    const close = handle.close.bind(handle)
+    vi.spyOn(handle, 'read').mockImplementation(async (offset, length, readOptions) => {
+      reads++
+      entered.resolve(undefined)
+      const signal = readOptions!.signal!
+      await new Promise<void>((resolve, reject) => {
+        const abort = () => {reject(signal.reason)}
+        signal.addEventListener('abort', abort, { once: true })
+        void gate.promise.then(() => {signal.removeEventListener('abort', abort); resolve()})
+        if (signal.aborted) abort()
+      })
+      return read(offset, length, readOptions)
+    })
+    vi.spyOn(handle, 'close').mockImplementation(async () => {closes++; await close()})
+    return handle
+  })
+  onTestFinished(() => io.mockRestore())
+  const first = new AbortController()
+  const rejected = controller.presentation({ sessionId: id }, first.signal)
+  await entered.promise
+  const kept = controller.presentation({ sessionId: id }, new AbortController().signal)
+  first.abort(new Error('first metadata caller cancelled'))
+  await expect(rejected).rejects.toThrow('first metadata caller cancelled')
+  gate.resolve(undefined)
+  expect(await kept).toEqual({ visibility: 'visible' })
+  expect(await controller.presentation({ sessionId: id }, new AbortController().signal)).toEqual({ visibility: 'visible' })
+  expect(reads).toBe(1)
+  expect(closes).toBe(1)
+})
+
+it.skipIf(process.platform === 'win32')('keeps known migration-cache Dot metadata hidden before normal projections can return it', async () => {
+  const h = await fixture()
+  const { ctx, controller } = await h.open()
+  const id = SessionId('migration-cache-dot')
+  const session = Session.create(id, undefined, {
+    version: SESSION_FORMAT_VERSION, id, createdAt: 79, isSeeded: false, cwd: h.workspacePath,
+  })
+  appendPluginRecord(session, BINDING_RECORD, { source: 'axiom', sourceId: brandString<NativeConversationId>('https://chatgpt.com/dots/fixture~migration'), title: 'Legacy Dot', model: 'original-dot', cwd: null })
+  const writer = await ctx.sessionPersistence.create(session.header)
+  try {await writer.append(session.snapshotEvents()); await writer.flush()} finally {await writer.close()}
+  await ctx.sessionProjectionCache.write(session)
+  const stat = ctx.sessionPersistence.stat.bind(ctx.sessionPersistence)
+  const io = vi.spyOn(ctx.sessionPersistence, 'stat').mockImplementation(async (target, options) => {
+    const value = await stat(target, options)
+    if (target !== id || !value) return value
+    const { eventCount: _count, ...rest } = value
+    return { ...rest, formatStatus: 'migration-required' }
+  })
+  onTestFinished(() => io.mockRestore())
+  const signal = new AbortController().signal
+  expect(await controller.presentation({ sessionId: id }, signal)).toMatchObject({ visibility: 'hidden', route: { view: 'dot' } })
+  await expect(controller.projections({ sessionId: id }, signal)).rejects.toMatchObject({ code: 'session/not-found' })
+})
+
+it.skipIf(process.platform === 'win32')('cancels metadata stat I/O with the caller and the owning service lifetime', async () => {
+  const h = await fixture()
+  const { ctx, controller } = await h.open()
+  const id = SessionId('stalled-policy-stat')
+  const entered = Promise.withResolvers<undefined>()
+  const stat = ctx.sessionPersistence.stat.bind(ctx.sessionPersistence)
+  let finished = 0
+  const io = vi.spyOn(ctx.sessionPersistence, 'stat').mockImplementation(async (target, options) => {
+    if (target !== id) return stat(target, options)
+    entered.resolve(undefined)
+    const signal = options!.signal!
+    try {
+      return await new Promise<never>((_resolve, reject) => {
+        const abort = () => {reject(signal.reason)}
+        signal.addEventListener('abort', abort, { once: true })
+        if (signal.aborted) abort()
+      })
+    } finally {finished++}
+  })
+  onTestFinished(() => io.mockRestore())
+  const abort = new AbortController()
+  const cancelled = controller.presentation({ sessionId: id }, abort.signal)
+  await entered.promise
+  abort.abort(new Error('cancelled stat'))
+  await expect(cancelled).rejects.toThrow('cancelled stat')
+  const closing = controller.presentation({ sessionId: id }, new AbortController().signal)
+  const settled = expect(closing).rejects.toMatchObject({ name: 'AbortError' })
+  await vi.waitFor(() => expect(io.mock.calls.filter(([target]) => target === id)).toHaveLength(2))
+  await ctx.fiber.dispose()
+  await settled
+  expect(finished).toBe(2)
 })

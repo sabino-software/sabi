@@ -23,6 +23,7 @@
     "src/state/listener.ts",
     "src/web/controller.ts",
     "src/list.ts",
+    "src/presentation.ts",
     "src/media-references.ts",
     "src/archived-session-gate.ts",
     "src/skill-catalog.ts",

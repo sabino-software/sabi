@@ -898,3 +898,19 @@ describe('session.search', () => {
     expect(failed.error.message).toContain('database unavailable')
   })
 })
+
+it('omits presentation-hidden rows and full-text matches without activating matching Sessions', async () => {
+  const ctx = await baseContext()
+  try {
+    const hidden = ctx.sessions.create(sid('hidden'), { meta: { cwd: '/project' } })
+    ctx.sessions.create(sid('creator'), { meta: { cwd: '/project' } })
+    ctx.on('workspace/session-presentation', id => id === hidden.id ? { visibility: 'hidden', route: { view: 'external', params: {} } } : undefined)
+    installSearchQuery(ctx, async () => ({ items: [hit('hidden'), hit('creator')], hasMore: false }))
+    const controller = await createSessionTestRemote(ctx, defaults)
+    const result = await controller.search(request('match'))
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw result.error
+    expect(result.value.items.map(item => item.sessionId)).toEqual(['creator'])
+    expect(ctx.agents.get(hidden.id)).toBeUndefined()
+  } finally {await ctx.fiber.dispose()}
+})

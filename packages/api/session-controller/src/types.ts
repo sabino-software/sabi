@@ -168,6 +168,11 @@ export interface SessionSummary {
   readonly projections?: SessionProjectionHints
 }
 
+/** Read process-local visibility and generic routing without resuming an Agent. */
+export interface SessionPresentationRequest { readonly sessionId: SessionId }
+/** Extension-owned presentation; it does not establish whether the Session exists. */
+export type SessionPresentationValue = import('@deepseek-ai/dsh-workspace/types').SessionPresentation
+
 /** One session-content search result. */
 export interface SessionSearchItem {
   readonly sessionId: SessionId

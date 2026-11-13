@@ -59,9 +59,9 @@ describe('Native conversation registrations', () => {
       expect(ctx.slots.entriesOfSlot(name)).toHaveLength(1)
     }
     expect([...providers.keys()]).toEqual(['native-conversation-status'])
-    expect(ctx.slots.entriesOfSlot('conversation.chat.node')).toHaveLength(2)
-    expect(events.entries().map(definition => definition.kind).sort()).toEqual(['native-axiom-message', 'native-codex-activity'])
-    expect([...dictionaries.keys()].sort()).toEqual(['codexLibrary', 'nativeAxiom', 'nativeCodexActivity'])
+    expect(ctx.slots.entriesOfSlot('conversation.chat.node')).toHaveLength(1)
+    expect(events.entries().map(definition => definition.kind).sort()).toEqual(['native-codex-activity'])
+    expect([...dictionaries.keys()].sort()).toEqual(['codexLibrary', 'nativeCodexActivity'])
     await fiber.dispose()
     for (const name of ['main', 'sidebar.panellist', 'sidebar.session.row.trailing', 'conversation.session.header.actions'] as const) {
       expect(ctx.slots.entriesOfSlot(name)).toHaveLength(0)

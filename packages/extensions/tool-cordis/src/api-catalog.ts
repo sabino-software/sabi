@@ -2398,6 +2398,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'A source binding is a Session projection; connection state carries no credentials.',
     methods: [
       {
+        signature: 'readonly axiomRequestTimeoutMs: number',
+        description: 'Deadline for one original-page bridge request, in milliseconds.',
+        parameters: [],
+      },
+      {
         signature: 'attachAxiomTransport(transport: AxiomTransport): () => void',
         description: 'Attach only the desktop-owned original-page transport; credentials stay in its browser session.',
         parameters: [{ name: 'transport', description: 'Original-page operations owned by this desktop Host.' }],
@@ -2436,12 +2441,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Replace one inactive derived mirror; its archived log remains local audit evidence. This compensates caught failures, but interruption can leave recoverable navigation/index state.',
         parameters: [{ name: 'sessionId', description: 'Explicitly selected old local mirror, never an original Codex thread id.' }],
         returns: 'New mirror and archived evidence identities; no local tool or approval records are replayed.',
-      },
-      {
-        signature: '@Remote async connectAxiom(url: string): Promise<{ sessionId: SessionId }>',
-        description: 'Connect the original selected Dot and open it as an ordinary Session.',
-        parameters: [{ name: 'url', description: 'Exact original ChatGPT Dot URL selected by the user.' }],
-        returns: 'The ordinary Session assigned to that original conversation.',
       },
       {
         signature: '@Remote async showAxiomLogin(): Promise<void>',
@@ -3063,6 +3062,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'visible Session summaries ordered by activity.',
       },
       {
+        signature: '@Remote(\'presentation\') presentation(request: SessionPresentationRequest, signal: AbortSignal): Promise<SessionPresentationValue>',
+        description: 'Read extension-owned visibility and routing without reading a transcript or activating an Agent.',
+        parameters: [{ name: 'request', description: 'Session whose presentation is requested; resource authorization still applies.' }, { name: 'signal', description: 'Optional caller cancellation.' }],
+        returns: 'Generic presentation metadata; ordinary presentation does not establish existence.',
+      },
+      {
         signature: '@Remote(\'search\') async search(request: SessionSearchRequest, signal: AbortSignal): Promise<SessionSearchValue>',
         description: 'Search visible Session content without resuming an Agent. A non-owner receives only the hits whose Session `allows()` admits; `hasMore` describes the bounded result before that filtering.',
         parameters: [{ name: 'request', description: 'literal message-content query.' }, { name: 'signal', description: 'cancellation for list and search reads.' }],
@@ -3167,25 +3172,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'readiness and subsequent events, without a snapshot.',
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame>',
+        signature: '@Remote({ mode: \'stream\' }) async *observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame>',
         description: 'Subscribe to Session projection changes.',
         parameters: [{ name: 'request', description: 'target Session.' }, { name: 'signal', description: 'subscription cancellation.' }],
         returns: 'readiness followed by one projection change frame per committed event.',
       },
       {
-        signature: '@Remote state(request: SessionStateRequest, signal: AbortSignal): Promise<SessionState>',
+        signature: '@Remote async state(request: SessionStateRequest, signal: AbortSignal): Promise<SessionState>',
         description: 'Read passive Session state.',
         parameters: [{ name: 'request', description: 'target Session.' }, { name: 'signal', description: 'read cancellation.' }],
         returns: 'current passive state.',
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) observeState(request: SessionStateRequest, signal: AbortSignal): AsyncIterable<SessionState>',
+        signature: '@Remote({ mode: \'stream\' }) async *observeState(request: SessionStateRequest, signal: AbortSignal): AsyncIterable<SessionState>',
         description: 'Subscribe to complete Session state replacements.',
         parameters: [{ name: 'request', description: 'target Session.' }, { name: 'signal', description: 'subscription cancellation.' }],
         returns: 'complete passive state replacements.',
       },
       {
-        signature: '@Remote wait(request: SessionWaitRequest, signal: AbortSignal): Promise<SessionWaitValue>',
+        signature: '@Remote async wait(request: SessionWaitRequest, signal: AbortSignal): Promise<SessionWaitValue>',
         description: 'Wait for Session quiescence or pending input with bounded assistant output.',
         parameters: [{ name: 'request', description: 'Session, wait bounds and output window.' }, { name: 'signal', description: 'caller cancellation.' }],
         returns: 'stopping state and bounded assistant output.',
@@ -3197,7 +3202,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a complete opening snapshot followed by gap-free durable event frames and optional cursorless assistant-stream frames.',
       },
       {
-        signature: '@Remote(\'projections\') projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue>',
+        signature: '@Remote(\'projections\') async projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue>',
         description: 'Read exact projections, returning cached hints only when migration is required.',
         parameters: [{ name: 'request', description: 'Session whose current values are required.' }, { name: 'signal', description: 'cancellation for the Session read.' }],
         returns: 'a sequenced baseline, cached hints when migration is deferred, or null when absent.',
@@ -4911,7 +4916,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Host service backing the generated `ctx.remote.workspace` namespace.',
     methods: [
       {
-        signature: '@Remote(\'create\') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>',
+        signature: '@Remote(\'create\') async create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>',
         description: 'Create or idempotently resolve one Workspace over an existing directory.',
         parameters: [{ name: 'request', description: 'directory path to register.' }],
         returns: 'the Workspace and whether this call created it.',
@@ -4923,7 +4928,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the durable Workspace, or undefined when first-use initialization is ineligible; creates no Session or message.',
       },
       {
-        signature: '@Remote(\'rename\') rename(request: WorkspaceRenameRequest): Promise<WorkspaceValue>',
+        signature: '@Remote(\'rename\') async rename(request: WorkspaceRenameRequest): Promise<WorkspaceValue>',
         description: 'Rename one Workspace to a unique non-blank title.',
         parameters: [{ name: 'request', description: 'Workspace identity and proposed title.' }],
         returns: 'the updated Workspace projection.',
@@ -4941,31 +4946,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the complete resulting Workspace order.',
       },
       {
-        signature: '@Remote(\'insertSessionBefore\') insertSessionBefore(request: WorkspaceInsertSessionBeforeRequest): Promise<WorkspaceValue>',
+        signature: '@Remote(\'insertSessionBefore\') async insertSessionBefore(request: WorkspaceInsertSessionBeforeRequest): Promise<WorkspaceValue>',
         description: 'Move one accounted Session within a Workspace.',
         parameters: [{ name: 'request', description: 'Workspace, Session, and optional anchor identities.' }],
         returns: 'the updated Workspace projection.',
       },
       {
-        signature: '@Remote(\'archiveSession\') archiveSession(request: WorkspaceArchiveSessionRequest): Promise<WorkspaceArchiveValue>',
+        signature: '@Remote(\'archiveSession\') async archiveSession(request: WorkspaceArchiveSessionRequest): Promise<WorkspaceArchiveValue>',
         description: 'Hide one known Session from Workspace grouping surfaces.',
         parameters: [{ name: 'request', description: 'Session identity to archive.' }],
         returns: 'the complete resulting archive set.',
       },
       {
-        signature: '@Remote(\'unarchiveSession\') unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue>',
+        signature: '@Remote(\'unarchiveSession\') async unarchiveSession(request: WorkspaceUnarchiveSessionRequest): Promise<WorkspaceArchiveValue>',
         description: 'Restore one archived Session to Workspace grouping surfaces.',
         parameters: [{ name: 'request', description: 'Session identity to unarchive.' }],
         returns: 'the complete resulting archive set.',
       },
       {
-        signature: '@Remote(\'pinSession\') pinSession(request: WorkspacePinSessionRequest): Promise<WorkspacePinValue>',
+        signature: '@Remote(\'pinSession\') async pinSession(request: WorkspacePinSessionRequest): Promise<WorkspacePinValue>',
         description: 'Surface one known unarchived Session ahead of unpinned Sessions.',
         parameters: [{ name: 'request', description: 'Session identity to pin.' }],
         returns: 'the complete resulting pin set, most recently pinned first.',
       },
       {
-        signature: '@Remote(\'unpinSession\') unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue>',
+        signature: '@Remote(\'unpinSession\') async unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue>',
         description: 'Remove one Session\'s pin without changing its saved Session order.',
         parameters: [{ name: 'request', description: 'Session identity to unpin.' }],
         returns: 'the complete resulting pin set, most recently pinned first.',
@@ -5876,6 +5881,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Admit optional follow-up work after durable archival and any stop requests.',
     description: 'Admit optional follow-up work after durable archival and any stop requests. Dispatched inside the registry\'s write queue: a listener registers its work and returns, and runs the work and any unbounded I/O afterwards. Listener failures are logged without undoing archival. Listeners own and drain their background work.',
     parameters: [{ name: 'request', description: 'newly archived Session; repeated archive requests do not dispatch.' }],
+  },
+  {
+    name: 'workspace/session-presentation',
+    mode: 'serial',
+    signature: '\'workspace/session-presentation\'(sessionId: SessionId, signal?: AbortSignal): SessionPresentation | void | Promise<SessionPresentation | void>',
+    summary: 'Resolve a Session\'s discovery and normal-open policy without activating it.',
+    description: 'Resolve a Session\'s discovery and normal-open policy without activating it.',
+    parameters: [{ name: 'sessionId', description: 'Session whose process-local presentation is requested.' }, { name: 'signal', description: 'Optional cancellation for read-only metadata work.' }],
   },
   {
     name: 'workspace/session-stop',
@@ -9408,6 +9421,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionPersistenceStatOptions',
     declaration: 'export interface SessionPersistenceStatOptions {\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'SessionPresentation',
+    declaration: 'export interface SessionPresentation {\n    readonly visibility: \'visible\' | \'hidden\';\n    readonly route?: {\n        readonly view: string;\n        readonly params: Readonly<Record<string, string>>;\n    };\n}',
+  },
+  {
+    name: 'SessionPresentationRequest',
+    declaration: 'export interface SessionPresentationRequest {\n    readonly sessionId: SessionId;\n}',
+  },
+  {
+    name: 'SessionPresentationValue',
+    declaration: 'export type SessionPresentationValue = import(\'@deepseek-ai/dsh-workspace/types\').SessionPresentation;',
   },
   {
     name: 'SessionProjectionBaseline',
