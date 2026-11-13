@@ -39,16 +39,39 @@ it('uses browser editing for exact multiline text, refuses stale or existing dra
     const fixture = window as typeof window & { fixtureCommand: (value: object) => Promise<unknown> }
     return fixture.fixtureCommand({ type: 'skeinlet-command', method, args, url })
   }, { method, args, url })
+  const initial = await command('snapshot') as AxiomSnapshot
+  expect(initial.messages.map(message => message.text)).toEqual(['Old **original answer**'])
+  expect(JSON.stringify(initial)).not.toContain('DO_NOT_EXPORT')
+  await page.evaluate(() => {
+    const first = document.querySelector('article')!
+    for (let index = 0; index < 4; index++) {
+      const row = first.cloneNode(true) as HTMLElement
+      row.dataset.messageId = `older-long-${index}`
+      row.querySelector('.message-text')!.textContent = 'a'.repeat(32768)
+      first.before(row)
+    }
+  })
   const before = await command('snapshot') as AxiomSnapshot
-  expect(before.messages.map(message => message.text)).toEqual(['Old **original answer**'])
-  expect(JSON.stringify(before)).not.toContain('DO_NOT_EXPORT')
+  expect(before.messages.at(-1)?.id).toBe('old-assistant')
+  expect(before.limited).toBe(true)
   const request = { requestId: 'real-browser-send-1', revision: before.revision, text: 'Exact multiline.\nSecond line.' }
   expect(await command('send', { request: { ...request, revision: before.revision + 1 } })).toMatchObject({ status: 'refused' })
   const result = await command('send', { request: { ...request, requestId: 'real-browser-send-2' } }) as AxiomSendResult
   expect(result).toMatchObject({ status: 'confirmed', messageId: 'new-user' })
+  expect(result.snapshot.messages.at(-1)).toMatchObject({ id: 'new-user', role: 'user', text: request.text })
   expect(await page.locator('article.self .message-text').innerText()).toBe(request.text)
   expect(await command('send', { request: { ...request, requestId: 'real-browser-send-2' } })).toMatchObject({ status: 'confirmed' })
   expect(await page.locator('article.self').count()).toBe(1)
+  await page.evaluate(() => {
+    const row = document.querySelector('article')!.cloneNode(true) as HTMLElement
+    row.dataset.messageId = 'new-assistant'
+    row.querySelector('.message-text')!.textContent = 'Newest original reply'
+    document.querySelector('[role="textbox"]')!.before(row)
+  })
+  const replied = await command('snapshot') as AxiomSnapshot
+  expect(replied.messages.slice(-2).map(message => message.id)).toEqual(['new-user', 'new-assistant'])
+  expect(replied.messages.at(-1)?.text).toBe('Newest original reply')
+  expect(replied.messages.reduce((size, message) => size + message.text.length, 0)).toBeLessThanOrEqual(131072)
   await page.getByRole('textbox').fill('User-owned draft')
   const draft = await command('snapshot') as AxiomSnapshot
   expect(await command('send', { request: { ...request, requestId: 'real-browser-send-3', revision: draft.revision } })).toMatchObject({ status: 'refused' })

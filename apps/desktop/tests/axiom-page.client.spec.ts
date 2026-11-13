@@ -61,4 +61,26 @@ describe('original Dot DOM projection', () => {
     expect(findAxiomAcknowledgement('Exact user text', ['original/user~1'])).toBeNull()
     expect(findAxiomAcknowledgement('Exact user text', [])).toBe('original/user~1')
   })
+
+  it('retains the newest user and reply when older rendered bodies exceed the text budget', () => {
+    const bodies = [...Array.from({ length: 5 }, () => 'a'.repeat(32768)), 'Exact new text', 'Newest original reply']
+    document.body.replaceChildren(...bodies.map((text, index) => {
+      const row = document.createElement('article')
+      row.className = index === 5 ? 'message-row self' : 'message-row'
+      row.dataset.messageId = `original/${index}`
+      row.innerHTML = '<div class="message-body"><div class="message-surface"><div class="message-bubble"><div class="message-text"></div></div></div></div>'
+      row.querySelector('.message-text')!.textContent = text
+      return row
+    }))
+    const state = readAxiomPage()
+    expect(state.messages.map(message => message.id)).toEqual([1, 2, 3, 4, 5, 6].map(index => `original/${index}`))
+    expect(state.messages.slice(-2)).toMatchObject([
+      { id: 'original/5', role: 'user', text: 'Exact new text', truncated: false },
+      { id: 'original/6', role: 'assistant', text: 'Newest original reply', truncated: false },
+    ])
+    expect(state.messages[0]?.truncated).toBe(true)
+    expect(state.messages.every(message => message.text.length <= 32768)).toBe(true)
+    expect(state.messages.reduce((size, message) => size + message.text.length, 0)).toBe(131072)
+    expect(state.limited).toBe(true)
+  })
 })

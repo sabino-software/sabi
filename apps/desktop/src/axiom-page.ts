@@ -17,14 +17,14 @@ export interface AxiomPageState {
 /**
  * Read rendered message bodies without page storage, application state, or network interception.
  * This function is serialized into the original page and therefore has no module references.
- * @returns Bounded original-page text and observed composer state.
+ * @returns Original-page text in source order, retaining the newest messages within the bounds, and observed composer state.
  */
 export function readAxiomPage(): AxiomPageState {
   const rows = [...document.querySelectorAll('article.message-row[data-message-id]')]
   const messages: AxiomMessage[] = []
   let remaining = 131072
   let limited = rows.length > 100
-  for (const row of rows.slice(-100)) {
+  for (const row of rows.slice(-100).reverse()) {
     const id = row.getAttribute('data-message-id')
     const body = row.querySelector('.message-body > .message-surface .message-bubble .message-text')
     if (id === null || id.length > 512 || body === null) continue
@@ -93,6 +93,7 @@ export function readAxiomPage(): AxiomPageState {
     if (text !== '') messages.push({ id, role: row.classList.contains('self') ? 'user' : 'assistant', text,
       timestamp: row.querySelector('time')?.getAttribute('datetime')?.slice(0, 100) ?? null, truncated })
   }
+  messages.reverse()
   const composer = document.querySelector('div[role="textbox"][contenteditable="true"][aria-label="Message"]')
   const send = document.querySelector('button[aria-label="Send"]')
   const status = document.querySelector('[role="status"].typing-indicator[aria-live="polite"]')
