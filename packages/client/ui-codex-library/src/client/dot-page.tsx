@@ -54,7 +54,7 @@ export function DotPage({ useDot, setDotDraft, sendDot, loadDotHistory, showDotO
         && <p className={css.notice} role="alert">{t(state.sendOutcome === 'refused' ? 'dotSendRefused' : 'dotSendUnknown')}</p>}
       <form className={css.composer} onSubmit={(event) => { event.preventDefault(); if (canSend) void sendDot() }}>
         <InlineEditor value={state.draft} label={t('dotComposer')} onChange={setDotDraft}
-          onSave={() => { if (canSend) void sendDot() }} onCancel={() => { setDotDraft('') }} className={css.editor} />
+          onSave={() => { if (canSend) void sendDot() }} onCancel={() => { setDotDraft('') }} className={css.editor ?? ''} />
         <Button className={css.send} type="submit" variant="ghost" disabled={!canSend} aria-label={t(state.sending ? 'dotSending' : 'dotSend')}>
           {state.sending ? <IconLoadingOutlineRegular size={20} /> : <IconSendOutlineRegular size={20} />}
         </Button>
