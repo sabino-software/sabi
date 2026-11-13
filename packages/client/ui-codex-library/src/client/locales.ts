@@ -34,7 +34,7 @@ export const en = {
   actionError: 'The operation failed. Check the connection and try again.',
   codex: 'Codex', codexDescription: 'Sync existing work Codex threads into their workspaces. Open a conversation there to continue it.',
   connected: 'Connected', disconnected: 'Not connected', sync: 'Sync Codex conversations', syncing: 'Syncing…', synced: 'Imported {count} conversations.',
-  axiom: 'Dot', axiomDescription: 'Connect your original ChatGPT Dot. Continue its conversation in the normal chat and sign in through ChatGPT when needed.',
+  axiom: 'Dot', axiomDescription: 'Continue your original ChatGPT Dot in this chat. Its website stays connected in the background. Closing the original page disconnects Dot until you reconnect.',
   bridgeAvailable: 'Desktop bridge available', bridgeUnavailable: 'Desktop bridge unavailable',
   url: 'Existing ChatGPT Dot URL', connect: 'Connect Dot', connecting: 'Connecting…', login: 'Open ChatGPT login', openingLogin: 'Opening login…',
   openOriginal: 'Open ChatGPT', openingOriginal: 'Opening ChatGPT…', openOriginalError: 'Could not open ChatGPT. Try again.',
@@ -77,7 +77,7 @@ export const zh: Record<CodexLibraryKey, string> = {
 
   title: '原生对话', subtitle: '从工作区侧边栏继续现有对话。', refresh: '刷新', loading: '正在读取连接状态…', statusError: '无法读取连接状态，请刷新重试。', actionError: '操作失败，请检查连接后重试。',
   codex: 'Codex', codexDescription: '将现有工作 Codex 对话同步到对应工作区，打开对话即可继续。', connected: '已连接', disconnected: '未连接', sync: '同步 Codex 对话', syncing: '正在同步…', synced: '已导入 {count} 个对话。',
-  axiom: 'Dot', axiomDescription: '连接原始 ChatGPT Dot，在常规聊天界面继续对话，并在需要时通过 ChatGPT 登录。', bridgeAvailable: '桌面桥接可用', bridgeUnavailable: '桌面桥接不可用', url: '现有 ChatGPT Dot 网址', connect: '连接 Dot', connecting: '正在连接…', login: '打开 ChatGPT 登录', openingLogin: '正在打开登录…',
+  axiom: 'Dot', axiomDescription: '在此聊天中继续原始 ChatGPT Dot 对话。其网站保持后台连接；关闭原始页面会断开 Dot，直到再次连接。', bridgeAvailable: '桌面桥接可用', bridgeUnavailable: '桌面桥接不可用', url: '现有 ChatGPT Dot 网址', connect: '连接 Dot', connecting: '正在连接…', login: '打开 ChatGPT 登录', openingLogin: '正在打开登录…',
   openOriginal: '打开 ChatGPT', openingOriginal: '正在打开 ChatGPT…', openOriginalError: '无法打开 ChatGPT，请重试。',
   sourceCodex: 'Codex', sourceAxiom: 'Axiom', sourceCodexHint: '继续原始 Codex 对话。', sourceAxiomHint: '通过 ChatGPT 继续原始 Axiom 对话。',
 }
@@ -115,7 +115,7 @@ export const pt: Record<CodexLibraryKey, string> = {
 
   title: 'Conversas nativas', subtitle: 'Continue conversas existentes pela barra lateral dos espaços de trabalho.', refresh: 'Atualizar', loading: 'Lendo o status das conexões…', statusError: 'Não foi possível ler o status. Atualize para tentar novamente.', actionError: 'A operação falhou. Verifique a conexão e tente novamente.',
   codex: 'Codex', codexDescription: 'Sincronize as conversas existentes do Codex de trabalho com seus espaços. Abra uma conversa ali para continuar.', connected: 'Conectado', disconnected: 'Desconectado', sync: 'Sincronizar conversas do Codex', syncing: 'Sincronizando…', synced: '{count} conversas importadas.',
-  axiom: 'Dot', axiomDescription: 'Conecte sua Dot original do ChatGPT. Continue a conversa no chat normal e entre pelo ChatGPT quando necessário.', bridgeAvailable: 'Ponte do Desktop disponível', bridgeUnavailable: 'Ponte do Desktop indisponível', url: 'URL da Dot existente no ChatGPT', connect: 'Conectar Dot', connecting: 'Conectando…', login: 'Abrir login do ChatGPT', openingLogin: 'Abrindo login…',
+  axiom: 'Dot', axiomDescription: 'Continue sua Dot original do ChatGPT neste chat. A página permanece conectada em segundo plano. Fechar a página original desconecta a Dot até você reconectar.', bridgeAvailable: 'Ponte do Desktop disponível', bridgeUnavailable: 'Ponte do Desktop indisponível', url: 'URL da Dot existente no ChatGPT', connect: 'Conectar Dot', connecting: 'Conectando…', login: 'Abrir login do ChatGPT', openingLogin: 'Abrindo login…',
   openOriginal: 'Abrir ChatGPT', openingOriginal: 'Abrindo ChatGPT…', openOriginalError: 'Não foi possível abrir o ChatGPT. Tente novamente.',
   sourceCodex: 'Codex', sourceAxiom: 'Axiom', sourceCodexHint: 'Continua a conversa original do Codex.', sourceAxiomHint: 'Continua a conversa original da Axiom pelo ChatGPT.',
 }
