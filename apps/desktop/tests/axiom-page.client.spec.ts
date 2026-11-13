@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 /** Original message DOM is projected without actions, hidden content, or active media. */
+import { runInNewContext } from 'node:vm'
+import type { AxiomHistoryObservation } from '../src/axiom-page.ts'
 import { beforeAll, afterAll, describe, expect, it } from 'vitest'
 import { clickAxiomSend, findAxiomAcknowledgement, focusAxiomComposer, readAxiomHistoryPage, readAxiomPage } from '../src/axiom-page.ts'
 
@@ -232,4 +234,57 @@ it('collects only explicitly requested structural history diagnostics without ex
     scrollTop: 7, scrollTopAfter: 0, clientHeight: 100, scrollHeight: 1000, cursorPresent: true })
   expect(measured.diagnostics?.visibility).toBe(document.visibilityState)
   expect(JSON.stringify(measured.diagnostics)).not.toMatch(/https:|Exact user|original\//)
+})
+
+
+it('loads older source bodies after distinct serialized history observations move away from zero and back to the top', async () => {
+  document.body.innerHTML = '<div id="primary-scroll"></div><input aria-label="Keep focus">'
+    + '<section class="messages-scroll"><div class="message-list">'
+    + '<article class="message-row" data-message-id="committed~CalpicoMessage~Sentinel_cursor">'
+    + '<div class="message-body"><div class="message-surface"><div class="message-bubble"><div class="message-text">Latest body</div>'
+    + '</div></div></div></article></div></section>'
+    + '<div role="textbox" contenteditable="true" aria-label="Message">Preserved draft</div>'
+  const primary = document.querySelector('#primary-scroll')!
+  primary.scrollTop = 77
+  const focused = document.querySelector('input')!
+  focused.focus()
+  const composer = document.querySelector('[role="textbox"]')!
+  Object.defineProperty(composer, 'innerText', { get: () => { throw new Error('History must not read the live draft') } })
+  const scroller = document.querySelector('.messages-scroll')!
+  const list = scroller.querySelector('.message-list')!
+  Object.defineProperty(scroller, 'clientHeight', { value: 100 })
+  Object.defineProperty(scroller, 'scrollHeight', { value: 1000 })
+  const transitions: number[] = []
+  let offset = 0
+  // jsdom has no scroll layout; model browser scroll events only when the actual offset changes.
+  Object.defineProperty(scroller, 'scrollTop', { get: () => offset, set(value: number) {
+    const next = Math.max(0, Math.min(900, value))
+    if (next === offset) return
+    offset = next
+    queueMicrotask(() => { scroller.dispatchEvent(new Event('scroll')) })
+  } })
+  scroller.addEventListener('scroll', () => {
+    transitions.push(scroller.scrollTop)
+    if (scroller.scrollTop !== 0 || transitions.at(-2) !== 1 || list.children.length > 1) return
+    list.insertAdjacentHTML('afterbegin', '<article class="message-row self" data-message-id="committed~CalpicoMessage~Sentinel_older">'
+      + '<div class="message-body"><div class="message-surface"><div class="message-bubble"><div class="message-text">Older source body</div>'
+      + '</div></div></div></article>')
+  })
+  const observe = (): AxiomHistoryObservation => {
+    const script = `(${readAxiomHistoryPage.toString()})(${readAxiomPage.toString()},${JSON.stringify(location.href.replace(/\/$/u, ''))},"committed~CalpicoMessage~Sentinel_cursor",true)`
+    const value: unknown = runInNewContext(script, { document, location, Node, HTMLElement, HTMLButtonElement, getComputedStyle, URL })
+    return value as AxiomHistoryObservation
+  }
+  expect(observe().messages).toEqual([])
+  await Promise.resolve()
+  expect(transitions).toEqual([1])
+  expect(observe().messages).toEqual([])
+  await Promise.resolve()
+  expect(transitions).toEqual([1, 0])
+  const older = observe()
+  expect(older.messages).toMatchObject([{ id: 'committed~CalpicoMessage~Sentinel_older', role: 'user', text: 'Older source body' }])
+  expect(older.sourceOrder).toEqual(['committed~CalpicoMessage~Sentinel_older'])
+  expect(primary.scrollTop).toBe(77)
+  expect(document.activeElement).toBe(focused)
+  expect(composer.textContent).toBe('Preserved draft')
 })
