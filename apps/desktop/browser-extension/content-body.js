@@ -46,8 +46,21 @@ async function send(request, url) {
     if (ids.length > 10000 || !focusAxiomComposer()) return { status: 'refused', snapshot: snapshot(url) }
     // Browser editing only. If the real editor rejects this command, preserve the draft and refuse.
     if (!document.execCommand('insertText', false, request.text)) return { status: 'refused', snapshot: snapshot(url) }
-    if (canonical(location.href) !== url) return { status: 'unknown', snapshot: state }
-    clicked = clickAxiomSend(request.text)
+    // React may enable Send after the input handler returns. Admit only the unchanged inserted draft.
+    const editorDeadline = Date.now() + 2000
+    const insertedComposer = document.querySelector('div[role="textbox"][contenteditable="true"][aria-label="Message"]')
+    for (;;) {
+      if (canonical(location.href) !== url) return { status: 'unknown', snapshot: state }
+      const composer = document.querySelector('div[role="textbox"][contenteditable="true"][aria-label="Message"]')
+      const sendControl = document.querySelector('button[aria-label="Send"]')
+      if (!(composer instanceof HTMLElement) || composer !== insertedComposer || composer.getAttribute('aria-disabled') === 'true'
+        || composer.innerText.replaceAll('\r\n', '\n') !== request.text || !(sendControl instanceof HTMLButtonElement)) {
+        return { status: 'refused', snapshot: snapshot(url) }
+      }
+      if (Date.now() >= editorDeadline) return { status: 'refused', snapshot: snapshot(url) }
+      if (!sendControl.disabled) { clicked = clickAxiomSend(request.text); break }
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
     if (!clicked) return { status: 'refused', snapshot: snapshot(url) }
     const deadline = Date.now() + 12000
     while (Date.now() < deadline && canonical(location.href) === url) {

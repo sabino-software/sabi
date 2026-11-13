@@ -7,7 +7,7 @@ import { expect, it, onTestFinished } from 'vitest'
 import { prepareAxiomBrowserBridge } from '../../desktop/scripts/prepare-axiom-browser.ts'
 import type { AxiomSendResult, AxiomSnapshot } from '../../desktop/src/axiom-protocol.ts'
 
-it('uses browser editing for exact multiline text, refuses stale or existing drafts and acknowledges only new original rows', async () => {
+it.each([false, true])('uses exact browser editing and preserves drafts with deferred Send: %s', async (deferredSend) => {
   const root = await mkdtemp(join(tmpdir(), 'axiom-content-'))
   const browser = await chromium.launch({ headless: true })
   onTestFinished(async () => { await browser.close(); await rm(root, { recursive: true, force: true }) })
@@ -20,7 +20,8 @@ it('uses browser editing for exact multiline text, refuses stale or existing dra
     <div role="textbox" contenteditable="true" aria-label="Message"></div><button aria-label="Send" disabled>Send</button>
     <script>
       const composer = document.querySelector('[role=textbox]'); const send = document.querySelector('button');
-      composer.addEventListener('input', () => { send.disabled = composer.innerText.trim() === '' });
+      const updateSend = () => { send.disabled = composer.innerText.trim() === '' };
+      composer.addEventListener('input', () => { if (${deferredSend}) setTimeout(updateSend, 50); else updateSend() });
       send.addEventListener('click', () => {
         const article = document.createElement('article'); article.className = 'message-row self'; article.dataset.messageId = 'new-user';
         article.innerHTML = '<div class="message-body"><div class="message-surface"><div class="message-bubble"><div class="message-text"></div></div></div></div>';
@@ -77,4 +78,46 @@ it('uses browser editing for exact multiline text, refuses stale or existing dra
   expect(await command('send', { request: { ...request, requestId: 'real-browser-send-3', revision: draft.revision } })).toMatchObject({ status: 'refused' })
   expect(await page.getByRole('textbox').innerText()).toBe('User-owned draft')
   expect(await page.locator('article.self').count()).toBe(1)
+  if (deferredSend) {
+    await page.getByRole('textbox').fill('')
+    await page.evaluate(() => {
+      const composer = document.querySelector('[role="textbox"]') as HTMLElement
+      const send = document.querySelector('button[aria-label="Send"]') as HTMLButtonElement
+      send.disabled = true
+      composer.addEventListener('input', () => {
+        setTimeout(() => {
+          const until = performance.now() + 2100
+          // A suspended or throttled browser can deliver the editing timer after its deadline.
+          while (performance.now() < until) { /* Keep this controlled browser task blocked. */ }
+          send.disabled = false
+        }, 0)
+      }, { once: true })
+    })
+    const timed = await command('snapshot') as AxiomSnapshot
+    expect(await command('send', { request: { ...request, requestId: 'real-browser-send-4', revision: timed.revision } })).toMatchObject({ status: 'refused' })
+    expect(await page.getByRole('textbox').innerText()).toBe(request.text)
+    expect(await page.locator('article.self').count()).toBe(1)
+    await page.getByRole('textbox').fill('')
+    await page.evaluate(() => {
+      const composer = document.querySelector('[role="textbox"]') as HTMLElement
+      const send = document.querySelector('button[aria-label="Send"]') as HTMLButtonElement
+      send.disabled = true
+      composer.addEventListener('input', () => { queueMicrotask(() => { composer.innerText = 'Changed original draft' }) }, { once: true })
+    })
+    const empty = await command('snapshot') as AxiomSnapshot
+    expect(await command('send', { request: { ...request, requestId: 'real-browser-send-5', revision: empty.revision } })).toMatchObject({ status: 'refused' })
+    expect(await page.getByRole('textbox').innerText()).toBe('Changed original draft')
+    expect(await page.locator('article.self').count()).toBe(1)
+    await page.getByRole('textbox').fill('')
+    await page.evaluate(() => {
+      const composer = document.querySelector('[role="textbox"]') as HTMLElement
+      const send = document.querySelector('button[aria-label="Send"]') as HTMLButtonElement
+      send.disabled = true
+      composer.addEventListener('input', () => { queueMicrotask(() => { composer.replaceWith(composer.cloneNode(true)) }) }, { once: true })
+    })
+    const replaced = await command('snapshot') as AxiomSnapshot
+    expect(await command('send', { request: { ...request, requestId: 'real-browser-send-6', revision: replaced.revision } })).toMatchObject({ status: 'refused' })
+    expect(await page.getByRole('textbox').innerText()).toBe(request.text)
+    expect(await page.locator('article.self').count()).toBe(1)
+  }
 })
