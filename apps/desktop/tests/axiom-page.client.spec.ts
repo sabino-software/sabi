@@ -137,3 +137,50 @@ it('keeps own-row timestamps and source IDs while excluding quoted or nested mes
   Object.defineProperty(composer, 'innerText', { configurable: true, get: () => { throw new Error('History must not inspect drafts') } })
   expect(readAxiomPage('original/assistant~2').messages.map(message => message.id)).toEqual(['original/user~1'])
 })
+
+
+it.each(['a1b5c831-09f4-4fdd-9660-05ec402ff83e', 'A1B5C831-09F4-4FDD-9660-05EC402FF83E'])(
+  'waits for a committed source ID instead of retaining or acknowledging temporary row %s', (temporaryId) => {
+    fixture()
+    const user = document.querySelector('article.self')!
+    const committedId = 'a1b5c831-09f4-4fdd-9660-05ec402ff83e~CalpicoMessage~Sentinel_committed'
+    user.setAttribute('data-message-id', temporaryId)
+    expect(readAxiomPage().messages.map(message => message.id)).toEqual(['original/assistant~2'])
+    expect(findAxiomAcknowledgement('Exact user text', [])).toBeNull()
+
+    user.setAttribute('data-message-id', committedId)
+    expect(readAxiomPage().messages.map(message => message.id)).toEqual([committedId, 'original/assistant~2'])
+    expect(findAxiomAcknowledgement('Exact user text', [])).toBe(committedId)
+
+    const repeated = user.cloneNode(true) as HTMLElement
+    const repeatedId = 'another-source~CalpicoMessage~Sentinel_repeated'
+    repeated.setAttribute('data-message-id', repeatedId)
+    document.body.append(repeated)
+    expect(readAxiomPage().messages.filter(message => message.role === 'user').map(message => message.id))
+      .toEqual([committedId, repeatedId])
+    expect(findAxiomAcknowledgement('Exact user text', [committedId])).toBe(repeatedId)
+  },
+)
+
+it('excludes temporary website rows from older pages and original history cursors', () => {
+  fixture()
+  const scroller = document.createElement('section')
+  scroller.className = 'messages-scroll'
+  const list = document.createElement('div')
+  list.className = 'message-list'
+  list.append(...document.querySelectorAll('article.message-row'))
+  scroller.append(list)
+  document.body.prepend(scroller)
+  const user = list.querySelector('article.self')!
+  const temporaryId = 'a1b5c831-09f4-4fdd-9660-05ec402ff83e'
+  user.setAttribute('data-message-id', temporaryId)
+  const url = location.href.replace(/\/$/u, '')
+  expect(readAxiomHistoryPage(readAxiomPage, url, temporaryId, false).anchorFound).toBe(false)
+  expect(readAxiomHistoryPage(readAxiomPage, url, 'original/assistant~2', false))
+    .toMatchObject({ anchorFound: true, messages: [], hasEarlier: false, startVerified: false })
+
+  const committedId = 'source~CalpicoMessage~Sentinel_committed'
+  user.setAttribute('data-message-id', committedId)
+  expect(readAxiomHistoryPage(readAxiomPage, url, 'original/assistant~2', false).messages.map(message => message.id))
+    .toEqual([committedId])
+})

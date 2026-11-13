@@ -198,3 +198,43 @@ it('reports an initial source-read failure separately from preferences and permi
   expect(f.companion.snapshot).toHaveBeenCalledTimes(2)
   f.controller.dispose()
 })
+
+it.each(['none', 'before-preferences', 'after-preferences'] as const)(
+  'clears disabled history loading with %s disconnect delivery and discards its old page after reopening', async (delivery) => {
+    const f = fixture()
+    const pending = Promise.withResolvers<DotHistoryPage>()
+    vi.mocked(f.companion.historyBefore)
+      .mockResolvedValueOnce({ messages: [message('older-loaded')], hasMore: true, status: 'ready' })
+      .mockImplementationOnce(() => pending.promise)
+    const disconnected: DotSnapshot = { ...snapshot, phase: 'disconnected', url: null,
+      messages: [], revision: 2, canSend: false }
+    if (delivery === 'before-preferences') {
+      vi.mocked(f.companion.setPreferences).mockImplementation(async (preferences) => {
+        if (!preferences.enabled) f.publish(disconnected)
+      })
+    }
+    await f.controller.open()
+    await f.controller.loadOlder()
+    f.controller.setDraft('preserved authored draft')
+    const oldRead = f.controller.loadOlder()
+    expect(f.controller.store.getSnapshot().history).toBe('loading')
+    await f.controller.setPreferences({ enabled: false, showInSidebar: true, sidebarStyle: 'outline' })
+    if (delivery === 'after-preferences') f.publish(disconnected)
+    expect(f.controller.store.getSnapshot()).toMatchObject({ history: 'idle', snapshot: null, hasMore: true,
+      draft: 'preserved authored draft', selection: { title: 'Axiom' } })
+    expect(f.controller.store.getSnapshot().messages.map(value => value.id)).toEqual(['older-loaded', 'u1', 'a1'])
+    await f.controller.setPreferences({ enabled: true, showInSidebar: true, sidebarStyle: 'outline' })
+    await f.controller.open()
+    expect(f.controller.store.getSnapshot().snapshot?.phase).toBe('ready')
+    pending.resolve({ messages: [message('obsolete-page')], hasMore: false, status: 'ready' })
+    await oldRead
+    expect(f.controller.store.getSnapshot()).toMatchObject({ history: 'idle', hasMore: true, draft: 'preserved authored draft' })
+    expect(f.controller.store.getSnapshot().messages.map(value => value.id)).toEqual(['older-loaded', 'u1', 'a1'])
+    vi.mocked(f.companion.historyBefore).mockResolvedValueOnce({ messages: [message('fresh-older')], hasMore: false, status: 'ready' })
+    await f.controller.loadOlder()
+    expect(f.companion.historyBefore).toHaveBeenCalledTimes(3)
+    expect(f.controller.store.getSnapshot()).toMatchObject({ history: 'ready', hasMore: false, draft: 'preserved authored draft' })
+    expect(f.controller.store.getSnapshot().messages[0]?.id).toBe('fresh-older')
+    f.controller.dispose()
+  },
+)

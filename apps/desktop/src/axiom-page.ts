@@ -15,16 +15,18 @@ export interface AxiomPageState {
 }
 
 /**
- * Read rendered message bodies without page storage, application state, or network interception.
+ * Read committed message bodies without page storage, application state, or network interception.
  * This function is serialized into the original page and therefore has no module references.
  * @param beforeId Optional original cursor; a history read returns only preceding messages and never reads the composer.
  * @returns Original-page text in source order, retaining the newest messages within the bounds, and observed composer state.
  */
 export function readAxiomPage(beforeId?: string): AxiomPageState {
+  // The website replaces optimistic bare UUIDv4 rows with committed compound source IDs.
+  const temporaryId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
   const seen = new Set<string>()
   const rows = [...document.querySelectorAll('article.message-row[data-message-id]')].filter((row) => {
     const id = row.getAttribute('data-message-id')
-    if (!id || seen.has(id) || row.parentElement?.closest('article.message-row[data-message-id]')
+    if (!id || temporaryId.test(id) || seen.has(id) || row.parentElement?.closest('article.message-row[data-message-id]')
       || row.closest('.quoted-reply,blockquote,[hidden],[aria-hidden="true"]')) return false
     const style = getComputedStyle(row)
     if (style.display === 'none' || style.visibility === 'hidden') return false
@@ -153,13 +155,14 @@ export function clickAxiomSend(text: string): boolean {
  * Find original-page acknowledgement after one click, including when background layout skips its text.
  * @param text Exact submitted user text.
  * @param before IDs present immediately before submission.
- * @returns The stable ID of a newly rendered matching user message, or null.
+ * @returns The committed ID of a new matching user message, excluding temporary UUIDv4 rows, or null.
  */
 export function findAxiomAcknowledgement(text: string, before: readonly string[]): string | null {
+  const temporaryId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
   for (const row of document.querySelectorAll('article.message-row.self[data-message-id]')) {
     const id = row.getAttribute('data-message-id')
     const body = row.querySelector('.message-body > .message-surface .message-bubble .message-text')
-    if (id !== null && id.length <= 512 && !before.includes(id) && body instanceof HTMLElement
+    if (id !== null && !temporaryId.test(id) && id.length <= 512 && !before.includes(id) && body instanceof HTMLElement
       && (body.textContent.replaceAll('\r\n', '\n').trim() === text.trim()
         || body.innerText.replaceAll('\r\n', '\n').trim() === text.trim())) return id
   }
@@ -193,10 +196,11 @@ export function readAxiomHistoryPage(
   const scroller = document.querySelector('.messages-scroll')
   const list = scroller?.querySelector('.message-list')
   if (!(scroller instanceof HTMLElement) || !(list instanceof HTMLElement)) return empty
+  const temporaryId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
   const ids = new Set<string>()
   const rows = [...list.querySelectorAll('article.message-row[data-message-id]')].filter((row) => {
     const id = row.getAttribute('data-message-id')
-    if (!id || ids.has(id) || row.parentElement?.closest('article.message-row[data-message-id]')
+    if (!id || temporaryId.test(id) || ids.has(id) || row.parentElement?.closest('article.message-row[data-message-id]')
       || row.closest('.quoted-reply,blockquote,[hidden],[aria-hidden="true"]')) return false
     ids.add(id)
     return true

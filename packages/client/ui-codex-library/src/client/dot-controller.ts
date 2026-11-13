@@ -124,7 +124,7 @@ export function createDotController(companion: DesktopAxiomCompanion): DotContro
     store,
     async setPreferences(preferences): Promise<void> {
       await companion.setPreferences(preferences)
-      if (!preferences.enabled) { generation++; update({ pending: false, snapshot: null, sending: false }) }
+      if (!preferences.enabled) { generation++; update({ pending: false, snapshot: null, sending: false, history: 'idle' }) }
       update({ preferences })
     },
     open: async (fallbackUrl) => { await configure(true, fallbackUrl) },
