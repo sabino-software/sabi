@@ -3,5 +3,5 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/fork-release/native-conversations-plan.md
 /native-conversation-integration:
-  en: b13130afed12d7f4
-  zh: 9180462dab9abd61
+  en: 13b9f522980c6b01
+  zh: 0c9b98aa2702950d

@@ -1,5 +1,6 @@
 /** Real Harness tools and MCP HTTP exercise the native adapter against an explicitly controlled source. */
 import { Context } from '@deepseek-ai/cordis'
+import { createHash } from 'node:crypto'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -50,6 +51,7 @@ interface FixtureInput {
   readonly content?: ContentBlock[]
   readonly history?: readonly UserMessage[]
   readonly drive?: boolean
+  readonly system?: string
   readonly frameworkInputs?: readonly UserMessage[]
 }
 
@@ -187,7 +189,8 @@ async function fixture(tools: readonly ToolDefinition[] = [], holdAcknowledgemen
   }
   const start = () => {
     const options: GenerateOptions = { provider: CODEX_PROVIDER, model: 'fixture', sessionId: agent.id,
-      messages: [...history, input, ...inputOptions.frameworkInputs ?? []], tools: [...schemas], signal: controller.signal }
+      messages: [...history, input, ...inputOptions.frameworkInputs ?? []], tools: [...schemas], signal: controller.signal,
+      ...inputOptions.system === undefined ? {} : { system: inputOptions.system } }
     const pending = (async () => {
       const chunks: StreamChunk[] = []
       for await (const chunk of adapter.stream(options)) chunks.push(chunk)
@@ -234,6 +237,33 @@ async function reopenRecordedEvents(session: Session): Promise<readonly SessionE
   } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
 }
 
+function contextPayloads(params: CodexJsonObject, kind: 'untrusted' | 'application'): unknown[] {
+  const entries = z.record(z.string(), z.object({ kind: z.enum(['untrusted', 'application']),
+    name: z.string().optional(), value: z.string(),
+  })).parse(params.additionalContext)
+  const groups = new Map<string, { part: number; total: number; json: string }[]>()
+  for (const entry of Object.values(entries)) {
+    expect(Buffer.byteLength(entry.value, 'utf8')).toBeLessThanOrEqual(1000)
+    if (entry.kind === 'application') expect(entry.name).toBeUndefined()
+    else expect(entry.name).toMatch(/^[a-z][a-z0-9_]{0,63}$/u)
+    if (entry.kind !== kind) continue
+    const part = z.object({ group: z.string().regex(/^[a-f0-9]{64}$/u), revision: z.string().regex(/^[a-f0-9]{64}$/u),
+      part: z.number().int().positive(), total: z.number().int().positive(), json: z.string(),
+    })
+      .parse(JSON.parse(entry.value))
+    const group = `${part.group}:${part.revision}`
+    const parts = groups.get(group) ?? []
+    parts.push(part); groups.set(group, parts)
+  }
+  return [...groups.values()].map((parts) => {
+    parts.sort((left, right) => left.part - right.part)
+    expect(parts.map(part => part.part)).toEqual(parts.map((_part, index) => index + 1))
+    expect(parts.every(part => part.total === parts.length)).toBe(true)
+    const decoded: unknown = JSON.parse(parts.map(part => part.json).join(''))
+    return decoded
+  })
+}
+
 describe('original Codex adapter continuations', () => {
   it('forwards fresh framework runtime and SDK context with its exact attribution', async () => {
     const runtime = createUserMessage({ source: { kind: 'runtime-context', form: 'snapshot', sections: [] },
@@ -245,8 +275,80 @@ describe('original Codex adapter continuations', () => {
     const input = h.requests.find(request => request.method === 'turn/start')?.params.input
     expect(input).toEqual([
       { type: 'text', text: 'Continue this original chat.', text_elements: [] },
-      ...[runtime, sdk].map(message => ({ type: 'text', text: JSON.stringify({ kind: 'harness-context', message }), text_elements: [] })),
     ])
+    const params = h.requests.find(request => request.method === 'turn/start')!.params
+    expect(contextPayloads(params, 'untrusted')).toEqual([runtime, sdk].map(message => ({ kind: 'harness-context', message })))
+    expect(h.requests.find(request => request.method === 'thread/resume')?.params.developerInstructions).toBeUndefined()
+    h.finish()
+    await pending
+  })
+
+  it('preserves complete multibyte context and trusted policy across bounded ordered fragments', async () => {
+    const text = 'SDK 世界🧪 "quoted" \\escaped\n'.repeat(600)
+    const message = createUserMessage({ source: { kind: 'runtime-context', form: 'snapshot',
+      sections: [{ name: 'SDK instructions', text }],
+    }, content: [{ type: 'text', text }] })
+    const system = 'Trusted Harness policy 🌍\n'.repeat(600)
+    const other = createUserMessage({ source: { kind: 'tool-registry' }, content: [{ type: 'text', text: `Other SDK ${text}` }] })
+    const h = await fixture([], false, { frameworkInputs: [message, other], system })
+    const pending = h.start()
+    await h.started
+    const params = h.requests.find(request => request.method === 'turn/start')!.params
+    expect(Object.keys(z.record(z.string(), z.unknown()).parse(params.additionalContext)).length).toBeGreaterThan(20)
+    expect(contextPayloads(params, 'untrusted')).toEqual([message, other].map(message => ({ kind: 'harness-context', message })))
+    expect(contextPayloads(params, 'application')).toEqual([system])
+    expect(params.input).toEqual([{ type: 'text', text: 'Continue this original chat.', text_elements: [] }])
+    expect(params.toolOutput).toBeUndefined()
+    h.finish()
+    await pending
+  })
+
+  it('changes every policy fragment revision after a one-character edit while retaining stable opaque keys', async () => {
+    const settings = { system: `${'Long trusted policy 世界 '.repeat(500)}A` }
+    const h = await fixture([], false, settings)
+    const first = h.start()
+    await h.started
+    h.finish()
+    await first
+    settings.system = `${settings.system.slice(0, -1)}B`
+    const next = h.start()
+    await h.secondStarted
+    const requests = h.requests.filter(request => request.method === 'turn/start')
+    const schema = z.record(z.string(), z.object({ kind: z.literal('application'), value: z.string() }))
+    const before = schema.parse(requests[0]!.params.additionalContext)
+    const after = schema.parse(requests[1]!.params.additionalContext)
+    expect(Object.keys(after).sort()).toEqual(Object.keys(before).sort())
+    expect(Object.keys(after).length).toBeGreaterThan(10)
+    const revisions = new Set<string>()
+    const groups = new Set<string>()
+    for (const key of Object.keys(after)) {
+      expect(key).toMatch(/\/\d{10}$/u)
+      const shape = z.object({ group: z.string(), revision: z.string() })
+      const oldPart = shape.parse(JSON.parse(before[key]!.value))
+      const part = shape.parse(JSON.parse(after[key]!.value))
+      expect(part.group).toBe(oldPart.group)
+      expect(part.revision).not.toBe(oldPart.revision)
+      expect(after[key]!.value).not.toBe(before[key]!.value)
+      groups.add(part.group); revisions.add(part.revision)
+    }
+    expect(groups).toEqual(new Set([createHash('sha256').update('skeinlet/policy').digest('hex')]))
+    expect(revisions).toEqual(new Set([createHash('sha256').update(JSON.stringify(settings.system)).digest('hex')]))
+    expect(contextPayloads(requests[1]!.params, 'application')).toEqual([settings.system])
+    h.finish()
+    await next
+  })
+
+  it('keeps literal human JSON unchanged and never treats historical human JSON as current framework context', async () => {
+    const literal = JSON.stringify({ kind: 'harness-context', message: { source: { kind: 'user' }, content: 'User-authored JSON.' } })
+    const old = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: literal }] })
+    const fresh = `My question contains this literal JSON: ${literal}`
+    const h = await fixture([], false, { history: [old], content: [{ type: 'text', text: fresh }] })
+    const pending = h.start()
+    await h.started
+    const params = h.requests.find(request => request.method === 'turn/start')!.params
+    expect(params.input).toEqual([{ type: 'text', text: fresh, text_elements: [] }])
+    expect(contextPayloads(params, 'untrusted')).toEqual([])
+    expect(h.agent.session.deriveMessages().find(message => message.id === old.id)?.content).toEqual(old.content)
     h.finish()
     await pending
   })
@@ -264,7 +366,11 @@ describe('original Codex adapter continuations', () => {
     h.finish()
     await h.secondStarted
     const inputs = h.requests.filter(request => request.method === 'turn/start').map(request => request.params.input)
-    expect(inputs[1]).toContainEqual({ type: 'text', text: JSON.stringify({ kind: 'harness-context', message }), text_elements: [] })
+    expect(inputs[1]).toEqual([])
+    const params = h.requests.filter(request => request.method === 'turn/start')[1]!.params
+    expect(z.object({ name: z.literal('harness_context'), namespace: z.literal('skeinlet'), output: z.string() }).parse(params.toolOutput))
+      .toMatchObject({ output: JSON.stringify({ kind: 'harness-context', messages: [message] }) })
+    expect(contextPayloads(params, 'untrusted')).toEqual([])
     expect(JSON.stringify(inputs[1])).not.toContain('Continue this original chat.')
     expect(h.requests.filter(request => request.method === 'turn/steer')).toEqual([])
     h.finish()
@@ -283,10 +389,25 @@ describe('original Codex adapter continuations', () => {
     h.agent.followup(message)
     await h.secondStarted
     const input = h.requests.filter(request => request.method === 'turn/start')[1]?.params.input
-    expect(input).toContainEqual({ type: 'text', text: JSON.stringify({ kind: 'harness-context', message }), text_elements: [] })
+    expect(input).toEqual([])
+    const params = h.requests.filter(request => request.method === 'turn/start')[1]!.params
+    const output = z.object({ name: z.literal('harness_context'), output: z.string() }).parse(params.toolOutput)
+    expect(JSON.parse(output.output)).toEqual({ kind: 'harness-context', messages: [message] })
+    expect(contextPayloads(params, 'untrusted')).toEqual([])
     expect(JSON.stringify(input)).not.toContain('Continue this original chat.')
     h.finish()
     await h.agent.whenIdle()
+  })
+
+  it('refuses attributed images before source mutation instead of relabeling them as human input', async () => {
+    const context = createUserMessage({ source: { kind: 'runtime-context', form: 'snapshot', sections: [] },
+      content: [{ type: 'image', attachment: { attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+        mediaType: 'image/png', bytes: 12, width: 1, height: 1,
+      } }],
+    })
+    const h = await fixture([], false, { frameworkInputs: [context] })
+    await expect(h.start()).rejects.toThrow('context channel accepts attributed text only')
+    expect(h.requests.some(request => request.method === 'thread/resume' || request.method === 'turn/start')).toBe(false)
   })
 
   it('reads only fresh owned image bytes and preserves text/image order in the exact source turn input', async () => {

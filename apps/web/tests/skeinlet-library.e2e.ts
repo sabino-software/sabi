@@ -16,6 +16,33 @@ function object(value: unknown): Json {
   return value as Json
 }
 
+function attributedContexts(params: Json): Json[] {
+  const groups = new Map<string, { revision: string; part: number; total: number; json: string }[]>()
+  for (const value of Object.values(object(params.additionalContext))) {
+    const entry = object(value)
+    if (typeof entry.value !== 'string') throw new Error('Expected encoded native context')
+    expect(Buffer.byteLength(entry.value, 'utf8')).toBeLessThanOrEqual(1000)
+    if (entry.kind === 'application') { expect(entry.name).toBeUndefined(); continue }
+    expect(entry.kind).toBe('untrusted')
+    expect(entry.name).toBe('harness_context')
+    const fragment = object(JSON.parse(entry.value))
+    if (typeof fragment.group !== 'string' || typeof fragment.revision !== 'string'
+      || typeof fragment.part !== 'number' || typeof fragment.total !== 'number' || typeof fragment.json !== 'string') {
+      throw new Error('Expected self-contained native context fragment')
+    }
+    const parts = groups.get(fragment.group) ?? []
+    parts.push({ revision: fragment.revision, part: fragment.part, total: fragment.total, json: fragment.json })
+    groups.set(fragment.group, parts)
+  }
+  return [...groups.values()].map((parts) => {
+    parts.sort((left, right) => left.part - right.part)
+    expect(new Set(parts.map(part => part.revision)).size).toBe(1)
+    expect(parts.map(part => part.part)).toEqual(parts.map((_part, index) => index + 1))
+    expect(parts.every(part => part.total === parts.length)).toBe(true)
+    return object(JSON.parse(parts.map(part => part.json).join('')))
+  })
+}
+
 /** Fixture traffic uses the actual authenticated, turn-scoped MCP endpoint emitted by the adapter. */
 async function mcpCatalog(server: Json): Promise<Json[]> {
   const url = new URL(String(server.url))
@@ -239,13 +266,8 @@ it.skipIf(process.platform === 'win32')('continues original Codex and Axiom chat
     expect(started.threadId).toBe('existing-codex-thread')
     const input = started.input
     if (!Array.isArray(input)) throw new Error('Expected original Codex turn input')
-    expect(input[0]).toEqual({ type: 'text', text: 'Continue this exact work thread.', text_elements: [] })
-    const framework = input.slice(1).map((value) => {
-      const context = object(value)
-      expect(context.type).toBe('text')
-      expect(context.text_elements).toEqual([])
-      if (typeof context.text !== 'string') throw new Error('Expected attributed Harness context')
-      const envelope = object(JSON.parse(context.text))
+    expect(input).toEqual([{ type: 'text', text: 'Continue this exact work thread.', text_elements: [] }])
+    const framework = attributedContexts(started).map((envelope) => {
       expect(envelope.kind).toBe('harness-context')
       const message = object(envelope.message)
       expect(object(message.source).kind).not.toBe('user')
