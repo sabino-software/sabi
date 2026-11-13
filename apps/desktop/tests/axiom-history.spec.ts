@@ -20,7 +20,7 @@ function fixture() {
     loadURL: vi.fn(async (value: string) => { currentUrl = value }),
   })
   const window = { isDestroyed: () => destroyed, destroy: vi.fn(() => { destroyed = true; contents.emit('destroyed') }) }
-  const create = vi.fn(() => ({ contents, window }) as AxiomWebsiteWindow)
+  const create = vi.fn(() => ({ contents, window }) as unknown as AxiomWebsiteWindow)
   const owner = new DesktopAxiomHistory(create)
   owners.push(owner)
   return { owner, create, contents, window }

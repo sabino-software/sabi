@@ -7,6 +7,7 @@ export interface DesktopElectronBuilderConfig {
   readonly artifactName: string
   readonly publish: null | readonly object[]
   readonly productName: string
+  readonly executableName?: string
   readonly protocols: readonly [{ readonly name: string; readonly schemes: readonly [string] }]
   readonly directories: {
     readonly output: string
@@ -16,7 +17,7 @@ export interface DesktopElectronBuilderConfig {
     { readonly from: string, readonly to: 'dsh', readonly filter: readonly ['**/*'] },
     { readonly from: string, readonly to: 'dsh/node_modules', readonly filter: readonly ['**/*'] },
   ]
-  readonly extraMetadata: { readonly dshDesktopAppId: string; readonly dshLocalFork?: { readonly productName: string; readonly scheme: string; readonly profileDirectory: string } }
+  readonly extraMetadata: { readonly dshDesktopAppId: string; readonly dshLocalFork?: { readonly productName: string; readonly runtimeName: string; readonly scheme: string; readonly profileDirectory: string } }
   readonly asarUnpack: readonly string[]
   readonly extraResources: readonly [
     { readonly from: string, readonly to: 'runtime' },
