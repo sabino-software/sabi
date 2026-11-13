@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-native-conversations",
   "description": "Original Codex and ChatGPT conversations in ordinary Harness Sessions",
-  "version": "0.2.2-rc.2",
+  "version": "0.3.0-beta.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
