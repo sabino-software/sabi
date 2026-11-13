@@ -1313,7 +1313,7 @@ async function main(): Promise<void> {
   const refreshApplicationMenu = (): void => {
     Menu.setApplicationMenu(Menu.buildFromTemplate(process.platform === 'win32'
       ? windowsDevToolsShortcuts : [{
-        label: darwin ? app.name : currentDesktopLocale().messages.application,
+        label: darwin ? productName : currentDesktopLocale().messages.application,
         submenu: [...applicationItems(), devToolsF12Shortcut],
       }, ...platformMenus()]))
     tray?.relabel()

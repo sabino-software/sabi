@@ -7,12 +7,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveDesktopLocale } from '../src/locale.ts'
 import { brandDesktopLocale } from '../src/desktop-branding.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
-import type { WelcomeSaveResult, WelcomeNotice, WelcomeNativeProvider } from '../src/welcome-api.ts'
+import type { WelcomeApi, WelcomeSaveResult, WelcomeNotice, WelcomeNativeProvider } from '../src/welcome-api.ts'
 
 const html = readFileSync(join(import.meta.dirname, '../renderer/welcome.html'), 'utf8')
 afterEach(cleanup)
 
-function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined), productName?: string, native: WelcomeNativeProvider | null = null) {
+function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined), productName?: WelcomeApi['productName'], native: WelcomeNativeProvider | null = null) {
   cleanup()
   const stopAccount = vi.fn()
   const api = {
@@ -52,7 +52,7 @@ function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotic
 }
 
 it('offers authenticated work Codex explicitly without starting sign-in or skipping onboarding', async () => {
-  const view = mount('en', undefined, 'Skeinlet', { available: true, ready: false })
+  const view = mount('en', undefined, 'Sabi', { available: true, ready: false })
   const button = await screen.findByRole('button', { name: 'Use work Codex' })
   expect(view.api.useWorkCodex).not.toHaveBeenCalled()
   fireEvent.click(button)
@@ -64,7 +64,7 @@ it('offers authenticated work Codex explicitly without starting sign-in or skipp
 })
 
 it('keeps a failed native selection visible and retryable without falling back to a fake key', async () => {
-  const view = mount('en', undefined, 'Skeinlet', { available: true, ready: false })
+  const view = mount('en', undefined, 'Sabi', { available: true, ready: false })
   view.api.useWorkCodex.mockResolvedValue({ ok: false })
   fireEvent.click(await screen.findByRole('button', { name: 'Use work Codex' }))
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', view.api.messages.welcomeContinueFailed)
@@ -74,9 +74,13 @@ it('keeps a failed native selection visible and retryable without falling back t
 
 describe('desktop welcome presentation', () => {
   it('opens the branded provider workspace without starting a DeepSeek account login', async () => {
-    const view = mount('en', undefined, 'Skeinlet')
-    expect(view.document.title).toBe('Skeinlet')
-    expect(view.document.querySelector('img')!.getAttribute('src')).toBe('assets/welcome-skeinlet.svg')
+    const view = mount('en', undefined, 'Sabi')
+    expect(view.document.title).toBe('Sabi')
+    expect(view.document.querySelector('img')!.getAttribute('src')).toBe('assets/welcome-sabi.svg')
+    const artwork = readFileSync(join(import.meta.dirname, '../renderer/assets/welcome-sabi.svg'), 'utf8')
+    expect(artwork).toContain('viewBox="0 0 180 72"')
+    expect(artwork).toContain('>Sabi</text>')
+    expect(artwork).not.toContain('Skeinlet')
     expect(view.document.querySelector('#welcome-description')!.textContent).toContain('Settings → Models')
     expect(view.button('#api-key').hidden).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Open workspace' }))

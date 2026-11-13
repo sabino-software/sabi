@@ -28,7 +28,7 @@ interface Message {
 async function fixture(approve = true) {
   const root = await mkdtemp(join(tmpdir(), 'axiom-browser-test-'))
   const directory = join(root, 'profile')
-  const runtime = join(root, 'Skeinlet.app', 'Contents', 'Resources', 'runtime')
+  const runtime = join(root, 'Sabi.app', 'Contents', 'Resources', 'runtime')
   const artifact = join(runtime, 'axiom-browser')
   const nodeDirectory = join(runtime, 'primary-runtime', 'dependencies', 'node', 'bin')
   await mkdir(nodeDirectory, { recursive: true })
@@ -107,7 +107,8 @@ describe.skipIf(process.platform === 'win32')('paired original browser transport
 
   it('prepares only activeTab/scripting/nativeMessaging artifacts with the pinned public identity', async () => {
     const h = await fixture()
-    const manifest = JSON.parse(await readFile(join(h.artifact, 'extension', 'manifest.json'), 'utf8')) as { permissions: string[]; key: string; host_permissions?: unknown }
+    const manifest = JSON.parse(await readFile(join(h.artifact, 'extension', 'manifest.json'), 'utf8')) as { name: string; permissions: string[]; key: string; host_permissions?: unknown }
+    expect(manifest.name).toBe('Sabi original ChatGPT bridge')
     expect(manifest.permissions).toEqual(['activeTab', 'scripting', 'nativeMessaging'])
     expect(manifest.host_permissions).toBeUndefined()
     const hash = createHash('sha256').update(Buffer.from(manifest.key, 'base64')).digest().subarray(0, 16)

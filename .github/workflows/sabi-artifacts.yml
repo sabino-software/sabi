@@ -1,0 +1,84 @@
+name: Sabi artifact build
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sabi-artifacts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-arm64:
+    if: github.repository != 'deepseek-ai/deepseek-harness'
+    runs-on: macos-15
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+      # Hosted M1 memory is smaller than the local build machine; do not overlap build gates.
+      DSH_GATE_CONCURRENCY: '1'
+      DSH_COVERAGE_TEST_TIMEOUT_MS: '90000'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reserve isolated CI evidence
+        run: |
+          umask 077
+          mkdir -p "$RUNNER_TEMP/sabi-ci-evidence" "$RUNNER_TEMP/sabi-ci-artifacts"
+          printf '%s\n' "SABI_CI_EVIDENCE_DIR=$RUNNER_TEMP/sabi-ci-evidence" "SABI_CI_ARTIFACT_DIR=$RUNNER_TEMP/sabi-ci-artifacts" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        id: node
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@b307475762933b98ed359c036b0e51f26b63b74b # v5.0.0
+        with:
+          version: '11.28.5'
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Assert native Apple Silicon and record source/resources
+        run: node .github/scripts/sabi-artifact-evidence.mjs preflight
+      - name: Install immutable dependencies
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee "$SABI_CI_EVIDENCE_DIR/install.log"
+      - name: Build unsigned local fork and run packaged runtime smoke
+        run: |
+          set -euo pipefail
+          pnpm --filter @deepseek-ai/dsh-desktop run package mac-arm64 --unsigned --local-fork 2>&1 | tee "$SABI_CI_EVIDENCE_DIR/package.log"
+      - name: Run complete keyless unit inventory
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run --maxWorkers=2 --reporter=default --reporter=junit --outputFile.junit="$SABI_CI_EVIDENCE_DIR/unit-tests.xml" 2>&1 | tee "$SABI_CI_EVIDENCE_DIR/unit-tests.log"
+      - name: Verify ad-hoc application signature and collect installers/checksums
+        run: node .github/scripts/sabi-artifact-evidence.mjs collect
+      - name: Record final runner resources
+        if: always() && steps.node.outcome == 'success'
+        run: node .github/scripts/sabi-artifact-evidence.mjs resources
+      - name: Upload verified installers and source identity
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sabi-macos-arm64-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sabi-ci-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain build and test diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sabi-macos-arm64-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/sabi-ci-evidence/
+            apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: warn
+          retention-days: 14

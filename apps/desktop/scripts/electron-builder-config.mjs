@@ -117,13 +117,14 @@ export function createElectronBuilderConfig(
     protocols: [{ name: productName, schemes: [localFork ? LOCAL_FORK.scheme : 'dsh'] }],
     extraMetadata: {
       dshDesktopAppId: appId,
-      ...(localFork ? { dshLocalFork: { productName, scheme: LOCAL_FORK.scheme, profileDirectory: LOCAL_FORK.profileDirectory } } : {}),
+      ...(localFork ? { dshLocalFork: { productName, runtimeName: LOCAL_FORK.runtimeName, scheme: LOCAL_FORK.scheme, profileDirectory: LOCAL_FORK.profileDirectory } } : {}),
       dshDesktopUpdateChannel: update?.channel ?? 'nightly',
       ...(policy === undefined ? {} : { dshMandatoryUpdatePolicy: policy }),
       ...buildVersion === productVersion ? {} : { version: buildVersion },
       ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
     },
     productName,
+    ...localFork ? { executableName: LOCAL_FORK.executableName } : {},
     // The default copyright uses author.name; this line names the product instead.
     copyright: `Copyright © ${new Date().getFullYear()} \${productName}`,
     // Unsigned builds carry their own suffix so a shared file can never pass for a release artifact.

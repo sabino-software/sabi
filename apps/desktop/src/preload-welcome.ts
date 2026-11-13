@@ -3,13 +3,15 @@ import type { AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-acc
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { resolveDesktopLocale } from './locale.ts'
-import { brandDesktopLocale } from './desktop-branding.ts'
+import { brandDesktopLocale, isLocalProductName } from './desktop-branding.ts'
 import { WELCOME_IPC, type WelcomeApi, type WelcomeNotice, type WelcomeSaveResult, type WelcomeNativeProvider } from './welcome-api.ts'
 
 const prefix = '--dsh-welcome-locale='
 const locale = process.argv.find(argument => argument.startsWith(prefix))?.slice(prefix.length)
 if (locale === undefined) throw new Error('desktop welcome: missing window locale')
-const productName = process.argv.includes('--dsh-welcome-product=Skeinlet') ? 'Skeinlet' : undefined
+const productPrefix = '--dsh-welcome-product='
+const requestedProduct = process.argv.find(argument => argument.startsWith(productPrefix))?.slice(productPrefix.length)
+const productName = isLocalProductName(requestedProduct) ? requestedProduct : undefined
 const api: WelcomeApi = {
   ...brandDesktopLocale(resolveDesktopLocale(locale), productName ?? 'DeepSeek Harness'),
   ...(productName === undefined ? {} : { productName }),

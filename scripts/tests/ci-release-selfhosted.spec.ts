@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { load } from 'js-yaml'
 import { describe, expect, it, onTestFinished } from 'vitest'
+import { upstreamWorkflow } from '../upstream-workflow-test.ts'
 
 const root = resolve(import.meta.dirname, '../..')
 const repository = 'deepseek-harness/deepseek-harness'
@@ -39,7 +40,7 @@ interface Workflow {
 }
 
 function workflow(file: string): Workflow {
-  return load(readFileSync(resolve(root, '.github/workflows', file), 'utf8')) as Workflow
+  return upstreamWorkflow(load(readFileSync(resolve(root, '.github/workflows', file), 'utf8'))) as Workflow
 }
 
 // This canonical-case corpus has matching Actions/JavaScript comparison results.

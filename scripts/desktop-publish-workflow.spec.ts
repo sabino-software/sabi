@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import yaml from 'js-yaml'
 import { expect, it } from 'vitest'
+import { upstreamWorkflow } from './upstream-workflow-test.ts'
 
-const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github/workflows/desktop-publish.yml'), 'utf8')) as {
+const workflow = upstreamWorkflow(yaml.load(readFileSync(resolve(import.meta.dirname, '../.github/workflows/desktop-publish.yml'), 'utf8'))) as {
   on: Record<string, unknown>
   permissions: Record<string, string>
   jobs: Record<string, {

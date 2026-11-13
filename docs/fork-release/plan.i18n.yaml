@@ -3,26 +3,26 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/fork-release/plan.md
 /:
-  en: f1431bbba2514d44
-  zh: 86998006fe0d8e06
-/skeinlet-local-release:
-  en: 30035b1d70ab1fb8
-  zh: b4e2dd0e5a791d55
-/skeinlet-local-release/goal:
-  en: a8753ec75c952226
-  zh: 483916b8ce91b0eb
-/skeinlet-local-release/milestones:
-  en: 47ee6c4d5fd85e2e
-  zh: 9ef2ac2862c0e4c1
-/skeinlet-local-release/coding-workflow-comparison:
-  en: 26366587f500382a
-  zh: ff6fab730dd5fbab
-/skeinlet-local-release/acceptance:
-  en: 38718afb090b647e
-  zh: aa61661cef767de0
-/skeinlet-local-release/current-evidence:
-  en: e9df7e0fd5560fac
-  zh: faeb9a831872c655
-/skeinlet-local-release/limits-and-reproduction:
-  en: 270706d3f71be1b0
-  zh: 60ad598149b09bc8
+  en: 479e0c184e353885
+  zh: 5c6a7330a4855013
+/sabi-release-verification:
+  en: 63c63898b9d2610b
+  zh: 26c62350adfe0254
+/sabi-release-verification/scope:
+  en: b9e0f525bf5b5a9c
+  zh: 8dbfdb49be50680f
+/sabi-release-verification/conversation-architecture:
+  en: 71e3ab10394e82bc
+  zh: 616031b7d9fabc96
+/sabi-release-verification/privacy-defaults:
+  en: 24e02a2be3a79587
+  zh: bc1ec980bbfff196
+/sabi-release-verification/verified-core-boundary:
+  en: bffd732d57298f4c
+  zh: 61c2d2ac1d7f1f07
+/sabi-release-verification/release-verification-procedure:
+  en: b8df58cc53d64d77
+  zh: df9f057b70db9ad9
+/sabi-release-verification/release-boundary:
+  en: 59958af5c7400666
+  zh: c01c9136c28ed593

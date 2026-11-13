@@ -1,52 +1,43 @@
 ---
 kind: discussion
-description: "Skeinlet 本地发布范围、里程碑与验收证据。"
+description: "Sabi 发布约定与可重复的产物验证。"
 ---
-# Skeinlet 本地发布
+# Sabi 发布验证
 
 [English](plan.md) | 中文
 
-## 目标
+## 范围
 
-交付整洁、独立品牌的 macOS 编程工作区，支持工作 Codex 登录、已有 Codex 聊天展示、工具与审批，以及可选的真实 Axiom 入口。保留当前本地 Harness 会话和凭据，关闭报告，构建并安装本地应用，不推送、不创建 PR、不对外发布。
+Sabi 是独立品牌的 macOS 工作区与 `sabi` CLI，底层复用现有 Harness 引擎，发布目标仓库为 `sabino-software/sabi`。下一打包版本为 `0.3.0-beta.1`。保留现有工作区、本地会话、已保存的工作 Codex 授权，以及 `~/Library/Application Support/DeepSeek Harness Local` 下的 Electron/Harness 配置。工作 Codex 仍位于 `~/.codex`，个人 Codex 与 `dsh` 命令保持独立。保留 MIT DeepSeek 版权与第三方声明。名称不代表已完成商标审查。
 
-## 里程碑
+DeepSeek 是通过添加提供方及其 API key 配置的可选提供方。工作区、常规设置、工作 Codex 与原始 ChatGPT Dot 访问均无需 DeepSeek 账户。提供方和 ChatGPT 网站仍有各自的认证要求。
 
-1. 品牌已完成：Skeinlet 原生应用、原创生成的位图图标、SVG 标记和字标、欢迎页及浏览器品牌、独立 bundle 标识与 URL scheme。保留 MIT 许可证和上游署名。名称是工作名称，不声称完成商标审查。
-2. Codex 聊天已完成：独立只读库提供标题搜索、归档筛选、消息分页和工作主目录来源标记。读取私有 SQLite 快照，不恢复、改写或导入源聊天，不读取个人 Codex 或认证文件，不加载远端图片和原始 HTML。
-3. Axiom 插件已完成：可选 `@local/skeinlet-axiom-link` 0.1.1 通过桌面侧边栏浏览器打开用户选择的真实 ChatGPT Dot，并提供外部浏览器入口。插件基于 Creator 模板编写，在用户运行的 Creator 聊天中审查，并根据审查和原生视觉检查改进。不创建替代人格，不复制 Cookie，不使用私有 ChatGPT API。
-4. 本地发布已完成：独立 Apple Silicon 应用安装于 `~/Applications/Skeinlet.app`，保留现有本地配置，省略更新源，内嵌运行时，验证常规冷启动和界面注册，并在本地提交。它是临时签名的本地候选版，未经公证或对外分发。
+## 对话架构
 
-## 编程工作流对照
+现有工作 Codex 聊天成为所属工作区中的常规原生会话。打开历史不启动推理；发送消息通过工作 app-server 继续原始 Codex 对话。限定范围且经过认证的本地回环 MCP 连接提供 Harness 工具，执行受现有沙箱选择与审批约束。导入的操作卡片仅为不会执行的来源证据。历史、上下文与恢复的详细约定见[原生对话集成](native-conversations-plan.zh.md)。
 
-| 工作流 | 现有实现 | 发布动作 |
-|---|---|---|
-| 项目和聊天 | 工作区、搜索、归档和分支 | 保留，新增工作 Codex 聊天库 |
-| 终端、工具和审批 | PTY 标签页、工具执行和审批卡片 | 保留，检查运行时 PTY 和实际 Creator 工具 |
-| Git 和 worktree | 可选 Forge 集成 | 复用现有集成 |
-| 子代理和自动化 | Harness 原生服务 | 保留已有入口 |
-| 原始 Axiom 连续性 | 真实 ChatGPT Dot 页面 | 可选链接插件，需要单独登录 ChatGPT 网站 |
+可选 Dot 集成使用原始已认证的 ChatGPT 网站作为引擎。持久化的应用内会话无需扩展即可支持原生历史、用户原文发送与观察到的回复。浏览器伴随扩展为可选后备方式。常规设置中的独立选项控制集成启用、侧边栏显示，以及与新会话一致、简洁或轮廓样式。Dot 显示在新会话正下方，无需网址输入框即可选择原始对话。连接后的原始页面在隐藏状态运行；打开 ChatGPT 会显示它，重新加载会刷新它，明确关闭会销毁页面并停止观察，直到再次明确选择 Dot。网站登录状态在此关闭/重新打开周期中保留。详见 [Dot 页面适配器](axiom-native-bridge.zh.md)。
 
-## 验收
+## 隐私默认值
 
-本地产物构建及 Host/Client 汇总类型检查通过。重点检查覆盖源数据库保留与分页、资源和插槽卸载、Markdown 图片禁用、品牌、原生打包、CLI 转发和 OAuth 冷启动。组装浏览器测试通过聊天历史、提供方授权及 Axiom 安装、导航和卸载场景。仓库文档套件的 43 项检查全部通过。
+分支的五个报告插件默认全部禁用且未挂载。打包、冷启动、CLI 使用和未来上游合并都需保留此状态。它涵盖 Harness 报告与分析，不涵盖由 Codex、模型提供方、ChatGPT 或身份提供方负责的遥测或网络行为。不得通过复制凭据或浏览器 Cookie 实现 Dot 访问。
 
-原生运行时通过隔离的 CLI 插件安装与移除、PTY、搜索、原生依赖和 Office 文档往返检查。安装的应用通过严格深度签名校验，并能在不依赖检出目录启动器或开发参数的情况下正常冷启动。本地包依赖约束及改动文件 lint 通过。这些属于本地检查，不等同于 CI 或公开发布验收。
+## 已验证的核心边界
 
-## 当前证据
+安装候选版检查实际执行了持久化的应用内 ChatGPT 认证、一次原生 Dot 发送及原始来源标识下观察到的回复，以及来源页面隐藏时的原生交互。重新加载恢复了已登录页面；关闭销毁了页面，后台观察未重新打开它，明确选择 Dot 后无需再次登录即可重新连接。两项侧边栏开关、位置与样式持久化均经过实际检查。这些结果无需浏览器扩展。
 
-2026-11-12，Computer Use 展示了 `~/.codex` 中真实工作目录和已有聊天正文，提供只读来源标记、旧消息分页且不显示输入框。当前聊天使用 `thread_history_1.sqlite`，只扫描 JSONL 会遗漏它们。合成数据库测试验证源 DB/WAL 不变且不创建源 SHM。Codex 自身并发写入不属于此查看器的行为。
+工作 Codex 检查通过一次已完成的 Harness bash 调用继续同一原始对话，冷启动后重新打开原生历史，保留所选工作提供方，并保留旧凭据哈希。运行时清单显示五个报告插件全部禁用且未挂载。`sabi` CLI 通过内嵌 Electron 在检出目录之外运行，应用路径含空格且没有系统 Node。这些是本地核心与 CLI 观察，不代表即将发布的 Sabi 品牌包验收或托管 CI 结果。
 
-现有 Creator 聊天通过保存的工作 Codex 订阅完成只读插件审查。凭据文件在安装和重启后字节一致。最终冷启动识别提供方授权，直接进入保留的工作区。运行时元数据确认会话 OTel、产品 OTel 和客户端分析均禁用且未挂载。Axiom 链接在重启后保留在本地，私有 URL 不进入源码或发布产物。
+## 发布验证流程
 
-已在登录的工作浏览器中找到真实 Axiom 页面。安装的插件在原生侧边栏浏览器打开相同目标并到达 ChatGPT 登录页。嵌入式认证及登录后的 Axiom 回复仍需用户验收。临时测试标签页已关闭，应用已隐藏以恢复用户焦点和布局。
+1. 记录确切源码修订与版本。使用 `pnpm install --frozen-lockfile` 安装，再运行 `pnpm --dir apps/desktop run package:local-fork --dir`。保留打包诊断与生成的 `apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/mac-arm64/Sabi.app` 标识。
+2. 验证该产物的应用签名与正常冷启动。确认 Sabi 品牌、版本、保留的工作区与工作 Codex 授权，以及五个报告插件全部禁用且未挂载。重新检查原始 Codex 连续性、Harness 工具/审批路径，以及 Dot 隐藏页面、重新加载、关闭和重新连接周期，确保没有重复发送。
+3. 使用 **Manage sabi Command…** 管理 CLI。在检出目录之外、PATH 不含系统 Node 且应用路径含空格的环境中检查帮助、版本与无害命令。确认现有 `dsh` 和个人 Codex 未改变。
+4. 检查确切修订的 [Sabi artifact build](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml) 运行、任务结果、测试、签名证据，以及上传的产物与校验和。该工作流生成独立于上游签名基础设施的未签名本地分支产物。工作流定义或徽章不能证明某次运行成功。
+5. 分别记录安装产物与托管 CI 证据后再分发。本地临时签名不等同于公证；没有实际发布证据时，不得声称已有公开 npm 发布或已发布下载。
 
-## 限制与复现
+## 发布边界
 
-源库展示受支持的本地分页文字历史，不恢复 Codex 聊天，不同步远端历史，不复制附件、工具输出或推理，也不声称完全达到 Codex 桌面功能等同。未来 Codex SQLite 格式改变时可能需要更新读取器。Dot 连续性、认证和用量规则由 ChatGPT 管理；侧边栏浏览器 Cookie 当前仅保留至应用重启。可选网站及模型提供方仍遵循自身网络策略。
+分别记录本地构建、类型检查与测试结果，安装版验收，GitHub Actions，以及发布。较早的核心候选版不能验证之后的 Sabi 包。本地准备不授权推送、PR、仓库转移或发布。
 
-使用 `pnpm --dir apps/desktop run package:local-fork --dir` 重建。输出位于 `apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/mac-arm64/Skeinlet.app`。内嵌运行时 CLI 仅在应用完全退出时管理 desktop 配置。使用该 CLI、现有本地 `DSH_HOME` 和 `dsh plugin --profile desktop add <tarball> --ignore-scripts --offline` 安装可选插件 tarball。
-
-原生壳有意保留 `~/Library/Application Support/DeepSeek Harness Local` 下的 Electron 与 Harness 数据。替换为其他 Skeinlet 构建时保留此配置。工作 Codex 源仍为 `~/.codex`，个人 Codex 独立。上游 Harness 更新不会替换此应用；未来源码合并仍需重复上述隐私和登录检查。
-
-原创图形和生成提示词位于 `assets/branding/skeinlet/`：`app-icon.png`、`mark.svg`、`wordmark.svg` 和 `prompt.txt`。打包图标是内置 ImageGen 原始输出的 1024px 技术缩放版。
+现有引擎命令与打包流程仍见[桌面参考](../../apps/desktop/README.zh.md)和[开发指南](../development.zh.md)。替换可执行文件时保留应用数据；源码合并不得重置工作认证或报告默认值。

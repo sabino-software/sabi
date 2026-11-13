@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Skeinlet original ChatGPT bridge",
+  "name": "Sabi original ChatGPT bridge",
   "version": "0.1.0",
-  "description": "Connect one explicitly selected ChatGPT Dot to Skeinlet. Authentication stays in this browser profile.",
+  "description": "Connect one explicitly selected ChatGPT Dot to Sabi. Authentication stays in this browser profile.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw4QTLwhvjs3MQM0CWrY1XcVhCr8jucaT+v5rRHvjrB+eTVV8crrvS7skWKgPiInjYizoFwkChfjBe8GZCP+OEoBIhlT19VnYnV8PLgQWteIlLR6ICocYDgrlh08LA5r30BedFGrDLbGv+JYRtdtunIXQQAD28gcyT7Uo0Lq1CFnmVOv9Vz4FOUf8FGI9jhJJ08ftQbCmhfyAOixONibEDPIX/N6xjQyn+p/rtfMpfPBWWY76y6q9rSM8+dYXhcl4ybE97pdb/kfBhsEFWUDBpAsdW8uase6VZ79259BOyazHiutmA89ChNPK0NCes8rwwU0vr6LGhxE+a+p+y6EHswIDAQAB",
   "permissions": ["activeTab", "scripting", "nativeMessaging"],
   "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_title": "Connect this ChatGPT Dot to Skeinlet" }
+  "action": { "default_title": "Connect this ChatGPT Dot to Sabi" }
 }

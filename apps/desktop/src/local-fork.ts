@@ -2,6 +2,7 @@
 
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { isLocalProductName } from './desktop-branding.ts'
 
 interface LocalForkApplication {
   getPath(name: 'appData'): string
@@ -21,16 +22,19 @@ export function configureLocalFork(manifest: unknown, application: LocalForkAppl
   if (typeof manifest !== 'object' || manifest === null || !('dshLocalFork' in manifest)) return
   const fork = manifest.dshLocalFork
   if (typeof fork !== 'object' || fork === null || !('productName' in fork) || !('profileDirectory' in fork) || !('scheme' in fork)
-    || typeof fork.productName !== 'string' || fork.productName.trim() === ''
+    || !isLocalProductName(fork.productName)
     || typeof fork.scheme !== 'string' || !/^[a-z][a-z0-9+.-]*$/u.test(fork.scheme)
     || typeof fork.profileDirectory !== 'string' || fork.profileDirectory.trim() === ''
     || /[/\\]|^\.{1,2}$/u.test(fork.profileDirectory)) {
     throw new Error('desktop local fork: invalid packaged profile identity')
   }
+  // macOS Safe Storage uses this identity; public labels use productName.
+  const runtimeName = 'runtimeName' in fork ? fork.runtimeName : 'Skeinlet'
+  if (runtimeName !== 'Skeinlet') throw new Error('desktop local fork: invalid packaged profile identity')
   const root = join(application.getPath('appData'), fork.profileDirectory)
   const electron = join(root, 'electron')
   mkdirSync(electron, { recursive: true })
-  application.setName(fork.productName)
+  application.setName(runtimeName)
   application.setPath('userData', electron)
   application.setPath('sessionData', electron)
   environment.DSH_HOME = join(root, 'harness-home')

@@ -1,79 +1,42 @@
-# Skeinlet
-
-Skeinlet is an independent local macOS coding workspace built from DeepSeek Harness, with work Codex sign-in, a read-only Codex chat library, original branding, and reporting disabled by default. Third-party licenses and upstream attribution remain intact. The upstream reference below describes compatible packages and workflows; see the [local release plan](docs/fork-release/plan.md) for this fork.
+# Sabi
 
 English | [中文](README.zh.md)
 
-DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
+[![Sabi artifact build](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml/badge.svg)](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml)
 
-It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
+Sabi is an independent macOS coding workspace built from DeepSeek Harness. Continue original work Codex conversations in native chat, use Harness tools and approvals, and optionally connect your original ChatGPT Dot. Existing workspaces, local sessions, and work sign-in stay separate from personal Codex. No DeepSeek account is required; DeepSeek is an optional model provider configured with its own API key.
 
-Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+The public CLI is `sabi`, backed by the existing Harness engine. The next packaged release is `0.3.0-beta.1`; check its exact artifact and [workflow run](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml) before distribution. See the [release verification procedure](docs/fork-release/plan.md).
 
-## Developer preview
+## Native conversations
 
-DeepSeek Harness is in _developer preview_ and iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
+Work Codex chats appear as ordinary Sessions in their workspaces. Opening history does not start inference. Sending continues the same original Codex thread through the work app-server. Harness tools are available through a scoped local MCP connection; sandbox selections and approval decisions remain enforced. Source activity appears alongside messages without re-executing imported operations.
 
-Review the [safety notice](SAFETY.md) before running the project.
+Dot is optional. Enable **Show Dot in sidebar** and **Enable Dot integration** in **Settings → General** to place **Dot** directly below **New Session**. Its default style matches New Session; Subtle and Outline are available. Select Dot to sign in to the original ChatGPT website and choose your Dot without entering a URL. The persistent in-app website session powers native history, sending, and observed replies without a browser extension. A regular-browser companion remains an optional fallback.
 
-## Run
+The connected original page runs hidden while native chat remains usable. **Open ChatGPT** reveals it, and Reload refreshes it. **Close page** destroys the page and stops observation; only another explicit Dot selection reconnects it. Website sign-in survives closing and reopening the page. General Settings does not require a DeepSeek sign-in.
 
-### Run from `npm`
+## Privacy defaults
 
-Install `Node.js`, then run:
+All five fork reporting plugins are disabled and unmounted by default. Sabi does not enable Harness session reporting, product reporting, or client analytics. This does not disable telemetry or network processing performed by a selected model provider, Codex, ChatGPT, or an identity provider. Website credentials stay with the selected website session; Sabi does not copy browser cookies or use private ChatGPT APIs.
 
-```sh
-npx @deepseek-ai/dsh web
-```
+## Build and CLI
 
-The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it in the default browser for a local launch. An SSH launch only prints the host URL because the SSH client or editor owns the local forwarded address. Pass `--no-open` to run the server without opening a browser. See [Web UI guide](docs/user/guide/index.md).
-
-### Run from source
-
-To run from a repository checkout:
+Read the [safety notice](SAFETY.md), then build the Apple Silicon application from a local checkout:
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-pnpm install
-pnpm run build
-pnpm dsh web
+pnpm install --frozen-lockfile
+pnpm --dir apps/desktop run package:local-fork --dir
 ```
 
-`pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
+The unpacked application is `apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/mac-arm64/Sabi.app`. Verify that artifact before replacing an installed app. This local build is not a notarized public release.
 
-## Community and support
+Use the application's **Manage sabi Command…** menu item to manage the `sabi` command, then run `sabi --help` or `sabi --version`. The command uses the bundled Electron runtime; it does not require system Node or a checkout, including when its application path contains spaces. It preserves the existing `dsh` command and personal Codex installation.
 
-- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
-- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
-- Join <a href="https://discord.gg/4MrtZUhpxg">DeepSeek Harness Discord community</a>.
+See the [development guide](docs/development.md), [architecture](docs/architecture.md), and [agent instructions](AGENTS.md) for contributor workflows. APIs remain in developer preview and can break compatibility.
 
-## Contributing
+## Upstream and license
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) is developed by [DeepSeek AI](https://deepseek.com) on an everything-is-a-plugin architecture powered by [Cordis](https://github.com/cordiverse/cordis). Its upstream [documentation](https://deepseek-harness.github.io/deepseek-harness/) describes the underlying engine. Sabi is an independent fork.
 
-## Development
-
-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
-
-`pnpm run dev:web` builds, serves, and rebuilds client bundles on source edits in one terminal, and `make help` lists the matching Make targets for Web and Desktop; the guide's application commands section owns the full table.
-
-For agents, follow [AGENTS.md](AGENTS.md).
-
-## Citation
-
-```bibtex
-@misc{deepseek-harness2026,
-  title={DeepSeek Harness: Everything is a Plugin},
-  author={DeepSeek-AI},
-  year={2026},
-  publisher={GitHub},
-  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
-}
-```
-
-## License
-
-[MIT](LICENSE)
-
-Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The [MIT license](LICENSE), including `Copyright (c) 2026 DeepSeek`, remains intact. Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance.

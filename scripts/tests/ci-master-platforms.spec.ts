@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { load } from 'js-yaml'
 import { describe, expect, it } from 'vitest'
+import { upstreamWorkflow } from '../upstream-workflow-test.ts'
 import { gatesForMode } from '../run-gates.ts'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -28,7 +29,7 @@ interface Workflow {
 }
 
 function workflow(name: string): Workflow {
-  return load(readFileSync(resolve(root, '.github/workflows', name), 'utf8')) as Workflow
+  return upstreamWorkflow(load(readFileSync(resolve(root, '.github/workflows', name), 'utf8'))) as Workflow
 }
 
 function commands(job: Job): string[] {
@@ -88,7 +89,7 @@ describe('master-only platform scheduling', () => {
     expect(aggregate.needs).toContain('python-runtime')
     expect(aggregate.needs).not.toContain('windows')
     expect(aggregate.needs!.every(id => id in pr.jobs)).toBe(true)
-    expect(aggregate.if).toBe("${{ !cancelled() && github.event_name == 'pull_request' }}")
+    expect(aggregate.if).toBe("!cancelled() && github.event_name == 'pull_request'")
     expect(aggregate.steps).toContainEqual(expect.objectContaining({
       if: "contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')",
     }))

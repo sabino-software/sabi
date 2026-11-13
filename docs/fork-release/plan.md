@@ -1,52 +1,43 @@
 ---
 kind: discussion
-description: "Skeinlet local release scope, milestones, and acceptance evidence."
+description: "Sabi release contracts and repeatable artifact verification."
 ---
-# Skeinlet local release
+# Sabi release verification
 
 English | [中文](plan.zh.md)
 
-## Goal
+## Scope
 
-Ship a clean, independently branded macOS coding workspace with work Codex sign-in, existing Codex chat visibility, tools and approvals, and optional genuine Axiom access. Preserve existing local Harness sessions and credentials. Keep reporting off. Build and install locally; do not push, open a PR, or publish externally.
+Sabi is the independently branded macOS workspace and `sabi` CLI backed by the existing Harness engine, with release repository target `sabino-software/sabi`. The next packaged version is `0.3.0-beta.1`. Preserve existing workspaces, local Sessions, the stored work Codex grant, and the Electron/Harness profile at `~/Library/Application Support/DeepSeek Harness Local`. Work Codex remains under `~/.codex`; personal Codex and the `dsh` command stay separate. Preserve the MIT DeepSeek copyright and third-party notices. A name does not establish trademark clearance.
 
-## Milestones
+DeepSeek is an optional provider configured through Add provider with its API key. No DeepSeek account is required for the workspace, General Settings, work Codex, or original ChatGPT Dot access. Providers and the ChatGPT website retain their own authentication requirements.
 
-1. Identity complete: Skeinlet native application, original generated raster icon, SVG mark and wordmark, welcome screen and browser branding, independent bundle identity and URL scheme. The MIT license and upstream attribution remain intact. The name is a working identity, without a trademark clearance claim.
-2. Existing Codex chats complete: a separate read-only library with title search, archived filter, paged messages, and work-home source labels. Read private SQLite snapshots without resuming, rewriting, or importing source chats. Never read personal Codex or authentication files. Remote images and raw HTML are omitted.
-3. Axiom plugin complete: optional `@local/skeinlet-axiom-link` 0.1.1 opens the actual selected ChatGPT Dot through Desktop's Sidebar Browser, with an external fallback. The bundle was authored from the Creator template, reviewed in the user's running Creator chat, and refined from that review and native visual checks. No replacement persona, copied cookies, or private ChatGPT API.
-4. Local release complete: standalone Apple Silicon application installed as `~/Applications/Skeinlet.app`. Preserve the existing local profile, omit updater feeds, embed runtimes, verify normal cold launch and visible registrations, and commit locally. This is an ad-hoc signed local release candidate, without notarization or external distribution.
+## Conversation architecture
 
-## Coding workflow comparison
+Existing work Codex chats become ordinary native Sessions in their workspaces. History opening starts no inference; sending continues the original Codex thread through the work app-server. A scoped authenticated loopback MCP connection provides Harness tools, with existing sandbox selections and approvals governing execution. Imported operation cards are inert source evidence. The [native conversation integration](native-conversations-plan.md) owns detailed history, context, and recovery contracts.
 
-| Workflow | Existing implementation | Release action |
-|---|---|---|
-| Projects and chats | Workspaces, search, archive and forks | Preserve; add work Codex chat library |
-| Terminal, tools and approvals | PTY tabs, tool execution and approval cards | Preserve; runtime PTY and live Creator tools checked |
-| Git and worktrees | Optional Forge integration | Reuse the existing integration |
-| Subagents and automation | Native Harness services | Preserve existing entry points |
-| Original Axiom continuity | Genuine ChatGPT Dot page | Optional link plugin; separate ChatGPT website sign-in required |
+Optional Dot integration uses the original authenticated ChatGPT website as its engine. Its persistent in-app session supports native history, exact user-authored sends, and observed replies without an extension. The browser companion is an optional fallback. Independent General Settings preferences control integration enablement, sidebar visibility, and Match New Session/Subtle/Outline styling. Dot appears directly below New Session and selects the original conversation without a URL textbox. The connected original page runs hidden; Open ChatGPT reveals it, Reload refreshes it, and explicit Close destroys it and stops observation until another explicit Dot selection. Website sign-in persists across that close/reopen cycle. See the [Dot page adapter](axiom-native-bridge.md).
 
-## Acceptance
+## Privacy defaults
 
-The local artifact build and aggregate Host/Client type checks passed. Focused checks cover source-database preservation and paging, resource and slot disposal, Markdown image suppression, branding, native packaging, CLI forwarding, and OAuth-aware cold start. The assembled browser tests passed for chat history, provider authorization, and Axiom installation/navigation/unload. The repository documentation suite passed all 43 gates.
+All five fork reporting plugins are disabled and unmounted by default. Preserve this state across packaging, cold launch, CLI use, and future upstream merges. It covers Harness reporting and analytics, not telemetry or network behavior owned by Codex, model providers, ChatGPT, or identity providers. Never copy credentials or browser cookies to implement Dot access.
 
-The native runtime passed isolated CLI plugin install/remove, PTY, search, native dependencies, and Office document round trips. The installed application passed strict deep signature verification and normal cold launch without a checkout launcher or development flags. Local package/dependency constraints and changed-file lint passed. These are local checks, not CI or public-release acceptance.
+## Verified core boundary
 
-## Current evidence
+Installed-candidate checks exercised persistent in-app ChatGPT authentication, one native Dot send and its observed reply under the original source identity, and native interaction with the source page hidden. Reload recovered the signed-in page; Close destroyed it, background observation did not reopen it, and explicit Dot selection reconnected without another login. Both sidebar flags, placement, and style persistence were exercised. These results require no browser extension.
 
-On 2026-11-12, Computer Use displayed the real work catalog and an existing transcript from `~/.codex`, with read-only source labels, older-message paging and no composer. Current chats use `thread_history_1.sqlite`; JSONL-only discovery would miss them. Synthetic database tests verify unchanged source DB/WAL files and no source SHM creation. Normal concurrent Codex writes are independent of this viewer.
+Work Codex checks continued the same original thread through a completed Harness bash call, reopened native history after a cold restart, retained the selected work provider, and preserved the legacy credential hash. Runtime inventory showed all five reporters disabled and unmounted. The `sabi` CLI ran through bundled Electron outside a checkout, from a path containing spaces, without system Node. These are local core and CLI observations, not acceptance of the forthcoming Sabi-branded package or a hosted CI result.
 
-The existing Creator chat completed a read-only plugin review through the stored work Codex subscription. The original credential file remained byte-identical across installation and restarts. The final cold launch recognized the stored provider grant and entered the preserved workspace directly. Runtime metadata confirmed session OTel reporting, product OTel reporting, and client analytics all disabled and unmounted. Axiom's link persisted locally across restart; its private URL is absent from source and release artifacts.
+## Release verification procedure
 
-The genuine Axiom page was found in the signed-in work browser. The installed plugin opened that same destination in the native Sidebar Browser and reached ChatGPT's login page. Embedded authentication and a post-login Axiom reply remain user-side acceptance steps. The temporary test tab was closed, and the application was hidden to restore the user's focus and layout.
+1. Record the exact source revision and version. Install with `pnpm install --frozen-lockfile`, then run `pnpm --dir apps/desktop run package:local-fork --dir`. Retain the packaging diagnostics and resulting `apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/mac-arm64/Sabi.app` identity.
+2. Verify the app signature and a normal cold launch of that artifact. Confirm Sabi branding/version, preserved workspaces and work Codex grant, and all five reporting plugins disabled and unmounted. Recheck original Codex continuation, a Harness tool/approval path, and the Dot hidden-page/Reload/Close/reconnect cycle without duplicate sends.
+3. Use **Manage sabi Command…** to manage the CLI. Check help/version and a harmless command outside the checkout with system Node absent from PATH and a space-containing app path. Confirm existing `dsh` and personal Codex are unchanged.
+4. Inspect the exact revision's [Sabi artifact build](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml) run, job results, tests, signature evidence, and uploaded artifact/checksums. The workflow targets an unsigned local-fork artifact without upstream signing infrastructure. A workflow definition or badge is not proof a run succeeded.
+5. Record installed-artifact and hosted-CI evidence separately before distribution. A local ad-hoc signature is not notarization; do not claim a public npm release or published download without its actual release evidence.
 
-## Limits and reproduction
+## Release boundary
 
-The source library shows supported local, paginated text history. It does not resume Codex chats, synchronize remote history, copy attachments/tool output/reasoning, or claim full Codex desktop parity. Future Codex SQLite schema changes may need reader updates. ChatGPT owns Dot continuity, authentication and usage rules; Sidebar Browser cookies currently last until app restart. Optional websites and model providers retain their own network policies.
+Keep local build/typecheck/test results, installed-app acceptance, GitHub Actions, and publication separate. An earlier core candidate does not validate a later Sabi package. Local preparation does not authorize a push, PR, repository transfer, or publication.
 
-Rebuild with `pnpm --dir apps/desktop run package:local-fork --dir`. Output is `apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/mac-arm64/Skeinlet.app`. The embedded runtime CLI manages the desktop profile only while the app is fully quit. Install the optional plugin tarball with `dsh plugin --profile desktop add <tarball> --ignore-scripts --offline` using that embedded CLI and the existing local `DSH_HOME`.
-
-The native shell intentionally retains `~/Library/Application Support/DeepSeek Harness Local` for its Electron and Harness data. Keep this profile when replacing the app with another Skeinlet build. Work Codex source remains `~/.codex`; personal Codex is separate. Upstream Harness updates do not replace this app, and future source merges still require the privacy and sign-in checks above.
-
-Original artwork and generation prompt are in `assets/branding/skeinlet/`: `app-icon.png`, `mark.svg`, `wordmark.svg`, and `prompt.txt`. The packaged icon is a technical 1024px downscale of the original built-in ImageGen output.
+Existing engine commands and packaging procedures remain in the [Desktop reference](../../apps/desktop/README.md) and [development guide](../development.md). Preserve application data when replacing the executable; source merges must not reset work authentication or reporting defaults.

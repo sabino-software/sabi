@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { brandDesktopLocale } from '../src/desktop-branding.ts'
 import { resolveDesktopLocale } from '../src/locale.ts'
 import { needsWelcome, WELCOME_IPC } from '../src/welcome-api.ts'
 
@@ -227,4 +228,12 @@ it('accepts only permitted event fields and reads the current policy over IPC', 
   await expect(report(own, 'auth_page_view', null)).rejects.toThrow('invalid analytics')
   await report(own, 'api_key_save_click', {})
   expect(analytics).toHaveBeenLastCalledWith('api_key_save_click', {})
+})
+
+it.each(['Sabi', 'Skeinlet', 'Unknown'])('forwards only the known native welcome brand %s', (product) => {
+  const locale = brandDesktopLocale(resolveDesktopLocale('en'), product)
+  const options = welcomeWindowOptions('darwin', locale)
+  expect(options.webPreferences?.additionalArguments).toEqual([
+    '--dsh-welcome-locale=en', ...(product === 'Unknown' ? [] : [`--dsh-welcome-product=${product}`]),
+  ])
 })

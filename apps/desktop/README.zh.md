@@ -73,7 +73,7 @@ macOS 安装会创建 `/usr/local/bin/dsh`；目录权限需要时，系统会�
 
 命令注册是安装 Desktop 后的可选操作。卸载 Desktop 前，请通过**管理 dsh 命令… → 移除**删除其 CLI 注册；应用卸载程序不会移除该注册。更新或卸载 Desktop 前请结束 CLI 命令。CLI 运行时版本随已安装的 Desktop 版本变化。Desktop 插件命令与运行时限制见[内置命令运行时](#bundled-command-runtime)。
 
-隔离的本地分支提供**管理 sabi 命令…**，仅安装 `/usr/local/bin/sabi`。打包的 `sabi` 和兼容 `dsh` 启动器使用已安装的 Skeinlet 可执行文件及保留的 `DeepSeek Harness Local/harness-home` 配置，无需源码检出或系统 Node。`sabi --help` 和 `sabi --version` 显示公开命令名称。安装会拒绝无关的 `sabi` 文件、链接或当前 shell 命令；请自行移除冲突后重试。“修复”和“移除”仅影响已记录的 `sabi` 链接，并保留已有的 `dsh` 注册。
+隔离的本地分支提供**管理 sabi 命令…**，仅安装 `/usr/local/bin/sabi`。打包的 `sabi` 和兼容 `dsh` 启动器使用已安装的 Sabi 可执行文件及保留的 `DeepSeek Harness Local/harness-home` 配置，无需源码检出或系统 Node。`sabi --help` 和 `sabi --version` 显示公开命令名称。安装会拒绝无关的 `sabi` 文件、链接或当前 shell 命令；请自行移除冲突后重试。“修复”和“移除”仅影响已记录的 `sabi` 链接，并保留已有的 `dsh` 注册。
 
 本地分支无需 DeepSeek 账号或已配置的提供方即可打开工作区。通用“设置”按钮替代账号菜单，“模型”通过与其他提供方相同的可选目录流程添加或移除 DeepSeek。分支为应用和打包 CLI 设置 `DSH_PROVIDER_NEUTRAL=1` 和 `DSH_TELEMETRY_DISABLED=1`；普通 profile 保留既有账号流程。已保存的凭据、模型选择和 Session 不会被重写。绑定到已禁用的 `deepseek-official` 或 `deepseek-account` 路由的旧 Session 需要先选择已配置的提供方才能继续；原生 Codex 绑定和凭据保持不变。
 

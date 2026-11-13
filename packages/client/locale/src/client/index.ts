@@ -473,7 +473,7 @@ export class LocaleRuntime {
       ?? (ns !== COMMON_NS ? this.lookup(COMMON_NS, key, chain) : undefined)
       ?? key
     const template = process.env.DSH_CLIENT_BUILD_PROFILE === 'skeinlet'
-      ? original.replaceAll('DeepSeek Harness', process.env.DSH_CLIENT_TITLE ?? 'Skeinlet')
+      ? original.replaceAll('DeepSeek Harness', process.env.DSH_CLIENT_TITLE ?? 'Sabi')
       : original
     if (!params) return template
     return template.replace(/\{(\w+)\}/g, (match, name: string) =>

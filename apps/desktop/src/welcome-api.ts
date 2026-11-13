@@ -2,6 +2,7 @@
 
 import type { AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { ProductEventMap } from '@deepseek-ai/dsh-client-product-analytics/types'
+import type { LocalProductName } from './desktop-branding.ts'
 import type { DesktopLocale } from './locale.ts'
 
 /** Private native welcome channels, installed only while its window exists. */
@@ -68,7 +69,7 @@ export interface WelcomeOperations {
 /** The renderer receives localized copy, login operations, and safe account snapshots. */
 export type WelcomeApi = DesktopLocale & WelcomeOperations & {
   /** Packaged independent shell identity, when the launcher supplies one. */
-  readonly productName?: string
+  readonly productName?: LocalProductName
   /** @param listener - safe account snapshot recipient. @returns subscription disposer. */
   onAccountState(listener: (state: AccountView) => void): () => void
 }

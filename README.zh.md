@@ -1,98 +1,42 @@
-# Skeinlet
-
-Skeinlet 是基于 DeepSeek Harness 的独立本地 macOS 编程工作区，提供工作 Codex 登录、只读 Codex 聊天库、原创品牌和默认禁用的遥测。第三方许可与原作者署名保留。下面的上游文档介绍兼容的包和工作流；本地发布目标见[发布计划](docs/fork-release/plan.zh.md)。
+# Sabi
 
 [English](README.md) | 中文
 
-DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
+[![Sabi artifact build](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml/badge.svg)](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml)
 
-它构建于**一切皆插件**的架构之上，由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512)。
+Sabi 是基于 DeepSeek Harness 的独立 macOS 编程工作区。它支持在原生聊天界面继续原始工作 Codex 对话、使用 Harness 工具与审批，并可选连接原始 ChatGPT Dot。现有工作区、本地会话与工作登录保持独立于个人 Codex。无需 DeepSeek 账户；DeepSeek 是使用自身 API key 配置的可选模型提供方。
 
-文档：[https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+公开 CLI 为 `sabi`，底层复用现有 Harness 引擎。下一打包版本为 `0.3.0-beta.1`，分发前须检查确切产物与[工作流运行](https://github.com/sabino-software/sabi/actions/workflows/sabi-artifacts.yml)。详见[发布验证流程](docs/fork-release/plan.zh.md)。
 
-## 开发者预览
+## 原生对话
 
-DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来将出现破坏兼容性的变更。**
+工作 Codex 聊天作为常规会话出现在所属工作区。打开历史不会启动推理。发送消息通过工作 app-server 继续同一个原始 Codex 对话。Harness 工具通过限定范围的本地 MCP 连接提供，沙箱选择与审批决定仍受执行约束。来源活动与消息一起显示，不会重新执行导入的操作。
 
-运行本项目前，请阅读[安全说明](SAFETY.zh.md)。
+Dot 为可选功能。在**设置 → 常规**中同时启用**在侧边栏显示 Dot**与**启用 Dot 集成**，即可将 **Dot** 放在**新会话**正下方。默认样式与新会话一致，也可选择简洁或轮廓。选择 Dot 即可登录原始 ChatGPT 网站并选择 Dot，无需输入网址。持久化的应用内网站会话支持原生历史、发送与观察到的回复，无需浏览器扩展。常规浏览器伴随扩展仍为可选后备方式。
 
-<a id="run"></a>
+原始页面连接后在隐藏状态运行，原生聊天仍可使用。**打开 ChatGPT**会显示它，重新加载会刷新它。**关闭页面**会销毁页面并停止观察；只有再次明确选择 Dot 才会重新连接。关闭并重新打开页面后，网站登录状态保留。常规设置不要求 DeepSeek 登录。
 
-## 运行
+## 隐私默认值
 
-### 通过 `npm` 运行
+分支的五个报告插件默认全部禁用且未挂载。Sabi 不启用 Harness 会话报告、产品报告或客户端分析。这不禁用所选模型提供方、Codex、ChatGPT 或身份提供方执行的遥测或网络处理。网站凭据保留在所选网站会话中；Sabi 不复制浏览器 Cookie，也不使用 ChatGPT 私有 API。
 
-安装 `Node.js`，然后运行：
+## 构建与 CLI
 
-```sh
-npx @deepseek-ai/dsh web
-```
-
-该命令默认会在 `http://127.0.0.1:3080` 启动 Web UI，本机启动时还会用默认浏览器打开页面。通过 SSH 启动时只打印宿主机 URL，因为本地转发地址由 SSH 客户端或编辑器持有。传入 `--no-open` 可仅运行服务器而不打开浏览器。详见 [Web UI 指南](docs/user/guide/index.zh.md)。
-
-<a id="run-from-source"></a>
-
-### 从源码运行
-
-如需从仓库源码运行：
+阅读[安全说明](SAFETY.zh.md)，然后在本地检出目录构建 Apple Silicon 应用：
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-pnpm install
-pnpm run build
-pnpm dsh web
+pnpm install --frozen-lockfile
+pnpm --dir apps/desktop run package:local-fork --dir
 ```
 
-`pnpm run build` 会准备仓库产物。`pnpm dsh web` 会直接使用这些已构建产物，不会重新构建。
+未打包的应用位于 `apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/mac-arm64/Sabi.app`。替换已安装应用前须验证该产物。本地构建不等同于经过公证的公开发布。
 
-## 社区与支持
+通过应用菜单中的 **Manage sabi Command…** 管理 `sabi` 命令，然后运行 `sabi --help` 或 `sabi --version`。该命令使用内嵌 Electron 运行时，不依赖系统 Node 或检出目录，应用路径包含空格时也可使用。它保留现有 `dsh` 命令和个人 Codex 安装。
 
-- 通过 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 提交反馈或 bug 报告。
-- 为你的插件仓库添加 [`dsh-plugin`](https://github.com/topics/dsh-plugin) 话题，便于被发现。
-- 欢迎加入 DeepSeek Harness 企微群！扫描下方二维码填写入群问卷，小助手会定期发送入群邀请。
+贡献者工作流见[开发指南](docs/development.zh.md)、[架构](docs/architecture.zh.md)与[智能体说明](AGENTS.md)。API 仍处于开发者预览阶段，可能出现兼容性破坏。
 
-<table>
-  <thead>
-    <tr>
-      <th align="center">入群问卷</th>
-      <th align="center">微信公众号</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td align="center"><a href="https://trtgsjkv6r.feishu.cn/share/base/form/shrcnIt5twSVdLGD52KJBckGCgg"><img src="https://cdn.deepseek.com/harness/readme/community-wecom-survey.png" alt="DeepSeek Harness 入群问卷二维码" width="180" height="180"></a></td>
-      <td align="center"><img src="https://cdn.deepseek.com/harness/readme/community-wechat-official-account.png" alt="DeepSeek Harness 团队微信公众号二维码" width="180" height="180"></td>
-    </tr>
-  </tbody>
-</table>
+## 上游与许可证
 
-## 参与贡献
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 由 [DeepSeek AI](https://deepseek.com) 开发，采用由 [Cordis](https://github.com/cordiverse/cordis) 驱动的一切皆插件架构。其上游[文档](https://deepseek-harness.github.io/deepseek-harness/)介绍底层引擎。Sabi 是独立分支。
 
-参见 [CONTRIBUTING.md](CONTRIBUTING.zh.md)。
-
-## 开发
-
-请先阅读[开发指南](docs/development.zh.md)与[架构文档](docs/architecture.zh.md)。
-
-`pnpm run dev:web` 会在一个终端里完成构建、启动，并在源码修改时重建 client bundle；`make help` 列出 Web 与 Desktop 对应的 Make target。完整表格见开发指南的「应用命令」一节。
-
-面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
-
-## 引用
-
-```bibtex
-@misc{deepseek-harness2026,
-  title={DeepSeek Harness: Everything is a Plugin},
-  author={DeepSeek-AI},
-  year={2026},
-  publisher={GitHub},
-  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
-}
-```
-
-## 许可证
-
-[MIT](LICENSE)
-
-第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+保留完整 [MIT 许可证](LICENSE)，包括 `Copyright (c) 2026 DeepSeek`。第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.zh.md)。

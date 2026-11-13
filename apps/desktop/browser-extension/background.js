@@ -77,7 +77,7 @@ chrome.action.onClicked.addListener(async tab => {
         && typeof message.pairId === 'string' && /^[a-f0-9]{32}$/.test(message.pairId) && message.url === selected?.url) {
         paired = { ...selected, pairId: message.pairId }
         void chrome.action.setBadgeText({ text: 'ON' })
-        void chrome.action.setTitle({ title: 'This Dot is connected to Skeinlet. Click to pair again.' })
+        void chrome.action.setTitle({ title: 'This Dot is connected to Sabi. Click to pair again.' })
         return
       }
       if (!validRequest(message)) { connection.disconnect(); return }
@@ -103,12 +103,12 @@ chrome.action.onClicked.addListener(async tab => {
       selected = undefined
       port = undefined
       void chrome.action.setBadgeText({ text: '?' })
-      void chrome.action.setTitle({ title: 'Select this Dot in Skeinlet, then click to connect again.' })
+      void chrome.action.setTitle({ title: 'Select this Dot in Sabi, then click to connect again.' })
     })
     connection.postMessage({ type: 'pair', version: 1, ...selected })
   } catch {
     if (!currentAction()) return
     void chrome.action.setBadgeText({ text: '?' })
-    void chrome.action.setTitle({ title: 'Unable to connect. Select this Dot in Skeinlet and check the installed native helper.' })
+    void chrome.action.setTitle({ title: 'Unable to connect. Select this Dot in Sabi and check the installed native helper.' })
   }
 })

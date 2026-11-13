@@ -153,7 +153,7 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
           </span>
           <span className={css.titleGroup}>
             {/* Own element: keeps the headline text addressable apart from the badge. */}
-            <span>{skeinlet ? process.env.DSH_CLIENT_TITLE ?? 'Skeinlet' : t('hero.headline')}</span>
+            <span>{skeinlet ? process.env.DSH_CLIENT_TITLE ?? 'Sabi' : t('hero.headline')}</span>
             <span className={css.previewBadge}>{t('hero.preview')}</span>
           </span>
         </div>

@@ -2,33 +2,18 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
-/skeinlet:
-  en: d74651b1269e8f24
-  zh: de0b17f09ed90a87
-/skeinlet/developer-preview:
-  en: 4ef4d8a71ac143f0
-  zh: 1bfc3149ba8e5543
-/skeinlet/run:
-  en: 4e0248e4c6474fc6
-  zh: eb2fb8d78c7d6bc0
-/skeinlet/run/run-from-npm:
-  en: e22005cd42e6cbad
-  zh: 0f536f4208df1d60
-/skeinlet/run/run-from-source:
-  en: 819e3f7c144d0d64
-  zh: de815f040975dba7
-/skeinlet/community-and-support:
-  en: 20acf6451fdc869b
-  zh: d06246dd019ecef7
-/skeinlet/contributing:
-  en: cabc2d3e9f8898bd
-  zh: 83b6d238bae29ce3
-/skeinlet/development:
-  en: 803ca2b11b497bed
-  zh: 8b4071eb0e7783ef
-/skeinlet/citation:
-  en: 6704e9e5a8d49a91
-  zh: 85c9cdd8d56f8e9d
-/skeinlet/license:
-  en: 926995344fc1c72b
-  zh: c92fab5abf85932f
+/sabi:
+  en: d97937e250dc3b30
+  zh: eded909f2ae33988
+/sabi/native-conversations:
+  en: bdd1e3a96facf20e
+  zh: 46d8c8f4dd533bdb
+/sabi/privacy-defaults:
+  en: 3fe878e272aab2c4
+  zh: 1be8c52658ee6492
+/sabi/build-and-cli:
+  en: ebeecfdde43fc82c
+  zh: d1aa40e4dcd02208
+/sabi/upstream-and-license:
+  en: 8a016aead2944089
+  zh: e79ef1e45e33c4ca

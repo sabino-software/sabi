@@ -1,6 +1,7 @@
 import type { SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 /** Native welcome window and its presentation-only renderer. */
 
+import { isLocalProductName } from './desktop-branding.ts'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, ipcMain, type BrowserWindowConstructorOptions, type IpcMainInvokeEvent } from 'electron'
@@ -11,7 +12,7 @@ import { WELCOME_IPC, type WelcomeOperations } from './welcome-api.ts'
  * Resolve the fixed-size welcome window's native material and controls.
  * @param platform - operating system hosting Electron.
  * @param locale - shell-owned localized copy.
- * @returns sandboxed window options with a locale-only preload.
+ * @returns sandboxed window options with locale and known public-brand arguments.
  */
 export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopLocale): BrowserWindowConstructorOptions {
   return {
@@ -38,7 +39,7 @@ export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopL
     } as const : {}),
     webPreferences: {
       preload: fileURLToPath(new URL('./preload-welcome.cjs', import.meta.url)),
-      additionalArguments: [`--dsh-welcome-locale=${locale.id}`, ...(locale.messages.welcomeBrand === 'Skeinlet' ? ['--dsh-welcome-product=Skeinlet'] : [])],
+      additionalArguments: [`--dsh-welcome-locale=${locale.id}`, ...(isLocalProductName(locale.messages.welcomeBrand) ? [`--dsh-welcome-product=${locale.messages.welcomeBrand}`] : [])],
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,

@@ -69,7 +69,7 @@ export class BrowserAxiomPage {
     signal?.throwIfAborted()
     if (epoch !== this.epoch) return this.current
     if (this.peer) return this.snapshot()
-    this.update({ ...empty(url, 'login-required'), siteStatus: this.options.pairingNotice?.() ?? 'Open this Dot in your regular browser, then click the Skeinlet extension to connect it.' })
+    this.update({ ...empty(url, 'login-required'), siteStatus: this.options.pairingNotice?.() ?? 'Open this Dot in your regular browser, then click the Sabi extension to connect it.' })
     return this.current
   }
 
@@ -93,7 +93,7 @@ export class BrowserAxiomPage {
     const epoch = this.epoch
     await this.start()
     if (epoch !== this.epoch) return this.current
-    this.update({ ...empty(null, 'login-required'), siteStatus: this.options.pairingNotice?.() ?? 'Open your Dot in your regular browser, then click the Skeinlet extension to select it.' })
+    this.update({ ...empty(null, 'login-required'), siteStatus: this.options.pairingNotice?.() ?? 'Open your Dot in your regular browser, then click the Sabi extension to select it.' })
     return this.current
   }
 

@@ -174,7 +174,7 @@ describe('client build environment', () => {
     expect(resolveClientBuildEnvironment({
       DSH_CLIENT_COMMIT_HASH: COMMIT_HASH, DSH_CLIENT_VERSION: '1.2.3', DSH_CLIENT_TITLE: 'ignored',
     }, 'skeinlet')).toEqual({
-      DSH_CLIENT_BUILD_PROFILE: 'skeinlet', DSH_CLIENT_TITLE: 'Skeinlet',
+      DSH_CLIENT_BUILD_PROFILE: 'skeinlet', DSH_CLIENT_TITLE: 'Sabi',
       DSH_CLIENT_COMMIT_HASH: COMMIT_HASH, DSH_CLIENT_VERSION: '1.2.3',
     })
   })
