@@ -195,6 +195,14 @@ export interface AxiomHistoryObservation {
   readonly url: string
   readonly supported: boolean
   readonly anchorFound: boolean
+  /** A bounded source-scroller wheel proposal; only its native owner may dispatch it after revalidation. */
+  readonly wheel?: {
+    readonly x: number
+    readonly y: number
+    readonly deltaY: number
+    readonly viewportWidth: number
+    readonly viewportHeight: number
+  }
   readonly diagnostics?: AxiomHistoryDiagnostics
   readonly messages: readonly AxiomMessage[]
   readonly sourceOrder?: readonly string[]
@@ -203,11 +211,11 @@ export interface AxiomHistoryObservation {
 }
 
 /**
- * Observe earlier original rows and optionally reveal older rows through the site's own scroll container.
+ * Observe earlier original rows and propose bounded native scrolling through the site's own scroll container.
  * @param read Shared sanitized reader, serialized alongside this function.
  * @param url Exact selected canonical Dot; other documents are never read or scrolled.
  * @param beforeId Stable original message cursor.
- * @param scroll Whether to scroll the separate history page toward its oldest loaded rows.
+ * @param scroll Whether to propose an upward native wheel event for the separately owned history page.
  * @param debug Explicit owner opt-in to structural diagnostics; defaults to no additional metrics.
  * @returns A bounded chronological page and explicit source-boundary evidence.
  */
@@ -244,15 +252,27 @@ export function readAxiomHistoryPage(
   })
   const cursor = rows.findIndex(row => row.getAttribute('data-message-id') === beforeId)
   const scrollTop = debug ? scroller.scrollTop : 0
-  if (scroll) {
-    // A later observation returns from one pixel to the top so an unchanged zero cannot stall scroll-driven loading.
-    scroller.scrollTop = scroller.scrollTop === 0 && scroller.scrollHeight > scroller.clientHeight ? 1 : 0
+  let wheel: AxiomHistoryObservation['wheel']
+  if (scroll && scroller.clientHeight > 0 && scroller.scrollHeight > scroller.clientHeight) {
+    const rect = scroller.getBoundingClientRect()
+    const viewportWidth = document.documentElement.clientWidth
+    const viewportHeight = document.documentElement.clientHeight
+    const left = Math.max(0, rect.left); const top = Math.max(0, rect.top)
+    const right = Math.min(viewportWidth, rect.right); const bottom = Math.min(viewportHeight, rect.bottom)
+    const x = Math.floor((left + right) / 2); const y = Math.floor((top + bottom) / 2)
+    if (right - left >= 2 && bottom - top >= 2 && x >= left && x < right && y >= top && y < bottom) {
+      const hit = document.elementFromPoint(x, y)
+      if (hit !== null && scroller.contains(hit)) wheel = { x, y, viewportWidth, viewportHeight,
+        deltaY: Math.max(1, Math.min(600, Math.floor((bottom - top) * 0.8))) }
+    }
   }
   const diagnostics = inspect(rows, cursor, scrollTop)
-  if (cursor < 0) return { ...empty, supported: true, ...diagnostics === undefined ? {} : { diagnostics } }
+  if (cursor < 0) return { ...empty, supported: true, ...wheel === undefined ? {} : { wheel },
+    ...diagnostics === undefined ? {} : { diagnostics } }
   const { messages, sourceOrder } = read(beforeId)
   const first = messages[0]
   const firstIndex = first === undefined ? cursor : rows.findIndex(row => row.getAttribute('data-message-id') === first.id)
-  return { url, supported: true, anchorFound: true, messages, ...diagnostics === undefined ? {} : { diagnostics },
+  return { url, supported: true, anchorFound: true, messages, ...wheel === undefined ? {} : { wheel },
+    ...diagnostics === undefined ? {} : { diagnostics },
     ...sourceOrder === undefined ? {} : { sourceOrder }, hasEarlier: firstIndex > 0, startVerified: false }
 }

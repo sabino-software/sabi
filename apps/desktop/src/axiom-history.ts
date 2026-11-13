@@ -28,7 +28,13 @@ function reporter(enabled: boolean): DiagnosticReporter {
   }
 }
 
+const wheelSchema = z.object({
+  x: z.number().int().nonnegative().max(100000), y: z.number().int().nonnegative().max(100000),
+  deltaY: z.number().int().min(1).max(600), viewportWidth: z.number().int().min(1).max(100000),
+  viewportHeight: z.number().int().min(1).max(100000),
+}).strict().refine(value => value.x < value.viewportWidth && value.y < value.viewportHeight && value.deltaY <= value.viewportHeight)
 const observationSchema = z.object({
+  wheel: wheelSchema.optional(),
   diagnostics: diagnosticsSchema.optional(),
   url: z.string().max(4096), supported: z.boolean(), anchorFound: z.boolean(), hasEarlier: z.boolean(), startVerified: z.boolean(),
   sourceOrder: z.array(z.string().min(1).max(512)).max(100).optional(),
@@ -148,6 +154,16 @@ export class DesktopAxiomHistory {
             ...observation.sourceOrder === undefined ? {} : { sourceOrder: observation.sourceOrder },
             hasMore: observation.hasEarlier || !observation.startVerified, status: 'ready' }
           if (observation.startVerified) return { messages: [], hasMore: false, status: 'ready' }
+        }
+        if (observation.supported && observation.wheel !== undefined) {
+          signal.throwIfAborted()
+          if (Date.now() >= deadline || generation !== this.generation || epoch !== this.documentEpoch
+            || this.page !== page || page.window.isDestroyed() || page.contents.isLoading()
+            || page.contents.getURL().replace(/\/$/u, '') !== url) return unavailable()
+          const { x, y, deltaY } = observation.wheel
+          // Electron forwards deltaY unchanged; Chromium's WebMouseWheelEvent uses positive values for upward scrolling.
+          page.contents.sendInputEvent({ type: 'mouseWheel', x, y, deltaX: 0, deltaY, canScroll: true, hasPreciseScrollingDeltas: true })
+          report('native-wheel', observation.diagnostics)
         }
         // A fresh page may not have mounted the requested older cursor yet. Use only the site's scroller.
         if (observation.supported) scrolled = true

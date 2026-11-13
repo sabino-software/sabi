@@ -19,6 +19,7 @@ function fixture() {
   const contents = Object.assign(new EventEmitter(), {
     getURL: vi.fn(() => currentUrl), isLoading: vi.fn(() => false),
     setWindowOpenHandler: vi.fn((_handler: () => { action: string }) => undefined),
+    sendInputEvent: vi.fn((_event: Electron.MouseWheelInputEvent) => {}),
     executeJavaScript: vi.fn(async (_script: string): Promise<unknown> => observation),
     loadURL: vi.fn(async (value: string) => { currentUrl = value }),
   })
@@ -186,4 +187,56 @@ it('reports a safe read-timeout status without printing the page error or queued
   expect(await pending).toEqual({ messages: [], hasMore: true, status: 'unavailable' })
   expect(log).toHaveBeenLastCalledWith('[Dot history debug]', JSON.stringify({ status: 'read-timeout' }))
   expect(JSON.stringify(log.mock.calls)).not.toMatch(/PRIVATE_|https:/)
+})
+
+
+const wheel = { x: 300, y: 200, deltaY: 320, viewportWidth: 800, viewportHeight: 600 }
+
+it('dispatches one bounded upward native wheel only to the secondary owner, then returns observed older content', async () => {
+  vi.useFakeTimers()
+  const h = fixture()
+  h.contents.executeJavaScript.mockResolvedValueOnce({ ...observation, messages: [], wheel })
+  const pending = h.owner.before(url, 'cursor')
+  await vi.advanceTimersByTimeAsync(250)
+  expect(await pending).toMatchObject({ status: 'ready', messages: [message] })
+  expect(h.contents.sendInputEvent).toHaveBeenCalledExactlyOnceWith({ type: 'mouseWheel', x: 300, y: 200,
+    deltaX: 0, deltaY: 320, canScroll: true, hasPreciseScrollingDeltas: true })
+})
+
+it.each([
+  { name: 'outside the viewport', value: { ...wheel, x: 800 } },
+  { name: 'an excessive step', value: { ...wheel, deltaY: 601 } },
+  { name: 'a downward step', value: { ...wheel, deltaY: -320 } },
+])('refuses a wheel proposal with $name', async ({ value }) => {
+  const h = fixture()
+  h.contents.executeJavaScript.mockResolvedValue({ ...observation, messages: [], wheel: value })
+  expect(await h.owner.before(url, 'cursor')).toMatchObject({ status: 'unavailable' })
+  expect(h.contents.sendInputEvent).not.toHaveBeenCalled()
+})
+
+it.each(['close', 'navigation', 'wrong-url', 'loading'] as const)('does not dispatch late native input after %s', async (change) => {
+  const h = fixture()
+  const reading = Promise.withResolvers<unknown>()
+  h.contents.executeJavaScript.mockReturnValueOnce(reading.promise)
+  const pending = h.owner.before(url, 'cursor')
+  if (change === 'close') h.owner.disconnect()
+  else if (change === 'navigation') h.contents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+  else if (change === 'wrong-url') h.contents.getURL.mockReturnValue('https://auth.openai.com/log-in')
+  else h.contents.isLoading.mockReturnValue(true)
+  reading.resolve({ ...observation, messages: [], wheel })
+  expect(await pending).toMatchObject({ status: 'unavailable' })
+  expect(h.contents.sendInputEvent).not.toHaveBeenCalled()
+})
+
+it('never dispatches native input from a read whose deadline expired', async () => {
+  vi.useFakeTimers()
+  const h = fixture()
+  const reading = Promise.withResolvers<unknown>()
+  h.contents.executeJavaScript.mockReturnValueOnce(reading.promise)
+  const pending = h.owner.before(url, 'cursor')
+  await vi.advanceTimersByTimeAsync(5001)
+  expect(await pending).toMatchObject({ status: 'unavailable' })
+  reading.resolve({ ...observation, messages: [], wheel })
+  await Promise.resolve()
+  expect(h.contents.sendInputEvent).not.toHaveBeenCalled()
 })
