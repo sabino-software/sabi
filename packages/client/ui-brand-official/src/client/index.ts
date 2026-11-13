@@ -14,6 +14,7 @@ export const inject = ['slots']
  * @param ctx - Client root context.
  */
 export function apply(ctx: ClientContext): void {
+  if (process.env.DSH_CLIENT_BUILD_PROFILE === 'skeinlet') return
   ctx.slots.inject('conversation.hero.frame', () => ctx.slots.register({
     name: 'conversation.hero.frame',
     id: 'pixel-whale',

@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import {
-  FISH_LOGO_PATH, FISH_LOGO_VIEWBOX, IconChevronDownOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular,
+  FishLogo, FISH_LOGO_PATH, FISH_LOGO_VIEWBOX, IconChevronDownOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { ConversationContentProps } from '../contract/slots.ts'
@@ -131,6 +131,7 @@ function HeroFish({ hovering }: { hovering: boolean }) {
  */
 export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
   const [hovering, setHovering] = useState(false)
+  const skeinlet = process.env.DSH_CLIENT_BUILD_PROFILE === 'skeinlet'
   return (
     <div className={css.root}>
       <div className={css.stack}>
@@ -147,12 +148,12 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
             onPointerLeave={() => { setHovering(false) }}
           >
             {renderSlot('conversation.hero.brand.mark', { size: 34, className: css.fish }, {
-              fallback: <HeroFish hovering={hovering} />,
+              fallback: skeinlet ? <FishLogo size={34} className={css.fish} /> : <HeroFish hovering={hovering} />,
             })}
           </span>
           <span className={css.titleGroup}>
             {/* Own element: keeps the headline text addressable apart from the badge. */}
-            <span>{t('hero.headline')}</span>
+            <span>{skeinlet ? process.env.DSH_CLIENT_TITLE ?? 'Skeinlet' : t('hero.headline')}</span>
             <span className={css.previewBadge}>{t('hero.preview')}</span>
           </span>
         </div>
