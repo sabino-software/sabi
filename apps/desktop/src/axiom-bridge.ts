@@ -38,7 +38,8 @@ export class DesktopAxiomPage {
   private closedByUser = false
   private returnAfterChoice = false
   private readyUntil = 0
-  private pageRead: { page: BrowserWindow; generation: number; promise: Promise<unknown> } | undefined
+  private documentEpoch = 0
+  private pageRead: { page: BrowserWindow; generation: number; documentEpoch: number; promise: Promise<unknown> } | undefined
   private readonly websiteContents = new WeakMap<BrowserWindow, WebContents>()
   private sessionConfigured = false
   private authenticating = false
@@ -211,6 +212,14 @@ export class DesktopAxiomPage {
         if (this.page === page) void this.snapshot()
       })
     }
+    this.contents(page).on('did-start-navigation', (event) => {
+      if (this.page !== page || !event.isMainFrame || event.isSameDocument) return
+      this.documentEpoch++
+      this.pageRead = undefined
+      this.refreshing = undefined
+      this.readyUntil = Date.now() + 30000
+      this.update({ ...initialSnapshot(), url: this.selected, phase: 'loading' })
+    })
     this.contents(page).on('did-create-window', attachPopup)
     this.contents(page).on('did-finish-load', () => { returnToSelected(page) })
     this.contents(page).on('did-navigate-in-page', (_event, _url, mainFrame) => {
@@ -365,6 +374,7 @@ export class DesktopAxiomPage {
 
   private async read(generation: number): Promise<AxiomSnapshot> {
     const page = this.page
+    const documentEpoch = this.documentEpoch
     if (page === undefined || page.isDestroyed()) return this.current
     if (this.navigationIssue !== null) {
       this.update({ ...initialSnapshot(), url: this.selected, phase: 'login-required',
@@ -388,9 +398,10 @@ export class DesktopAxiomPage {
       this.update({ ...initialSnapshot(), url: this.selected, phase: 'loading' })
       return this.current
     }
-    if (this.pageRead?.page === page && this.pageRead.generation === generation) return this.current
+    if (this.pageRead?.page === page && this.pageRead.generation === generation
+      && this.pageRead.documentEpoch === documentEpoch) return this.current
     try {
-      const reading = { page, generation, promise: this.contents(page).executeJavaScript(`(${readAxiomPage.toString()})()`) }
+      const reading = { page, generation, documentEpoch, promise: this.contents(page).executeJavaScript(`(${readAxiomPage.toString()})()`) }
       this.pageRead = reading
       const settled = (): void => { if (this.pageRead === reading) this.pageRead = undefined }
       void reading.promise.then(settled, settled)
@@ -400,13 +411,16 @@ export class DesktopAxiomPage {
       try { raw = await Promise.race([reading.promise, deadline.promise]) }
       finally { clearTimeout(timer) }
       const state = pageSchema.parse(raw)
-      if (generation !== this.generation || !this.matches(state.url) || !this.matches(this.contents(page).getURL())) return this.current
+      if (generation !== this.generation || documentEpoch !== this.documentEpoch
+        || !this.matches(state.url) || !this.matches(this.contents(page).getURL())) return this.current
       this.update({ source: 'chatgpt-web', url: this.selected, title: state.title, revision: this.current.revision,
         phase: state.composer ? 'ready' : this.contents(page).isLoading() || Date.now() < this.readyUntil ? 'loading' : 'unavailable',
         messages: state.messages, canSend: state.composer && state.sendPresent, draftPresent: state.draft.trim() !== '',
         siteStatus: state.siteStatus, limited: state.limited })
       this.finishChoice(this.current)
-    } catch (_unsupportedPage) { if (generation === this.generation) this.unavailable('unsupported-page') }
+    } catch (_unsupportedPage) {
+      if (generation === this.generation && documentEpoch === this.documentEpoch) this.unavailable('unsupported-page')
+    }
     return this.current
   }
 

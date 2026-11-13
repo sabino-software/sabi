@@ -338,3 +338,16 @@ it('bounds an unresponsive read-only document without blocking later observation
   await Promise.resolve()
   expect(await owner.snapshot()).toMatchObject({ phase: 'ready', url: selected })
 })
+
+
+it('reloads past an old document read and ignores its late rejection', async () => {
+  const { owner, page } = await connect()
+  const oldDocument = Promise.withResolvers<unknown>()
+  page.webContents.executeJavaScript.mockReturnValueOnce(oldDocument.promise)
+  const prior = owner.snapshot()
+  page.webContents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false, url: selected })
+  expect(await owner.snapshot()).toMatchObject({ phase: 'ready', url: selected })
+  oldDocument.reject(new Error('Previous document destroyed'))
+  expect(await prior).toMatchObject({ phase: 'ready', url: selected })
+  expect(await owner.snapshot()).toMatchObject({ phase: 'ready', url: selected })
+})
