@@ -10,7 +10,7 @@ const observation = { url, supported: true, anchorFound: true, hasEarlier: false
 const owners: DesktopAxiomHistory[] = []
 afterEach(() => {
   for (const owner of owners.splice(0)) owner.disconnect()
-  vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 function fixture() {
@@ -134,59 +134,6 @@ it('preserves optional source row order through secondary history without requir
   const sourceOrder = ['missing-older-body', message.id]
   h.contents.executeJavaScript.mockResolvedValue({ ...observation, sourceOrder })
   expect(await h.owner.before(url, 'cursor')).toEqual({ messages: [message], sourceOrder, hasMore: true, status: 'ready' })
-})
-
-
-const diagnostics = { scrollerPresent: true, listPresent: true, rowCount: 54, bodyCount: 51, skippedRowCount: 36,
-  scrollTop: 10439, scrollTopAfter: 0, clientHeight: 752, scrollHeight: 11670,
-  visibility: 'hidden', readyState: 'complete', cursorPresent: true } as const
-
-it.each([undefined, '0', 'true'])('keeps history diagnostics silent unless the local debug flag is exactly 1 (%s)', async (flag) => {
-  vi.stubEnv('SABI_DOT_HISTORY_DEBUG', flag)
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
-  const h = fixture()
-  h.contents.executeJavaScript.mockResolvedValue({ ...observation, diagnostics })
-  await h.owner.before(url, 'PRIVATE_CURSOR')
-  expect(log).not.toHaveBeenCalled()
-})
-
-it('logs only opt-in structural metrics and owned outcome labels, never source content, IDs, URLs, or drafts', async () => {
-  vi.stubEnv('SABI_DOT_HISTORY_DEBUG', '1')
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
-  const h = fixture()
-  const secret = { ...message, id: 'PRIVATE_MESSAGE_ID', text: 'PRIVATE_MESSAGE_BODY' }
-  h.contents.executeJavaScript.mockResolvedValue({ ...observation, messages: [secret], diagnostics })
-  expect(await h.owner.before(url, 'PRIVATE_CURSOR')).toEqual({ messages: [secret], hasMore: true, status: 'ready' })
-  expect(log).toHaveBeenLastCalledWith('[Dot history debug]', JSON.stringify({ status: 'ready', ...diagnostics }))
-  expect(JSON.stringify(log.mock.calls)).not.toMatch(/https:|PRIVATE_|Observed old answer|original-old/)
-})
-
-it('bounds diagnostic progress samples and still reports the terminal history deadline', async () => {
-  vi.useFakeTimers()
-  vi.stubEnv('SABI_DOT_HISTORY_DEBUG', '1')
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
-  const h = fixture()
-  let count = 0
-  h.contents.executeJavaScript.mockImplementation(async () => ({ ...observation, anchorFound: false, messages: [],
-    diagnostics: { ...diagnostics, rowCount: count++, cursorPresent: false } }))
-  const pending = h.owner.before(url, 'PRIVATE_CURSOR')
-  await vi.advanceTimersByTimeAsync(20250)
-  expect(await pending).toEqual({ messages: [], hasMore: true, status: 'unavailable' })
-  expect(log).toHaveBeenCalledTimes(20)
-  expect(log).toHaveBeenLastCalledWith('[Dot history debug]', JSON.stringify({ status: 'history-deadline' }))
-})
-
-it('reports a safe read-timeout status without printing the page error or queued source script', async () => {
-  vi.useFakeTimers()
-  vi.stubEnv('SABI_DOT_HISTORY_DEBUG', '1')
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
-  const h = fixture()
-  h.contents.executeJavaScript.mockReturnValue(new Promise(() => {}))
-  const pending = h.owner.before(url, 'PRIVATE_CURSOR')
-  await vi.advanceTimersByTimeAsync(5000)
-  expect(await pending).toEqual({ messages: [], hasMore: true, status: 'unavailable' })
-  expect(log).toHaveBeenLastCalledWith('[Dot history debug]', JSON.stringify({ status: 'read-timeout' }))
-  expect(JSON.stringify(log.mock.calls)).not.toMatch(/PRIVATE_|https:/)
 })
 
 

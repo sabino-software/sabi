@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/fork-release/axiom-browser-bridge.md
 /original-chatgpt-browser-bridge:
-  en: 3e4ff77755d74354
-  zh: 1ceaf948d0c73913
+  en: 968187f41ceb4717
+  zh: 42645d78efb37cae
 /original-chatgpt-browser-bridge/review-the-prepared-artifacts:
   en: 4527cbd5a41573c1
   zh: cdd29ab8fbf2a92a

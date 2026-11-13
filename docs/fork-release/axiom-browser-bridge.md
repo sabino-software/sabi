@@ -2,7 +2,7 @@
 
 English | [中文](axiom-browser-bridge.zh.md)
 
-The optional Sabi companion connects one selected ChatGPT Dot in the user's regular Edge or Chrome profile. Google and ChatGPT sign-in remain in that browser. Installed-core checks confirmed in-app ChatGPT authentication; installed package 22 verified a native Dot send. Regular-browser companion input against the actual original Dot still awaits live acceptance. Embedded sign-in is the default only when no preference exists. An explicit **Browser** or **Embedded** choice is saved in the preserved app profile and survives update or restart; pairing itself is runtime-bound. The extension reads rendered messages and uses the page's real composer. It does not read cookies, browser storage, authentication pages, hidden history or network responses.
+The optional Sabi companion connects one selected ChatGPT Dot in the user's regular Edge or Chrome profile. Google and ChatGPT sign-in remain in that browser. Installed-core checks confirmed in-app ChatGPT authentication and native Dot sending. Regular-browser companion input against the actual original Dot still awaits live acceptance. Embedded sign-in is the default only when no preference exists. An explicit **Browser** or **Embedded** choice is saved in the preserved app profile and survives update or restart; pairing itself is runtime-bound. The extension reads rendered messages and uses the page's real composer. It does not read cookies, browser storage, authentication pages, hidden history or network responses.
 
 ## Review the prepared artifacts
 

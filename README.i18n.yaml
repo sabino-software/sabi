@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
 /sabi:
-  en: b4b6a39a07dab663
-  zh: 899bea9ce6627148
+  en: 41c96195722d41a5
+  zh: 902b09bf7bf4c823
 /sabi/native-conversations:
   en: 7c82ab6b60ff4464
   zh: 2608ef891760ac9e
