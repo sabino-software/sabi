@@ -26,6 +26,16 @@ function declarations(selector: string): Map<string, string> | undefined {
 }
 
 describe('SidebarRoot.module.css', () => {
+  it('shares exact primary geometry while style modifiers change only paint', () => {
+    expect(declarations('.primaryAction')?.get('height')).toBe('38px')
+    expect(declarations('.primaryAction')?.get('padding')).toBe('8px 12px')
+    for (const selector of ['.root .primaryAction.primaryActionSubtle', '.root .primaryAction.primaryActionOutline']) {
+      expect(declarations(selector)?.get('height')).toBeUndefined()
+      expect(declarations(selector)?.get('padding')).toBeUndefined()
+      expect(declarations(selector)?.get('background')).toBe('transparent')
+    }
+  })
+
   it('uses a compact expanded navigation gap without shrinking the collapsed rail spacing', () => {
     expect(declarations('.panelList')?.get('gap')).toBe('2px')
     expect(declarations('.collapsed .panelList')?.get('gap')).toBe('12px')
@@ -88,7 +98,7 @@ describe('SidebarRoot.module.css', () => {
   it('keeps the reviewed expanded spacing separate from rail and caption controls', () => {
     expect(declarations('.logoRow')?.get('padding')).toBe('8px 0 8px 8px')
     expect(declarations('.logoRow')?.get('margin-bottom')).toBe('0')
-    expect(declarations('.newSession')?.get('margin')).toBe('0 calc(var(--dsh-sidebar-paint-inset) + 1px)')
+    expect(declarations('.primaryAction')?.get('margin')).toBe('0 calc(var(--dsh-sidebar-paint-inset) + 1px)')
     expect(declarations('.newSessionContent')?.get('justify-content')).toBe('center')
     expect(declarations(":global(html[data-platform='darwin']:not([data-fullscreen])) .root:not(.collapsed) > .topStrip > .toggle")?.get('transform')).toBe('translateX(4px)')
     expect(css).not.toContain(':not(.fading)')
@@ -101,7 +111,7 @@ describe('SidebarRoot.module.css', () => {
     const animation = 'rail-in 150ms var(--ds-ease-in-out) backwards'
     for (const selector of [
       '.railIn .iconButton',
-      '.railIn .newSession',
+      '.railIn .primaryAction',
       '.railIn .regionArea',
     ]) {
       expect(declarations(selector)?.get('animation')).toBe(animation)
@@ -117,8 +127,8 @@ describe('SidebarRoot.module.css', () => {
 
   it('gives shell rail controls the same base anchor for their shared translation', () => {
     expect(declarations('.collapsed .logoRow')?.get('justify-content')).toBe('flex-start')
-    expect(declarations('.collapsed .newSession')?.get('align-self')).toBe('flex-start')
-    expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
+    expect(declarations('.collapsed .primaryAction')?.get('align-self')).toBe('flex-start')
+    expect(declarations('.collapsed .primaryAction')?.get('width')).toBe('36px')
   })
 
   it('keeps full-size brand artwork with a compact mark-to-name gap', () => {

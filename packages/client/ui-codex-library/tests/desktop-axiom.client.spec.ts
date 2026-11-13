@@ -2,7 +2,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { desktopAxiomCompanion } from '../src/client/desktop-axiom.ts'
 
-const selection = { preferences: async () => ({ enabled: true, showInSidebar: false }), setPreferences: async () => {},
+const selection = { preferences: async () => ({ enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' }),
+  setPreferences: async () => {},
   choose: async () => ({ url: null, phase: 'loading' }), subscribe: () => () => {} }
 
 const setup = { protocolVersion: 1, available: true, extensionDirectory: '/app/extension', registrationScript: '/app/registration.mjs',
@@ -49,16 +50,16 @@ it('validates persisted independent preferences and URL-free selection events', 
   let publish = (_state: unknown): void => {}
   const off = vi.fn()
   const choose = vi.fn(async (_hint: string | null) => ({ phase: 'login-required', url: null, messages: [] }))
-  const setPreferences = vi.fn(async (_value: { enabled: boolean; showInSidebar: boolean }) => {})
+  const setPreferences = vi.fn(async (_value: { enabled: boolean; showInSidebar: boolean; sidebarStyle: 'sameNewSession' | 'subtle' | 'outline' }) => {})
   vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: {
     ...selection, choose, setPreferences, transport: async () => 'embedded', selectTransport: async () => {},
     browserSetup: async () => setup,
     subscribe: (listener: (state: unknown) => void) => { publish = listener; return off },
   } })
   const bridge = desktopAxiomCompanion()!
-  expect(await bridge.preferences()).toEqual({ enabled: true, showInSidebar: false })
-  await bridge.setPreferences({ enabled: false, showInSidebar: true })
-  expect(setPreferences).toHaveBeenCalledExactlyOnceWith({ enabled: false, showInSidebar: true })
+  expect(await bridge.preferences()).toEqual({ enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' })
+  await bridge.setPreferences({ enabled: false, showInSidebar: true, sidebarStyle: 'sameNewSession' })
+  expect(setPreferences).toHaveBeenCalledExactlyOnceWith({ enabled: false, showInSidebar: true, sidebarStyle: 'sameNewSession' })
   expect(await bridge.choose(null)).toEqual({ phase: 'login-required', url: null })
   expect(choose).toHaveBeenCalledExactlyOnceWith(null)
   const listener = vi.fn()
@@ -67,4 +68,12 @@ it('validates persisted independent preferences and URL-free selection events', 
   expect(listener).toHaveBeenCalledExactlyOnceWith({ phase: 'ready', url: 'https://chatgpt.com/dots/selected' })
   unsubscribe()
   expect(off).toHaveBeenCalledOnce()
+})
+
+it('rejects an unknown sidebar style at the desktop boundary', async () => {
+  vi.stubGlobal('dshDesktop', { protocolVersion: 1, axiom: {
+    ...selection, preferences: async () => ({ enabled: true, showInSidebar: true, sidebarStyle: 'invented' }),
+    transport: async () => 'embedded', selectTransport: async () => {}, browserSetup: async () => setup,
+  } })
+  await expect(desktopAxiomCompanion()!.preferences()).rejects.toThrow()
 })

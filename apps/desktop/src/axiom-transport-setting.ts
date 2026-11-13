@@ -48,8 +48,12 @@ export function saveAxiomTransport(userData: string, transport: unknown): void {
 }
 
 /** Exact renderer choices; neither coercion nor extra properties are admitted. */
-export const axiomPreferencesSchema = z.object({ enabled: z.boolean(), showInSidebar: z.boolean() }).strict()
-const savedPreferencesSchema = axiomPreferencesSchema.extend({ version: z.literal(1) }).strict()
+export const axiomPreferencesSchema = z.object({ enabled: z.boolean(), showInSidebar: z.boolean(),
+  sidebarStyle: z.enum(['sameNewSession', 'subtle', 'outline']),
+}).strict()
+const savedPreferencesSchema = axiomPreferencesSchema.extend({
+  version: z.literal(1), sidebarStyle: axiomPreferencesSchema.shape.sidebarStyle.default('sameNewSession'),
+}).strict()
 
 /** @param userData Preserved app profile. @returns Saved choices; an absent file enables Dot without a sidebar row. */
 export function readAxiomPreferences(userData: string): AxiomPreferences {
@@ -61,7 +65,9 @@ export function readAxiomPreferences(userData: string): AxiomPreferences {
     const { version: _version, ...preferences } = savedPreferencesSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
     return preferences
   } catch (error: unknown) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return { enabled: true, showInSidebar: false }
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+      return { enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' }
+    }
     throw new Error('The Dot preferences could not be read')
   }
 }

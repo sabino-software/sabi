@@ -35,7 +35,7 @@ export class DesktopAxiomOwner implements AxiomPageOwner {
    */
   constructor(private readonly owners: Readonly<Record<AxiomTransportMode, AxiomPageOwner>>, private mode: AxiomTransportMode,
     private readonly persist?: (mode: AxiomTransportMode) => void,
-    preferences: AxiomPreferences = { enabled: true, showInSidebar: false },
+    preferences: AxiomPreferences = { enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' },
     private readonly persistPreferences?: (value: AxiomPreferences) => void) { this.choices = { ...preferences } }
   /** @returns Feature choices without reading website state. */
   preferences(): AxiomPreferences { return { ...this.choices } }
@@ -43,7 +43,8 @@ export class DesktopAxiomOwner implements AxiomPageOwner {
   setPreferences(value: unknown): void {
     const choices = axiomPreferencesSchema.parse(value)
     this.assertNoSend()
-    if (choices.enabled === this.choices.enabled && choices.showInSidebar === this.choices.showInSidebar) return
+    if (choices.enabled === this.choices.enabled && choices.showInSidebar === this.choices.showInSidebar
+      && choices.sidebarStyle === this.choices.sidebarStyle) return
     this.persistPreferences?.(choices)
     this.choices = choices
     if (!choices.enabled) { this.owners.browser.disconnect(); this.owners.embedded.disconnect() }

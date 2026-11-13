@@ -4460,7 +4460,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/**\n * Owner share of the sidebar settings seat: the column display state the\n * occupant\'s trigger row must render against (wide row vs rail icon).\n */\nexport interface SidebarSettingsOwnerProps {\n  /** Whether the sidebar renders wide content (false = 56px rail). */\n  wide: boolean\n}',
+      '/** Shell-owned primary-action appearance, shared exactly with New Session. */\nexport interface SidebarPrimaryActionOwnerProps {\n  /** Expanded row or collapsed icon geometry. */\n  readonly wide: boolean\n  /** Complete button classes for each supported appearance; geometry stays identical. */\n  readonly buttonClasses: Readonly<Record<\'sameNewSession\' | \'subtle\' | \'outline\', string>>\n  /** Shell-owned centering and overflow classes used by New Session. */\n  readonly labelMaskClassName: string\n  readonly contentClassName: string\n  readonly labelClassName: string\n  /** Icon edge matching the platform\'s New Session control. */\n  readonly iconSize: number\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [

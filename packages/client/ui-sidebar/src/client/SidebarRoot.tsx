@@ -383,7 +383,7 @@ export function SidebarRoot({
         <Tooltip label={t('session.new.label')} shortcutKeys={newShortcut?.keys} delayMs={500} side={captionTooltipSide} disabled={wide}>
           <button
             type="button"
-            className={css.newSession}
+            className={clsx(css.primaryAction, css.newSession)}
             aria-label={t('session.new.label')}
             aria-keyshortcuts={newShortcut?.aria}
             onClick={openNewSession}
@@ -401,7 +401,18 @@ export function SidebarRoot({
         </Tooltip>
       )}
 
-      {renderSlot('sidebar.primary.action', { wide })}
+      {renderSlot('sidebar.primary.action', {
+        wide,
+        buttonClasses: {
+          sameNewSession: clsx(css.primaryAction, css.primaryActionSecondary),
+          subtle: clsx(css.primaryAction, css.primaryActionSecondary, css.primaryActionSubtle),
+          outline: clsx(css.primaryAction, css.primaryActionSecondary, css.primaryActionOutline),
+        },
+        labelMaskClassName: css.newSessionLabelMask,
+        contentClassName: css.newSessionContent,
+        labelClassName: clsx(css.newSessionLabel, css.wide),
+        iconSize: wide ? 14 : windowsTitlebar ? 16 : 18,
+      })}
 
       <div className={css.scrollRegion}>
         <div

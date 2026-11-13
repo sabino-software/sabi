@@ -56,10 +56,15 @@ export interface AxiomBrowserSetup {
   readonly extensionId: string
 }
 
+/** Sidebar paint choices; all preserve the shared New Session geometry. */
+export type AxiomSidebarStyle = 'sameNewSession' | 'subtle' | 'outline'
+
 /** Device-local feature availability and optional sidebar visibility. */
 export interface AxiomPreferences {
   readonly enabled: boolean
   readonly showInSidebar: boolean
+  /** Saved Dot action appearance; defaults to matching New Session for an existing preference file. */
+  readonly sidebarStyle: AxiomSidebarStyle
 }
 
 /** Desktop original-page adapter; website authentication remains with the selected browser owner. */

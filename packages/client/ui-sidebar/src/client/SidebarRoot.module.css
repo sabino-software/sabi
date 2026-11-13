@@ -85,6 +85,7 @@
   margin-top: 6px;
 }
 
+:global([data-windows-titlebar]) .collapsed .primaryActionSecondary,
 :global([data-windows-titlebar]) .collapsed .panelList,
 :global([data-windows-titlebar]) .collapsed .regionArea,
 :global([data-windows-titlebar]) .collapsed .footArea {
@@ -158,7 +159,7 @@
    horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
    render stays static. */
 .railIn .iconButton,
-.railIn .newSession,
+.railIn .primaryAction,
 .railIn .panelList,
 .railIn .regionArea {
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
@@ -415,9 +416,9 @@
   white-space: nowrap;
 }
 
-/* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
+/* Primary actions: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
    corners); collapsed it renders as the rail's plain icon control. */
-.newSession {
+.primaryAction {
   container-type: inline-size;
   position: relative;
   flex: none;
@@ -441,7 +442,7 @@
 }
 
 @media (hover: hover) {
-  .newSession:hover {
+  .primaryAction:hover {
     background: var(--dsw-alias-button-floating-hover);
   }
 }
@@ -449,17 +450,17 @@
 /* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
    sidebar; a white wash sits in the glass like native macOS sidebar
    controls; the glass tokens lower its alpha in dark mode. */
-:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .primaryAction {
   background: var(--dsw-specific-sidebar-glass-fill);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession:hover {
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .primaryAction:hover {
     background: var(--dsw-specific-sidebar-glass-hover);
   }
 }
 
-.collapsed .newSession {
+.collapsed .primaryAction {
   align-self: flex-start;
   width: 36px;
   height: 36px;
@@ -471,18 +472,36 @@
 }
 
 @media (hover: hover) {
-  .collapsed .newSession:hover {
+  .collapsed .primaryAction:hover {
     background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
-:global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession {
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .primaryAction {
   background: var(--dsw-specific-sidebar-glass-collapsed-fill);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession:hover {
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .primaryAction:hover {
     background: var(--dsw-specific-sidebar-glass-collapsed-hover);
+  }
+}
+
+.root:not(.collapsed) .primaryActionSecondary { margin-top: 6px; }
+
+/* Appearance options change only paint, retaining New Session's shared geometry. */
+.root .primaryAction.primaryActionSubtle {
+  background: transparent;
+  border-color: transparent;
+}
+.root .primaryAction.primaryActionOutline {
+  background: transparent;
+  border-color: var(--dsw-alias-border-l3);
+}
+@media (hover: hover) {
+  .root .primaryAction.primaryActionSubtle:hover,
+  .root .primaryAction.primaryActionOutline:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
@@ -811,7 +830,7 @@
   .wide,
   .fading > *,
   .railIn .iconButton,
-  .railIn .newSession,
+  .railIn .primaryAction,
   .railIn .panelList,
   .railIn .footArea,
   .railIn .regionArea {

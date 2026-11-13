@@ -10,7 +10,7 @@ function fixture(chooseState: DotSelection = { phase: 'login-required', url: nul
   const choose = vi.fn(async (_hint: string | null) => chooseState)
   const setPreferences = vi.fn(async () => {})
   const companion: DesktopAxiomCompanion = {
-    preferences: async () => ({ enabled: true, showInSidebar: false }), setPreferences, choose,
+    preferences: async () => ({ enabled: true, showInSidebar: false, sidebarStyle: 'sameNewSession' }), setPreferences, choose,
     subscribe: (callback) => { listener = callback; return off }, transport: async () => 'browser',
     selectTransport: vi.fn(), browserSetup: vi.fn(),
   }
@@ -42,11 +42,11 @@ it('accepts immediate ready selection and disarms on feature disable or disposal
   immediate.controller.dispose()
   const f = fixture()
   await f.controller.choose()
-  await f.controller.setPreferences({ enabled: false, showInSidebar: true })
+  await f.controller.setPreferences({ enabled: false, showInSidebar: true, sidebarStyle: 'sameNewSession' })
   f.publish(ready)
   await f.controller.choose()
   expect(f.connect).not.toHaveBeenCalled()
-  expect(f.setPreferences).toHaveBeenCalledWith({ enabled: false, showInSidebar: true })
+  expect(f.setPreferences).toHaveBeenCalledWith({ enabled: false, showInSidebar: true, sidebarStyle: 'sameNewSession' })
   f.controller.dispose()
   f.publish(ready)
   expect(f.connect).not.toHaveBeenCalled()
@@ -82,7 +82,7 @@ it('suppresses navigation if disabled while the connection is completing', async
   f.connect.mockImplementation(async (_url, isCurrent) => { await waiting.promise; expect(isCurrent()).toBe(false) })
   const selecting = f.controller.choose()
   await vi.waitFor(() => { expect(f.connect).toHaveBeenCalledOnce() })
-  await f.controller.setPreferences({ enabled: false, showInSidebar: false })
+  await f.controller.setPreferences({ enabled: false, showInSidebar: false, sidebarStyle: 'sameNewSession' })
   waiting.resolve(undefined)
   await selecting
   f.controller.dispose()

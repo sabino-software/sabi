@@ -16,8 +16,11 @@ export interface AxiomBrowserSetup {
   readonly permissions: readonly ['activeTab', 'scripting', 'nativeMessaging']
 }
 
+/** Closed appearance choices; every option retains the shared New Session geometry. */
+export type DotSidebarStyle = 'sameNewSession' | 'subtle' | 'outline'
+
 /** Accepted desktop preferences; sidebar visibility is independent of integration enablement. */
-export interface DotPreferences { readonly enabled: boolean; readonly showInSidebar: boolean }
+export interface DotPreferences { readonly enabled: boolean; readonly showInSidebar: boolean; readonly sidebarStyle: DotSidebarStyle }
 
 /** Minimal observed website state needed for explicit Dot selection. */
 export interface DotSelection { readonly url: string | null; readonly phase: 'disconnected' | 'loading' | 'login-required' | 'ready' | 'unavailable' }
@@ -33,7 +36,9 @@ export interface DesktopAxiomCompanion {
   readonly browserSetup: () => Promise<AxiomBrowserSetup>
 }
 
-const preferencesSchema = z.object({ enabled: z.boolean(), showInSidebar: z.boolean() })
+const preferencesSchema = z.object({ enabled: z.boolean(), showInSidebar: z.boolean(),
+  sidebarStyle: z.enum(['sameNewSession', 'subtle', 'outline']).default('sameNewSession'),
+}).strict()
 const selectionSchema = z.object({ url: z.string().max(4096).nullable(), phase: z.enum(['disconnected', 'loading', 'login-required', 'ready', 'unavailable']) })
 
 const modeSchema = z.enum(['browser', 'embedded'])

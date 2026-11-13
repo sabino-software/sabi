@@ -28,7 +28,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
   interface SlotMap {
     /** Feature actions directly below New Session, outside the scrolling history. */
-    'sidebar.primary.action': { kind: 'list'; scope: 'root'; owner: SidebarSettingsOwnerProps }
+    'sidebar.primary.action': { kind: 'list'; scope: 'root'; owner: SidebarPrimaryActionOwnerProps }
     /** Non-interactive notification inside the collapsed sidebar expand button. */
     'sidebar.toggle.badge': { kind: 'single'; scope: 'root'; owner: Record<never, never> }
     /**
@@ -76,6 +76,20 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
   }
+}
+
+/** Shell-owned primary-action appearance, shared exactly with New Session. */
+export interface SidebarPrimaryActionOwnerProps {
+  /** Expanded row or collapsed icon geometry. */
+  readonly wide: boolean
+  /** Complete button classes for each supported appearance; geometry stays identical. */
+  readonly buttonClasses: Readonly<Record<'sameNewSession' | 'subtle' | 'outline', string>>
+  /** Shell-owned centering and overflow classes used by New Session. */
+  readonly labelMaskClassName: string
+  readonly contentClassName: string
+  readonly labelClassName: string
+  /** Icon edge matching the platform's New Session control. */
+  readonly iconSize: number
 }
 
 /** Geometry supplied to the sidebar brand-mark occupant. */
