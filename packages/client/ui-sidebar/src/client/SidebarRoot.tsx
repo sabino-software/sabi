@@ -408,8 +408,8 @@ export function SidebarRoot({
           subtle: clsx(css.primaryAction, css.primaryActionSecondary, css.primaryActionSubtle),
           outline: clsx(css.primaryAction, css.primaryActionSecondary, css.primaryActionOutline),
         },
-        labelMaskClassName: css.newSessionLabelMask,
-        contentClassName: css.newSessionContent,
+        labelMaskClassName: clsx(css.newSessionLabelMask),
+        contentClassName: clsx(css.newSessionContent),
         labelClassName: clsx(css.newSessionLabel, css.wide),
         iconSize: wide ? 14 : windowsTitlebar ? 16 : 18,
       })}
