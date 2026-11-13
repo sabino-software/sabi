@@ -23,8 +23,10 @@ export function createAxiomWebsiteWindow(options: WebsiteWindowOptions, locale: 
     preload: fileURLToPath(new URL('./preload-axiom-window.cjs', import.meta.url)),
     contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, webviewTag: false,
   } })
+  const isolatedWebsitePreferences = { ...websitePreferences }
+  delete isolatedWebsitePreferences.preload
   const website = new WebContentsView({ ...popupContents === undefined ? {} : { webContents: popupContents },
-    webPreferences: { ...websitePreferences, preload: undefined,
+    webPreferences: { ...isolatedWebsitePreferences,
       nodeIntegration: false, nodeIntegrationInWorker: false, nodeIntegrationInSubFrames: false,
       contextIsolation: true, sandbox: true, webSecurity: true, allowRunningInsecureContent: false,
       webviewTag: false, navigateOnDragDrop: false,
