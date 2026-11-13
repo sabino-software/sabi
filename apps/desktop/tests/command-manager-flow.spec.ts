@@ -38,6 +38,7 @@ async function fixture(options: {
   shadowed?: boolean
   elevate?: boolean
   messages?: DesktopMessages
+  commandName?: 'dsh' | 'sabi'
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-command-dialog-'))
   onTestFinished(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
@@ -46,6 +47,7 @@ async function fixture(options: {
   const worker = join(resources, 'runtime', 'cli')
   await mkdir(bin, { recursive: true })
   await mkdir(worker, { recursive: true })
+  if (options.commandName !== undefined) await writeFile(join(worker, 'command.json'), JSON.stringify({ name: options.commandName }))
   const node = join(bin, process.platform === 'win32' ? 'node.exe' : 'node')
   if (process.platform === 'win32') await copyFile(process.execPath, node)
   else await symlink(process.execPath, node)
@@ -159,4 +161,12 @@ it('coalesces repeated menu clicks and keeps update preparation waiting for the 
   await Promise.all([first, waiting])
   expect(idle).toBe(true)
   expect(await f.calls()).toEqual([{ operation: 'inspect' }])
+})
+
+it.skipIf(process.platform !== 'darwin')('refuses a conflicting sabi shell selection without attempting installation', async () => {
+  const f = await fixture({ commandName: 'sabi' })
+  f.show.mockResolvedValue({ response: 0, checkboxChecked: false })
+  await f.manager.show()
+  expect(await f.calls()).toEqual([{ operation: 'inspect' }])
+  expect(f.show.mock.lastCall![0]).toMatchObject({ type: 'error', message: en.cliCommandShadowed })
 })

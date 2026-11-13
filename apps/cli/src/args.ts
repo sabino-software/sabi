@@ -141,20 +141,21 @@ function resolveBoot(program: Command, profile: string, options: BootOptions, ar
  * @param argv - arguments after the Node binary and script.
  * @param version - version string printed by `--version`.
  * @param manageDesktopProfile - permit Desktop's installed carrier to manage its reserved profile's plugins.
+ * @param commandName - Public installed command; defaults to the ordinary dsh CLI.
  * @returns the resolved invocation.
  */
-export function parseDshArgs(argv: readonly string[], version: string, manageDesktopProfile = false): DshInvocation {
+export function parseDshArgs(argv: readonly string[], version: string, manageDesktopProfile = false, commandName: 'dsh' | 'sabi' = 'dsh'): DshInvocation {
   const first = argv[0]
   let resolved: DshInvocation | undefined
   // Annotated, not inferred: the actions below call back into `program`, and an
   // inferred type would be circular through its own chain.
   const program: Command = new Command()
   program
-    .name('dsh')
-    .version(version, '-V, --version', 'output the version number')
-    .usage('[--profile] <name> [options] [app-args...]\n       dsh plugin --profile <name> <pnpm-args...>')
-    .description('dsh: boot a DeepSeek Harness profile — an ordered stack of plugin-bundle patch layers under your own overrides.')
-    .addHelpText('after', HELP_EXAMPLES)
+    .name(commandName)
+    .version(commandName === 'sabi' ? `sabi ${version}` : version, '-V, --version', 'output the version number')
+    .usage(`[--profile] <name> [options] [app-args...]\n       ${commandName} plugin --profile <name> <pnpm-args...>`)
+    .description(`${commandName}: boot a ${commandName === 'sabi' ? 'Sabi' : 'DeepSeek Harness'} profile — an ordered stack of plugin-bundle patch layers under your own overrides.`)
+    .addHelpText('after', HELP_EXAMPLES.replaceAll('dsh ', `${commandName} `))
     .exitOverride()
     // The launcher's flags come first and end at the first token it does not
     // know; everything from there on belongs to the booted app, including
@@ -164,7 +165,7 @@ export function parseDshArgs(argv: readonly string[], version: string, manageDes
     .allowUnknownOption()
     .passThroughOptions()
     .enablePositionalOptions()
-    .argument('[args...]', 'arguments for the booted profile\'s app (see: dsh --profile <name> --help)')
+    .argument('[args...]', `arguments for the booted profile's app (see: ${commandName} --profile <name> --help)`)
     .option('--profile <name>', 'the profile under $DSH_HOME/profiles to boot', selectProfile)
     .option('--from-default-profile <name>', 'replace a custom profile with a fresh copy of a shipped profile template')
     .option('--patch <path>', 'extra patch-list overlay applied after the profile layer (repeatable)', collect)

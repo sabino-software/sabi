@@ -38,3 +38,11 @@ it('locates the archive of an ASAR-contained runtime and leaves a prepared runti
   expect(runtimeArchivePath(join(resources, 'app.asar.unpacked', 'dsh'))).toBeUndefined()
   expect(runtimeArchivePath(join(resources, 'dsh'))).toBeUndefined()
 })
+
+it('forwards only the installed Sabi public command to the shared CLI', async () => {
+  vi.stubEnv('DSH_DESKTOP_CLI_NAME', 'sabi')
+  await runDesktopCli('/installed/runtime')
+  expect(runCli).toHaveBeenCalledWith(expect.objectContaining({ commandName: 'sabi', manageDesktopProfile: true }))
+  vi.stubEnv('DSH_DESKTOP_CLI_NAME', '../other')
+  await expect(runDesktopCli('/installed/runtime')).rejects.toThrow('Invalid installed CLI command name')
+})

@@ -73,6 +73,8 @@ On macOS, installation creates `/usr/local/bin/dsh` and requests administrator a
 
 Command registration is optional after installing Desktop. Use **Manage dsh Command… → Remove** before uninstalling Desktop to remove its CLI registration; the application uninstaller does not remove it. Finish CLI commands before updating or uninstalling Desktop. The CLI runtime version follows the installed Desktop release. See [bundled command runtime](#bundled-command-runtime) for Desktop plugin commands and runtime limitations.
 
+The isolated local fork instead offers **Manage sabi command…**, installing only `/usr/local/bin/sabi`. Its packaged `sabi` and compatibility `dsh` launchers use the installed Skeinlet executable and the preserved `DeepSeek Harness Local/harness-home` profile, without a checkout or system Node. `sabi --help` and `sabi --version` identify the public command. Installation refuses an unrelated `sabi` file, link, or selected shell command; remove that conflict yourself before retrying. Repair and Remove affect only the recorded `sabi` link and leave existing `dsh` registrations intact.
+
 <a id="closing-the-window-and-quitting"></a>
 
 ## Closing the window and quitting

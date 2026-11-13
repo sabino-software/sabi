@@ -19,7 +19,10 @@ export function runtimeArchivePath(runtimeDir: string): string | undefined {
  * @returns Completion of the selected CLI command; profile plugins own their process lifetime.
  */
 export async function runDesktopCli(supportDir: string): Promise<void> {
+  const commandName = process.env.DSH_DESKTOP_CLI_NAME
+  if (commandName !== undefined && commandName !== 'dsh' && commandName !== 'sabi') throw new Error('Invalid installed CLI command name.')
   await runCli({
+    ...commandName === undefined ? {} : { commandName },
     manageDesktopProfile: true,
     packageManager: {
       command: process.execPath,

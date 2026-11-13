@@ -13,6 +13,8 @@ export interface FileCommandInstallation {
   readonly destination: string
   readonly launcher: string
   readonly linkHelper: string
+  /** Missing or true preserves previous-command replacement; false refuses an unrelated occupied destination. */
+  readonly allowReplacement?: boolean
 }
 
 type Entry = { readonly kind: 'symlink'; readonly fingerprint: string; readonly target: string }
@@ -53,7 +55,7 @@ function digest(value: unknown): string {
 }
 
 function receiptPath(options: FileCommandInstallation): string {
-  return join(dirname(options.destination), '.dsh-desktop-command.json')
+  return join(dirname(options.destination), `.${basename(options.destination)}-desktop-command.json`)
 }
 
 async function readEntry(path: string): Promise<Entry> {
@@ -187,6 +189,9 @@ export async function installFileCommand(options: FileCommandInstallation, expec
   return withFileLock(receiptPath(options), async () => {
     const { state, entry, receipt } = await readSnapshot(options)
     if (state.fingerprint !== expected) throw new CommandInstallationError('ESTALE', 'The command changed after confirmation.')
+    if (options.allowReplacement === false && !state.managed && entry.kind !== 'missing') {
+      throw new CommandInstallationError('EEXIST', 'Another command occupies this path. Remove it yourself or choose a different command location.')
+    }
     if (!await available(options.launcher)) throw new CommandInstallationError('ENOENT', 'The installed launcher is unavailable.')
     const moved = await withdraw(options, options.destination, entry)
     const pending = join(dirname(options.destination), '.dsh-command-new-' + randomUUID())

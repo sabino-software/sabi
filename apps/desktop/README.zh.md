@@ -73,6 +73,8 @@ macOS 安装会创建 `/usr/local/bin/dsh`；目录权限需要时，系统会�
 
 命令注册是安装 Desktop 后的可选操作。卸载 Desktop 前，请通过**管理 dsh 命令… → 移除**删除其 CLI 注册；应用卸载程序不会移除该注册。更新或卸载 Desktop 前请结束 CLI 命令。CLI 运行时版本随已安装的 Desktop 版本变化。Desktop 插件命令与运行时限制见[内置命令运行时](#bundled-command-runtime)。
 
+隔离的本地分支提供**管理 sabi 命令…**，仅安装 `/usr/local/bin/sabi`。打包的 `sabi` 和兼容 `dsh` 启动器使用已安装的 Skeinlet 可执行文件及保留的 `DeepSeek Harness Local/harness-home` 配置，无需源码检出或系统 Node。`sabi --help` 和 `sabi --version` 显示公开命令名称。安装会拒绝无关的 `sabi` 文件、链接或当前 shell 命令；请自行移除冲突后重试。“修复”和“移除”仅影响已记录的 `sabi` 链接，并保留已有的 `dsh` 注册。
+
 <a id="closing-the-window-and-quitting"></a>
 
 ## 关闭窗口与退出

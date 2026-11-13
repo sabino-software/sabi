@@ -255,3 +255,17 @@ describe('parseDshArgs', () => {
     expect(exitCode(['--version'])).toBe(0)
   })
 })
+
+it.each(['--help', '--version'])('reports the installed Sabi public command for %s without changing dsh defaults', (flag) => {
+  const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+  vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit') })
+  expect(() => parseDshArgs([flag], '1.2.3', true, 'sabi')).toThrow('exit')
+  const text = output.mock.calls.map(([chunk]) => String(chunk)).join('')
+  expect(text).toContain(flag === '--help' ? 'Usage: sabi ' : 'sabi 1.2.3')
+  expect(text).not.toMatch(/\bdsh\b/u)
+  output.mockClear()
+  expect(() => parseDshArgs([flag], '1.2.3')).toThrow('exit')
+  const ordinary = output.mock.calls.map(([chunk]) => String(chunk)).join('')
+  expect(ordinary).toContain(flag === '--help' ? 'Usage: dsh ' : '1.2.3')
+  expect(ordinary).not.toContain('sabi')
+})

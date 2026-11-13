@@ -16,6 +16,8 @@ import type { RunProfileOptions } from './profile-boot.ts'
 export type RunCliOptions = Pick<RunProfileOptions, 'packageManager'> & {
   /** Permit plugin commands for Desktop's existing profile; reserved for its installed carrier. */
   manageDesktopProfile?: boolean
+  /** Public installed alias; missing retains ordinary dsh output. */
+  commandName?: 'dsh' | 'sabi'
 }
 
 /**
@@ -25,8 +27,8 @@ export type RunCliOptions = Pick<RunProfileOptions, 'packageManager'> & {
  */
 export async function runCli(options: RunCliOptions = {}): Promise<void> {
   const version = getDshRuntimeVersion()
-  const { manageDesktopProfile, ...profileOptions } = options
-  const invocation = parseDshArgs(process.argv.slice(2), version, manageDesktopProfile)
+  const { manageDesktopProfile, commandName, ...profileOptions } = options
+  const invocation = parseDshArgs(process.argv.slice(2), version, manageDesktopProfile, commandName)
 
   switch (invocation.mode) {
     case 'profile': {

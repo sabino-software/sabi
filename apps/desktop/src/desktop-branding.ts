@@ -12,6 +12,7 @@ export function brandDesktopLocale(locale: DesktopLocale, productName: string): 
   const messages = { ...locale.messages }
   for (const key of Object.keys(messages) as (keyof typeof messages)[]) {
     messages[key] = messages[key].replaceAll('DeepSeek Harness', productName)
+    if ((productName === 'Skeinlet' || productName === 'Sabi') && key.startsWith('cliCommand')) messages[key] = messages[key].replaceAll('dsh', 'sabi')
   }
   if (productName === 'Skeinlet') {
     const copy: readonly [string, string] = locale.id === 'pt'

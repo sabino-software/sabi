@@ -63,6 +63,26 @@ describe.skipIf(process.platform === 'win32')('macOS command entry ownership', (
     expect(await readFile(f.options.launcher, 'utf8')).toBe('desktop\n')
   })
 
+  it('keeps dsh ownership independent while sabi refuses unrelated files and symlinks', async () => {
+    const f = await fixture()
+    const dsh = await installFileCommand(f.options, (await inspectFileCommand(f.options)).fingerprint)
+    const sabi = { ...f.options, destination: join(f.root, 'sabi'), allowReplacement: false }
+    for (const kind of ['file', 'symlink']) {
+      if (kind === 'file') await writeFile(sabi.destination, 'unrelated sabi', { mode: 0o755 })
+      else await symlink('unrelated-launcher', sabi.destination)
+      const before = await lstat(sabi.destination)
+      await expect(installFileCommand(sabi, (await inspectFileCommand(sabi)).fingerprint)).rejects.toMatchObject({ code: 'EEXIST' })
+      expect((await lstat(sabi.destination)).ino).toBe(before.ino)
+      await unlink(sabi.destination)
+    }
+    const first = await installFileCommand(sabi, (await inspectFileCommand(sabi)).fingerprint)
+    const repaired = await installFileCommand(sabi, first.fingerprint)
+    expect(repaired.managed).toBe(true)
+    await removeFileCommand(sabi, repaired.fingerprint)
+    expect((await inspectFileCommand(f.options)).fingerprint).toBe(dsh.fingerprint)
+    await removeFileCommand(f.options, dsh.fingerprint)
+  })
+
   it('preserves the raw target of an existing relative npm link and restores it', async () => {
     const f = await fixture()
     await writeFile(join(f.root, 'npm-cli'), 'npm\n', { mode: 0o755 })

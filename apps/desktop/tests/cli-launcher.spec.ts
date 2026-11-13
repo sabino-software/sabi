@@ -5,8 +5,10 @@ import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeF
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { expect, it, onTestFinished } from 'vitest'
 import { prepareDesktopCli } from '../scripts/prepare-cli.ts'
+import { readDesktopCommandName } from '../src/command-identity.ts'
 import { LOCAL_FORK } from '../scripts/local-fork.mjs'
 
 function fixture(localFork = false) {
@@ -24,8 +26,9 @@ function fixture(localFork = false) {
   const platform = process.platform === 'win32' ? 'win32' : 'darwin'
   const resources = join(application, ...platform === 'darwin' ? ['Contents', 'Resources'] : ['resources'])
   const cli = join(resources, 'runtime', 'cli')
-  prepareDesktopCli(cli, platform, localFork ? LOCAL_FORK.productName : 'DeepSeek Harness')
-  const electron = join(application, ...platform === 'darwin' ? ['Contents', 'MacOS', localFork ? LOCAL_FORK.productName : 'DeepSeek Harness'] : ['DeepSeek Harness.exe'])
+  prepareDesktopCli(cli, platform, localFork ? LOCAL_FORK.executableName : 'DeepSeek Harness', localFork)
+  expect(readDesktopCommandName(resources)).toBe(localFork ? 'sabi' : 'dsh')
+  const electron = join(application, ...platform === 'darwin' ? ['Contents', 'MacOS', localFork ? LOCAL_FORK.executableName : 'DeepSeek Harness'] : ['DeepSeek Harness.exe'])
   mkdirSync(dirname(electron), { recursive: true })
   if (platform === 'win32') copyFileSync(process.execPath, electron)
   else symlinkSync(process.execPath, electron)
@@ -41,13 +44,13 @@ function fixture(localFork = false) {
     '',
   ].join('\n'))
   const command = join(cli, 'bin', platform === 'win32' ? 'dsh.cmd' : 'dsh')
-  function start(args: string[], executable = command) {
+  function start(args: string[], executable = command, environment: NodeJS.ProcessEnv = {}) {
     // cmd fixture inputs contain no metacharacters; POSIX cases exercise literal expansion characters separately.
     const child = platform === 'win32'
       ? spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `""${executable}" ${args.map(value => `"${value}"`).join(' ')}"`], {
-        cwd: root, env: { ...process.env, DSH_CLI_TEST_VALUE: 'kept' }, stdio: 'pipe', windowsVerbatimArguments: true,
+        cwd: root, env: { ...process.env, DSH_CLI_TEST_VALUE: 'kept', ...environment }, stdio: 'pipe', windowsVerbatimArguments: true,
       })
-      : spawn(executable, args, { cwd: root, env: { ...process.env, DSH_CLI_TEST_VALUE: 'kept' }, stdio: 'pipe' })
+      : spawn(executable, args, { cwd: root, env: { ...process.env, DSH_CLI_TEST_VALUE: 'kept', ...environment }, stdio: 'pipe' })
     children.push(child)
     const closed = new Promise<number | null>((resolve, reject) => {
       child.once('error', reject)
@@ -60,7 +63,7 @@ function fixture(localFork = false) {
     child.stderr.setEncoding('utf8').on('data', (text: string) => { stderr += text })
     return { child, closed, stdout: () => stdout, stderr: () => stderr }
   }
-  return { root, command, start }
+  return { root, cli, command, entry, start }
 }
 
 it('preserves common arguments, cwd, environment, binary input, stderr and exit status', async () => {
@@ -101,4 +104,32 @@ it('rejects executable paths and shell expansions before preparing a launcher', 
     expect(() =>{  prepareDesktopCli('/unused-invalid-name', 'darwin', name) }).toThrow('plain basename')
   }
   expect(() =>{  prepareDesktopCli('/unused-invalid-name', 'win32', 'Skeinlet') }).toThrow('require macOS')
+})
+
+it.skipIf(process.platform === 'win32')('runs sabi and dsh from a foreign cwd without system Node and pins the preserved fork profile', async () => {
+  const f = fixture(true)
+  writeFileSync(f.entry, 'process.stdout.write(JSON.stringify({args:process.argv.slice(2),cwd:process.cwd(),home:process.env.DSH_HOME,name:process.env.DSH_DESKTOP_CLI_NAME,native:process.env.DSH_NATIVE_CONVERSATIONS}))')
+  for (const name of ['sabi', 'dsh']) {
+    const command = join(f.root, name)
+    symlinkSync(join(f.cli, 'bin', name), command)
+    const args = ['中文 with spaces', '$literal', '']
+    const run = f.start(args, command, { HOME: join(f.root, 'User home'), DSH_HOME: '/unrelated-profile', PATH: '/usr/bin:/bin' })
+    run.child.stdin.end()
+    expect(await run.closed, run.stderr()).toBe(0)
+    expect(JSON.parse(run.stdout())).toEqual({ args, cwd: f.root,
+      home: join(f.root, 'User home', 'Library', 'Application Support', LOCAL_FORK.profileDirectory, 'harness-home'), name, native: '1' })
+  }
+})
+
+it.skipIf(process.platform === 'win32')('prints sabi help and version through the actual installed alias and shared argument parser', async () => {
+  const f = fixture(true)
+  const parser = pathToFileURL(join(import.meta.dirname, '../../cli/src/args.ts')).href
+  writeFileSync(f.entry, `const {parseDshArgs} = await import(${JSON.stringify(parser)}); parseDshArgs(process.argv.slice(2), '1.2.3', true, process.env.DSH_DESKTOP_CLI_NAME)`)
+  for (const flag of ['--help', '--version']) {
+    const run = f.start([flag], join(f.cli, 'bin', 'sabi'), { PATH: '/usr/bin:/bin' })
+    run.child.stdin.end()
+    expect(await run.closed, run.stderr()).toBe(0)
+    expect(run.stdout()).toContain(flag === '--help' ? 'Usage: sabi ' : 'sabi 1.2.3')
+    expect(run.stdout()).not.toMatch(/\bdsh\b/u)
+  }
 })

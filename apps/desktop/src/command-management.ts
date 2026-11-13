@@ -1,5 +1,6 @@
 /** Native command-management dialogs; only fixed installation locations reach the worker. */
 
+import { readDesktopCommandName } from './command-identity.ts'
 import { execFile } from 'node:child_process'
 import { isAbsolute, join, normalize, win32 } from 'node:path'
 import { userInfo } from 'node:os'
@@ -109,10 +110,10 @@ export function presentCommandManagement(
   }
 }
 
-async function shellCommand(): Promise<{ activeCommand?: string; selectionUnknown?: boolean }> {
+async function shellCommand(name: 'dsh' | 'sabi'): Promise<{ activeCommand?: string; selectionUnknown?: boolean }> {
   const shell = userInfo().shell
   if (shell === null) return { selectionUnknown: true }
-  const script = "printf '\\0DSH_COMMAND\\0'; command -v dsh; printf '\\0'"
+  const script = `printf '\\0DSH_COMMAND\\0'; command -v ${name}; printf '\\0'`
   const { stdout } = await promisify(execFile)(shell, ['-ilc', script], { timeout: 5000, maxBuffer: 65536 })
   const value = stdout.split('\0DSH_COMMAND\0')[1]?.split('\0')[0]?.trim()
   if (value === undefined) return { selectionUnknown: true }
@@ -126,6 +127,8 @@ export class DesktopCommandManager {
 
   /** @param options - Installed resources and shell-owned UI callbacks. */
   constructor(private readonly options: CommandManagerOptions) {}
+
+  private get commandName(): 'dsh' | 'sabi' { return readDesktopCommandName(this.options.resources) }
 
   /** Open or join the command-management operation. */
   show(): Promise<void> {
@@ -173,7 +176,7 @@ export class DesktopCommandManager {
     const state = await this.worker('inspect')
     if (process.platform !== 'darwin') return state
     try {
-      return { ...state, ...await shellCommand() }
+      return { ...state, ...await shellCommand(this.commandName) }
     } catch {
       // A custom login shell can fail or wait for interaction; its output is not a diagnostic.
       return { ...state, selectionUnknown: true }
@@ -197,6 +200,11 @@ export class DesktopCommandManager {
       const operation = state.managed ? (choice.response === 1 ? 'install' : choice.response === 2 ? 'remove' : undefined)
         : choice.response === 0 ? 'install' : undefined
       if (operation === undefined) return
+      if (operation === 'install' && this.commandName === 'sabi'
+        && ((!state.managed && state.occupied) || state.selectionUnknown
+          || (state.activeCommand !== undefined && !sameCommand(state.activeCommand, state.destination, process.platform)))) {
+        throw new CommandWorkerError('EEXIST', 'The sabi command is occupied or its shell selection could not be verified. No existing command was replaced.')
+      }
       const ownsSelection = state.managed
         && (state.activeCommand === undefined || sameCommand(state.activeCommand, state.destination, process.platform))
       if (operation === 'install' && (state.selectionUnknown || (!ownsSelection && (state.occupied || state.activeCommand !== undefined)))) {
@@ -230,7 +238,7 @@ export class DesktopCommandManager {
       if (code === 'ECANCELED') return
       await this.options.show({
         type: 'error', title: messages.cliCommandTitle,
-        message: code === 'ESTALE' ? messages.cliCommandChanged : code === 'EOWNERSHIP' ? messages.cliCommandOwnershipError : messages.cliCommandFailed,
+        message: code === 'ESTALE' ? messages.cliCommandChanged : code === 'EEXIST' ? messages.cliCommandShadowed : code === 'EOWNERSHIP' ? messages.cliCommandOwnershipError : messages.cliCommandFailed,
         technicalDetails: error instanceof Error ? error.message : '',
         buttons: [messages.cliCommandClose],
       })
