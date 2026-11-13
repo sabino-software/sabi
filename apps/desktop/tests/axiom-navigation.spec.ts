@@ -1,6 +1,6 @@
 /** Authentication navigation stays on official origins and returns to the selected Dot. */
 import { describe, expect, it } from 'vitest'
-import { axiomNavigation } from '../src/axiom-navigation.ts'
+import { axiomChooserNavigation, axiomNavigation } from '../src/axiom-navigation.ts'
 
 const selected = 'https://chatgpt.com/dots/selected~conversation'
 
@@ -50,4 +50,18 @@ describe('Axiom authentication navigation', () => {
     }
   })
 
+})
+
+it('admits unobserved ChatGPT selection pages only in a revealed chooser and keeps the identity allowlist', () => {
+  for (const destination of ['https://chatgpt.com/', 'https://chatgpt.com/dots', 'https://chatgpt.com/c/other']) {
+    expect(axiomChooserNavigation(destination, false, true)).toBe('selection')
+    expect(axiomChooserNavigation(destination, false, false)).toBe('blocked')
+  }
+  expect(axiomChooserNavigation(selected, false, true)).toBe('conversation')
+  expect(axiomChooserNavigation(`${selected}?private=opaque`, false, true)).toBe('selection')
+  expect(axiomChooserNavigation('https://accounts.google.com/sign-in', false, true)).toBe('blocked')
+  expect(axiomChooserNavigation('https://accounts.google.com/sign-in', true, true)).toBe('authentication')
+  for (const destination of ['https://evil.test/', 'https://chatgpt.com.evil.test/', 'https://user:secret@chatgpt.com/', 'http://chatgpt.com/']) {
+    expect(axiomChooserNavigation(destination, true, true)).toBe('blocked')
+  }
 })

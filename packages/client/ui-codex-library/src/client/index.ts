@@ -1,4 +1,8 @@
 /** Native conversation connections and source badges over ordinary Harness Sessions. */
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { createDotController } from './dot-controller.ts'
+import { DotSidebarRow, DotSettingsRow, type DotControlsInjected } from './dot-controls.tsx'
+import type {} from '@deepseek-ai/dsh-client-ui-settings-general/client'
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -31,7 +35,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Services needed for native connection controls and ordinary Session navigation. */
-export const inject = ['slots', 'locale', 'resources', 'remote', 'remote.nativeConversations', 'sessions', 'uiWorkspace', 'uiConversation']
+export const inject = ['slots', 'locale', 'resources', 'remote', 'remote.nativeConversations', 'sessions', 'uiWorkspace', 'uiConversation', 'layout']
 
 function valueOf<T>(result: RemoteResult<T>): T {
   if (!result.ok) throw result.error
@@ -45,8 +49,35 @@ function valueOf<T>(result: RemoteResult<T>): T {
 export function apply(ctx: Context): void {
   registerAxiomMessages(ctx)
   registerCodexActivity(ctx)
-  const companion = desktopAxiomCompanion()
   const panel = 'codex-library' as MainPanelId
+  const companion = desktopAxiomCompanion()
+  const dot = companion === undefined ? undefined : createDotController(companion, {
+    preferredUrl: async () => valueOf(await ctx.remote.nativeConversations.status()).axiom.preferredUrl ?? null,
+    connect: async (url, isCurrent) => {
+      const result = valueOf(await ctx.remote.nativeConversations.connectAxiom(url))
+      await ctx.sessions.refresh()
+      if (isCurrent()) ctx.uiWorkspace.openSession(result.sessionId)
+    },
+  })
+  ctx.effect(() => () => { dot?.dispose() }, 'native-conversations.dot-selection')
+  const dotInjected = (): DotControlsInjected => ({
+    hooks: { dot: dot?.store ?? unavailableDot },
+    chooseDot: async () => { await dot?.choose() },
+    setDotPreferences: async (preferences) => { await dot?.setPreferences(preferences) },
+  })
+  const unavailableDot = createSnapshotStore({ preferences: null, busy: false, pending: false, failed: false, preferencesFailed: false })
+  if (dot !== undefined) {
+    ctx.slots.inject('sidebar.primary.action', () => ctx.slots.register({
+      name: 'sidebar.primary.action', id: 'dot', locale: 'codexLibrary',
+      inject: () => ({ ...dotInjected(), chooseDot: async () => {
+        ctx.layout.selectPanel(panel)
+        await dot.choose()
+      } }),
+    }, DotSidebarRow))
+    ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+      name: 'settings.general.item', id: 'dot', order: 20, locale: 'codexLibrary', inject: dotInjected,
+    }, DotSettingsRow))
+  }
   const t = ctx.locale.bind('codexLibrary')
   ctx.effect(() => ctx.locale.register('codexLibrary', { en, zh, pt, ja: en, es: en, fr: en, de: en, ru: en }), 'native-conversations.copy')
   ctx.effect(() => ctx.resources.register({
@@ -56,6 +87,7 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main', key: panel, locale: 'codexLibrary',
     inject: (): NativeConnectionsInjected => ({
+      ...dotInjected(),
       ...companion === undefined ? {} : { axiomCompanion: companion },
       useCodex: async () => { valueOf(await ctx.remote.nativeConversations.useCodex()) },
       startCodexLogin: async () => valueOf(await ctx.remote.nativeConversations.startCodexLogin()),
@@ -64,11 +96,6 @@ export function apply(ctx: Context): void {
         const result = valueOf(await ctx.remote.nativeConversations.syncCodex())
         await ctx.sessions.refresh()
         return result
-      },
-      connectAxiom: async (url) => {
-        const result = valueOf(await ctx.remote.nativeConversations.connectAxiom(url))
-        await ctx.sessions.refresh()
-        ctx.uiWorkspace.openSession(result.sessionId)
       },
       showAxiomLogin: async () => { valueOf(await ctx.remote.nativeConversations.showAxiomLogin()) },
     }),

@@ -1,0 +1,10 @@
+:root { color-scheme: light; }
+body[data-ds-dark-theme] { color-scheme: dark; }
+body { margin: 0; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: 13px system-ui, sans-serif; }
+header { box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 48px; padding: 0 12px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+#title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+nav { flex: none; display: flex; gap: 8px; }
+button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+button:focus-visible { outline: 2px solid var(--dsw-alias-link); outline-offset: 2px; }
+button:disabled { opacity: 0.5; cursor: default; }

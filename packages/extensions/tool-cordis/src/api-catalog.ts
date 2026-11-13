@@ -8103,7 +8103,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'NativeConversationStatus',
-    declaration: 'export interface NativeConversationStatus {\n    readonly codex: {\n        readonly login: NativeCodexLoginStatus;\n        readonly connected: boolean;\n        readonly authenticated: boolean;\n        readonly selected: boolean;\n        readonly error: string | null;\n    };\n    readonly axiom: {\n        readonly available: boolean;\n        readonly phase: string;\n    };\n    readonly syncing: boolean;\n}',
+    declaration: 'export interface NativeConversationStatus {\n    readonly codex: {\n        readonly login: NativeCodexLoginStatus;\n        readonly connected: boolean;\n        readonly authenticated: boolean;\n        readonly selected: boolean;\n        readonly error: string | null;\n    };\n    readonly axiom: {\n        readonly available: boolean;\n        readonly phase: string;\n        readonly preferredUrl?: string | null;\n    };\n    readonly syncing: boolean;\n}',
   },
   {
     name: 'NativeFileApplication',

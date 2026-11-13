@@ -94,6 +94,7 @@ export default class NativeConversations extends TypertRemoteService {
     axiomResponseTimeoutMs: z.number().min(10000).max(1800000).default(300000),
     axiomSettleMs: z.number().min(500).max(10000).default(1500),
   })
+  /** Deadline for one original-page bridge request, in milliseconds. */
   readonly axiomRequestTimeoutMs: number
   private bindings!: ProjectionHandle<NativeConversationBinding | null>
   private bindingSequences!: ProjectionHandle<SessionSeq | null>
@@ -106,6 +107,7 @@ export default class NativeConversations extends TypertRemoteService {
   private readonly observedCodex = new WeakSet<Agent>()
   private axiom: AxiomTransport | undefined
   private axiomPhase = 'disconnected'
+  private readonly axiomSelection: { preferredUrl: string | null } = { preferredUrl: null }
   // RPC receivers inherit this shared state; assigning a primitive on a receiver would hide an in-flight sync.
   private readonly synchronization: { task: Promise<{ imported: number }> | undefined } = { task: undefined }
   private readonly rebuilding = { pending: false, ids: new Set<SessionId>() }
@@ -136,6 +138,16 @@ export default class NativeConversations extends TypertRemoteService {
     this.stepInputs = await this.ctx.sessionProjections.register(nativeStepInputProjection)
     this.checkpoints = await this.ctx.sessionProjections.register(sourceCheckpointProjection)
     this.axiomMessages = await this.ctx.sessionProjections.register(axiomMessagesProjection)
+    const savedDots = new Set<string>()
+    for (const { header } of await this.ctx.sessionPersistence.list()) {
+      if (header.isSeeded || header.parentSession !== undefined
+        || this.ctx.workspaceRegistry.archivedSessionIds.includes(header.id)) continue
+      const binding = this.ctx.sessionProjectionCache.cachedSnapshot(header, ['nativeConversation'])?.values.nativeConversation
+      if (binding?.source !== 'axiom') continue
+      const assignment = this.sourceSessions.get(sourceSessionId('axiom', binding.sourceId))
+      if (assignment?.sessionId === header.id && assignment.createdAt === header.createdAt) savedDots.add(binding.sourceId)
+    }
+    this.axiomSelection.preferredUrl = savedDots.size === 1 ? savedDots.values().next().value ?? null : null
     this.codexActivity = await createCodexActivityRecorder(this.ctx)
     this.ctx.on('api-session/has-content', (event) => {
       const record = pluginRecordOf(event)
@@ -269,7 +281,7 @@ export default class NativeConversations extends TypertRemoteService {
   async status(): Promise<NativeConversationStatus> {
     const authenticated = await this.workAccountReady()
     const status = this.ctx.codexAppServer.status()
-    return { codex: { login: managedLogin(this.lifetime.signal).status(), connected: status.state === 'ready', authenticated, selected: this.ctx.get('agentDefaultModel')?.currentSelection().provider === CODEX_PROVIDER, error: status.reason }, axiom: { available: this.axiom !== undefined, phase: this.axiomPhase }, syncing: this.synchronization.task !== undefined }
+    return { codex: { login: managedLogin(this.lifetime.signal).status(), connected: status.state === 'ready', authenticated, selected: this.ctx.get('agentDefaultModel')?.currentSelection().provider === CODEX_PROVIDER, error: status.reason }, axiom: { available: this.axiom !== undefined, phase: this.axiomPhase, preferredUrl: this.axiomSelection.preferredUrl }, syncing: this.synchronization.task !== undefined }
   }
   /**
    * Start managed login after an explicit owner action; Codex owns OAuth and the local callback.
@@ -427,6 +439,7 @@ export default class NativeConversations extends TypertRemoteService {
     this.axiomPhase = history.phase
     const value: NativeConversationBinding = { source: 'axiom', sourceId: brandString<NativeConversationId>(history.url), title: history.phase === 'ready' ? history.title || 'Axiom' : 'Axiom', model: 'original-dot', cwd: null }
     await this.ensureStored(value)
+    this.axiomSelection.preferredUrl = history.url
     return { sessionId: sourceSessionId('axiom', value.sourceId) }
   }
   /** Show the dedicated original-page login surface when authentication is required. */

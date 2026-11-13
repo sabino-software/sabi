@@ -27,6 +27,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     }
   }
   interface SlotMap {
+    /** Feature actions directly below New Session, outside the scrolling history. */
+    'sidebar.primary.action': { kind: 'list'; scope: 'root'; owner: SidebarSettingsOwnerProps }
     /** Non-interactive notification inside the collapsed sidebar expand button. */
     'sidebar.toggle.badge': { kind: 'single'; scope: 'root'; owner: Record<never, never> }
     /**
@@ -231,6 +233,7 @@ export type SidebarRootInjected = {
 export type SidebarRootComponentProps =
   PropsRuntime<'sidebar'>
   & PropsRenderSlots<
+    | 'sidebar.primary.action'
     | 'sidebar.brand.mark'
     | 'sidebar.brand.name'
     | 'sidebar.toggle.badge'

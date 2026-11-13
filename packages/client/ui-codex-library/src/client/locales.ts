@@ -1,5 +1,9 @@
 /** Locale-owned native conversation connection and source labels. */
 export const en = {
+  dot: 'Dot', dotEnabled: 'Enable Dot integration', dotShowInSidebar: 'Show Dot in sidebar',
+  dotPreferencesError: 'Could not save or read Dot options. Try again.',
+  dotSelectionPending: 'Sign in to ChatGPT and select your Dot in the ChatGPT window. It will open here when ready.',
+  dotSelectionError: 'Could not open the selected Dot. Check ChatGPT and select Dot again.',
   codexSelect: 'Use work Codex for new chats',
   codexSelecting: 'Selecting work Codex…',
   codexSelected: 'Using work Codex for new chats.',
@@ -41,6 +45,10 @@ export type CodexLibraryKey = keyof typeof en
 
 /** Simplified Chinese copy. */
 export const zh: Record<CodexLibraryKey, string> = {
+  dot: 'Dot', dotEnabled: '启用 Dot 集成', dotShowInSidebar: '在侧边栏显示 Dot',
+  dotPreferencesError: '无法保存或读取 Dot 选项，请重试。',
+  dotSelectionPending: '请在 ChatGPT 窗口登录并选择 Dot。准备就绪后将在此打开。',
+  dotSelectionError: '无法打开所选 Dot，请检查 ChatGPT 并重新选择 Dot。',
   codexSelect: '新聊天使用工作 Codex',
   codexSelecting: '正在选择工作 Codex…',
   codexSelected: '新聊天使用工作 Codex。',
@@ -74,6 +82,10 @@ export const zh: Record<CodexLibraryKey, string> = {
 
 /** Brazilian Portuguese copy. */
 export const pt: Record<CodexLibraryKey, string> = {
+  dot: 'Dot', dotEnabled: 'Ativar integração Dot', dotShowInSidebar: 'Mostrar Dot na barra lateral',
+  dotPreferencesError: 'Não foi possível salvar ou ler as opções do Dot. Tente novamente.',
+  dotSelectionPending: 'Entre no ChatGPT e selecione seu Dot na janela do ChatGPT. Ele será aberto aqui quando estiver pronto.',
+  dotSelectionError: 'Não foi possível abrir o Dot selecionado. Verifique o ChatGPT e selecione o Dot novamente.',
   codexSelect: 'Usar Codex de trabalho em novas conversas',
   codexSelecting: 'Selecionando Codex de trabalho…',
   codexSelected: 'Usando Codex de trabalho em novas conversas.',

@@ -66,6 +66,7 @@ describe('ui-sidebar apply', () => {
     const b = await bench()
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     expect(b.slots.entries('sidebar')).toHaveLength(1)
+    expect(b.slots.spec('sidebar.primary.action')).toEqual({ kind: 'list', scope: 'root' })
     expect(b.slots.spec('sidebar.brand.mark')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.brand.name')).toEqual({ kind: 'single', scope: 'root' })
     const section = b.slots.spec('sidebar.workspaces') as { kind: string; scope: string; inject: SidebarSectionInjected }

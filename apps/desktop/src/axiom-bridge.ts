@@ -1,10 +1,11 @@
 /** Persistent original-site page ownership; Harness renders only bounded DOM projections. */
-import { BrowserWindow, dialog, session } from 'electron'
+import { type BrowserWindow, dialog, session, type WebContents } from 'electron'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { AxiomSendRequest, AxiomSendResult, AxiomSnapshot } from './axiom-protocol.ts'
 import { readAxiomPage, focusAxiomComposer, clickAxiomSend, findAxiomAcknowledgement } from './axiom-page.ts'
-import { axiomConversationUrl, axiomNavigation } from './axiom-navigation.ts'
+import { createAxiomWebsiteWindow } from './axiom-window.ts'
+import { axiomChooserNavigation, axiomConversationUrl, axiomNavigation, type AxiomNavigation } from './axiom-navigation.ts'
 
 export { axiomConversationUrl } from './axiom-navigation.ts'
 
@@ -27,12 +28,16 @@ function initialSnapshot(): AxiomSnapshot {
 export class DesktopAxiomPage {
   private page: BrowserWindow | undefined
   private selected: string | null = null
+  private choosing = false
+  private pendingChoice = false
   private current = initialSnapshot()
   private generation = 0
   private timer: ReturnType<typeof setTimeout> | undefined
   private refreshing: Promise<AxiomSnapshot> | undefined
   private sending = false
-  private closing = false
+  private closedByUser = false
+  private returnAfterChoice = false
+  private readonly websiteContents = new WeakMap<BrowserWindow, WebContents>()
   private sessionConfigured = false
   private authenticating = false
   private loginRevealed = false
@@ -41,8 +46,13 @@ export class DesktopAxiomPage {
   private readonly loginPopups = new Set<BrowserWindow>()
   private readonly submissions = new Map<string, { digest: string; pending?: Promise<AxiomSendResult>; outcome?: Pick<AxiomSendResult, 'status' | 'messageId'> }>()
 
-  /** @param publish Sends safe projections only to the owned application renderer. */
-  constructor(private readonly publish: (snapshot: AxiomSnapshot) => void) {}
+  /**
+   * @param publish Sends safe projections only to the owned application renderer.
+   * @param locale Toolbar locale; absent uses English.
+   * @param revealNative Reveals native chat only when a completed chooser held focus.
+   */
+  constructor(private readonly publish: (snapshot: AxiomSnapshot) => void, private readonly locale: () => string = () => 'en',
+    private readonly revealNative?: () => void) {}
 
   /**
    * Open a directly selected conversation in its dedicated persistent original-site session.
@@ -53,9 +63,44 @@ export class DesktopAxiomPage {
   async connect(value: unknown, signal?: AbortSignal): Promise<AxiomSnapshot> {
     signal?.throwIfAborted()
     const url = axiomConversationUrl(value)
+    if (this.closedByUser) return this.current
+    if (this.choosing || (this.pendingChoice && this.selected !== url)) return this.snapshot()
+    this.pendingChoice = false
     if (this.selected === url && this.page !== undefined && !this.page.isDestroyed()) return this.snapshot()
+    return this.open(url, false)
+  }
+
+  /**
+   * @param hintUrl Known canonical Dot, or null to choose on the original website.
+   * @returns Safe source state; sign-in content stays private.
+   */
+  async choose(hintUrl: string | null): Promise<AxiomSnapshot> {
+    if (hintUrl !== null) {
+      const url = axiomConversationUrl(hintUrl)
+      this.closedByUser = false
+      this.returnAfterChoice = true
+      const state = this.selected === url && !this.choosing ? await this.snapshot() : await this.open(url, false, true)
+      this.finishChoice(state)
+      if (state.phase !== 'ready' && this.selected === url && this.page && !this.page.isDestroyed()) this.revealAuthentication()
+      return state
+    }
+    this.closedByUser = false
+    if (this.selected !== null && this.current.phase === 'ready' && this.page && !this.page.isDestroyed()) {
+      this.returnAfterChoice = true
+      const state = await this.snapshot()
+      this.finishChoice(state)
+      return state
+    }
+    return this.open(null, true)
+  }
+
+  private async open(url: string | null, choosing: boolean, pendingChoice = false): Promise<AxiomSnapshot> {
     this.disconnect()
     this.selected = url
+    this.choosing = choosing
+    this.pendingChoice = pendingChoice
+    this.returnAfterChoice = choosing || pendingChoice
+    this.loginRevealed = choosing
     const generation = this.generation
     const browserSession = session.fromPartition('persist:skeinlet-axiom')
     if (!this.sessionConfigured) {
@@ -66,47 +111,73 @@ export class DesktopAxiomPage {
       browserSession.on('will-download', (event) => { event.preventDefault() })
       this.sessionConfigured = true
     }
-    const page = new BrowserWindow({ show: false, width: 1100, height: 800,
+    const created = createAxiomWebsiteWindow({ show: false, width: 1100, height: 800,
       webPreferences: { session: browserSession, nodeIntegration: false, nodeIntegrationInWorker: false,
         nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: true, webSecurity: true,
         allowRunningInsecureContent: false, webviewTag: false, navigateOnDragDrop: false,
         backgroundThrottling: false, spellcheck: false },
-    })
+    }, this.locale())
+    const page = created.window
+    this.websiteContents.set(page, created.contents)
     this.page = page
+    const categoryOf = (target: string, window: BrowserWindow): AxiomNavigation | 'selection' => this.choosing
+      ? axiomChooserNavigation(target, this.authenticating, this.loginRevealed && window.isVisible())
+      : this.selected === null ? 'blocked' : axiomNavigation(target, this.selected, this.authenticating, this.loginRevealed && window.isVisible())
     const admit = (target: string, window: BrowserWindow): boolean => {
-      const category = axiomNavigation(target, url, this.authenticating, this.loginRevealed && window.isVisible())
+      const category = categoryOf(target, window)
       if (category === 'authentication') this.authenticating = true
       if (category === 'blocked') { this.blockedNavigation(window); return false }
       this.navigationIssue = null
       return true
     }
-    page.webContents.setWindowOpenHandler((details) => {
+    this.contents(page).setWindowOpenHandler((details) => {
       if (this.page !== page || generation !== this.generation || !page.isVisible()
         || this.loginPopups.size > 0 || details.postBody !== undefined
-        || axiomNavigation(details.url, url, this.authenticating, this.loginRevealed && page.isVisible()) !== 'authentication') {
+        || categoryOf(details.url, page) !== 'authentication') {
         this.blockedNavigation(page)
         return { action: 'deny' }
       }
       this.authenticating = true
       this.navigationIssue = null
-      return { action: 'allow', overrideBrowserWindowOptions: { show: true, width: 600, height: 800,
+      return { action: 'allow', createWindow: (options) => {
+        const popup = createAxiomWebsiteWindow(options, this.locale())
+        this.websiteContents.set(popup.window, popup.contents)
+        attachPopup(popup.window)
+        return popup.contents
+      }, overrideBrowserWindowOptions: { show: true, width: 600, height: 800,
         webPreferences: { session: browserSession, nodeIntegration: false, nodeIntegrationInWorker: false,
           nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: true, webSecurity: true,
           allowRunningInsecureContent: false, webviewTag: false, navigateOnDragDrop: false },
       } }
     })
     const guardNavigation = (window: BrowserWindow): void => {
-      window.webContents.on('will-frame-navigate', (event) => {
+      this.contents(window).on('will-frame-navigate', (event) => {
         if (event.isMainFrame && !admit(event.url, window)) event.preventDefault()
       })
-      window.webContents.on('will-redirect', (event, target, _inPlace, mainFrame) => {
+      this.contents(window).on('will-redirect', (event, target, _inPlace, mainFrame) => {
         if (mainFrame && !admit(target, window)) event.preventDefault()
       })
     }
     guardNavigation(page)
     const returnToSelected = (window: BrowserWindow): void => {
       if (this.page !== page || generation !== this.generation || window.isDestroyed()) return
-      const category = axiomNavigation(window.webContents.getURL(), url, this.authenticating, this.loginRevealed && window.isVisible())
+      const observedUrl = this.contents(window).getURL()
+      const category = categoryOf(observedUrl, window)
+      if (this.choosing) {
+        if (window !== page) {
+          if (category === 'conversation' || category === 'selection' || category === 'return') {
+            window.destroy()
+            void this.contents(page).loadURL(category === 'conversation' ? axiomConversationUrl(observedUrl) : 'https://chatgpt.com/').catch((_chooserReturnFailure: unknown) => {
+              if (this.page === page) this.unavailable('page-unavailable')
+            })
+          }
+          return
+        }
+        if (category !== 'conversation') return
+        this.selected = axiomConversationUrl(observedUrl)
+        this.choosing = false
+        this.pendingChoice = true
+      }
       if (window === page && category === 'conversation') {
         this.authenticating = false
         this.loginRevealed = false
@@ -118,29 +189,42 @@ export class DesktopAxiomPage {
       this.loginRevealed = false
       this.navigationIssue = null
       if (window !== page) window.destroy()
-      void page.loadURL(url).catch((_loginReturnFailure: unknown) => {
+      const selected = this.selected
+      if (selected === null) return
+      void this.contents(page).loadURL(selected).catch((_loginReturnFailure: unknown) => {
         if (this.page === page) this.unavailable('page-unavailable')
       })
     }
-    page.webContents.on('did-create-window', (popup) => {
+    const attachPopup = (popup: BrowserWindow): void => {
       if (this.page !== page || generation !== this.generation) { popup.destroy(); return }
       this.loginPopups.add(popup)
       guardNavigation(popup)
-      popup.webContents.setWindowOpenHandler(() => { this.blockedNavigation(popup); return { action: 'deny' } })
-      popup.webContents.on('will-attach-webview', (event) => { event.preventDefault() })
-      popup.webContents.on('did-finish-load', () => { returnToSelected(popup) })
+      this.contents(popup).setWindowOpenHandler(() => { this.blockedNavigation(popup); return { action: 'deny' } })
+      this.contents(popup).on('will-attach-webview', (event) => { event.preventDefault() })
+      this.contents(popup).on('did-finish-load', () => { returnToSelected(popup) })
       popup.once('closed', () => {
         this.loginPopups.delete(popup)
         if (this.page === page) void this.snapshot()
       })
+    }
+    this.contents(page).on('did-create-window', attachPopup)
+    this.contents(page).on('did-finish-load', () => { returnToSelected(page) })
+    this.contents(page).on('did-navigate-in-page', (_event, _url, mainFrame) => {
+      if (!mainFrame || this.page !== page) return
+      returnToSelected(page)
+      void this.snapshot()
     })
-    page.webContents.on('did-finish-load', () => { returnToSelected(page) })
-    page.webContents.on('will-attach-webview', (event) => { event.preventDefault() })
-    page.webContents.on('render-process-gone', () => { if (this.page === page) this.unavailable('page-unavailable') })
-    page.on('close', (event) => { if (!this.closing) { event.preventDefault(); page.hide() } })
-    page.webContents.on('did-finish-load', () => { if (this.page === page) void this.snapshot() })
+    this.contents(page).on('will-attach-webview', (event) => { event.preventDefault() })
+    this.contents(page).on('render-process-gone', () => { if (this.page === page) this.unavailable('page-unavailable') })
+    page.once('closed', () => {
+      if (this.page !== page) return
+      this.closedByUser = true
+      this.disconnect()
+    })
+    this.contents(page).on('did-finish-load', () => { if (this.page === page) void this.snapshot() })
     this.update({ ...initialSnapshot(), url, phase: 'loading' })
-    try { await page.loadURL(url) }
+    if (choosing) page.show()
+    try { await this.contents(page).loadURL(url ?? 'https://chatgpt.com/') }
     catch (_pageLoadFailure) { if (generation === this.generation) this.unavailable('page-unavailable') }
     if (generation !== this.generation) return this.current
     this.schedule(generation)
@@ -159,6 +243,11 @@ export class DesktopAxiomPage {
 
   /** Show the original page for direct OpenAI authentication; any approved login popup shares its isolated session. */
   showLogin(): void {
+    this.returnAfterChoice = false
+    this.revealAuthentication()
+  }
+
+  private revealAuthentication(): void {
     if (this.page === undefined || this.page.isDestroyed()) throw new Error('Connect an original conversation first')
     this.loginRevealed = true
     this.navigationIssue = null
@@ -179,9 +268,10 @@ export class DesktopAxiomPage {
     for (const popup of this.loginPopups) if (!popup.isDestroyed()) popup.destroy()
     this.loginPopups.clear()
     this.selected = null
-    this.closing = true
+    this.choosing = false
+    this.pendingChoice = false
+    this.returnAfterChoice = false
     if (page !== undefined && !page.isDestroyed()) page.destroy()
-    this.closing = false
     this.update(initialSnapshot())
   }
 
@@ -219,29 +309,29 @@ export class DesktopAxiomPage {
     const page = this.page
     const generation = this.generation
     const selected = this.selected
-    if (page === undefined || page.isDestroyed() || selected === null || !this.matches(page.webContents.getURL())) {
+    if (page === undefined || page.isDestroyed() || selected === null || !this.matches(this.contents(page).getURL())) {
       return { status: 'refused', snapshot: this.current }
     }
     this.sending = true
     let attemptedClick = false
     try {
       const state = await this.snapshot()
-      if (signal?.aborted || generation !== this.generation || !state.canSend || state.draftPresent || !this.matches(page.webContents.getURL())) return { status: 'refused', snapshot: state }
-      const ids: unknown = await page.webContents.executeJavaScript(
+      if (signal?.aborted || generation !== this.generation || !state.canSend || state.draftPresent || !this.matches(this.contents(page).getURL())) return { status: 'refused', snapshot: state }
+      const ids: unknown = await this.contents(page).executeJavaScript(
         "Array.from(document.querySelectorAll('article.message-row[data-message-id]'), row => row.getAttribute('data-message-id'))")
       const before = z.array(z.string().max(512)).max(10000).parse(ids)
-      const focused: unknown = await page.webContents.executeJavaScript(`(${focusAxiomComposer.toString()})()`, true)
-      if (signal?.aborted || focused !== true || generation !== this.generation || !this.matches(page.webContents.getURL())) return { status: 'refused', snapshot: this.current }
-      await page.webContents.insertText(request.text)
-      if (signal?.aborted || generation !== this.generation || !this.matches(page.webContents.getURL())) return { status: 'unknown', snapshot: this.current }
+      const focused: unknown = await this.contents(page).executeJavaScript(`(${focusAxiomComposer.toString()})()`, true)
+      if (signal?.aborted || focused !== true || generation !== this.generation || !this.matches(this.contents(page).getURL())) return { status: 'refused', snapshot: this.current }
+      await this.contents(page).insertText(request.text)
+      if (signal?.aborted || generation !== this.generation || !this.matches(this.contents(page).getURL())) return { status: 'unknown', snapshot: this.current }
       attemptedClick = true
-      const accepted: unknown = await page.webContents.executeJavaScript(
+      const accepted: unknown = await this.contents(page).executeJavaScript(
         `location.href.replace(/\\/$/, '') === ${JSON.stringify(selected)} && (${clickAxiomSend.toString()})(${JSON.stringify(request.text)})`, true)
       if (accepted !== true) return { status: 'refused', snapshot: await this.snapshot() }
       const deadline = Date.now() + 12000
       while (!signal?.aborted && generation === this.generation && !page.isDestroyed()
-        && this.matches(page.webContents.getURL()) && Date.now() < deadline) {
-        const id: unknown = await page.webContents.executeJavaScript(
+        && this.matches(this.contents(page).getURL()) && Date.now() < deadline) {
+        const id: unknown = await this.contents(page).executeJavaScript(
           `(${findAxiomAcknowledgement.toString()})(${JSON.stringify(request.text)},${JSON.stringify(before)})`)
         if (typeof id === 'string') return { status: 'confirmed', messageId: id, snapshot: await this.snapshot() }
         await new Promise<void>((resolve) => { setTimeout(resolve, 250) })
@@ -251,6 +341,16 @@ export class DesktopAxiomPage {
       return { status: attemptedClick ? 'unknown' : 'refused', snapshot: this.current }
     } finally { this.sending = false }
   }
+
+  /** Reload only the focused owned website, including its current authentication popup. @returns Whether a page was reloaded. */
+  reloadFocused(): boolean {
+    for (const window of [...this.loginPopups, ...(this.page === undefined ? [] : [this.page])]) {
+      if (!window.isDestroyed() && window.isFocused()) { this.contents(window).reload(); return true }
+    }
+    return false
+  }
+
+  private contents(window: BrowserWindow): WebContents { return this.websiteContents.get(window) ?? window.webContents }
 
   private matches(url: string): boolean {
     try { return axiomConversationUrl(url) === this.selected } catch (_differentPage) { return false }
@@ -264,8 +364,12 @@ export class DesktopAxiomPage {
         siteStatus: this.navigationIssue, errorCode: 'unsupported-page' })
       return this.current
     }
-    if (this.loginPopups.size > 0 || !this.matches(page.webContents.getURL())) {
-      const currentUrl = page.webContents.getURL()
+    if (this.choosing) {
+      this.update({ ...initialSnapshot(), phase: 'login-required', limited: true })
+      return this.current
+    }
+    if (this.loginPopups.size > 0 || !this.matches(this.contents(page).getURL())) {
+      const currentUrl = this.contents(page).getURL()
       if (currentUrl === '' || currentUrl === 'about:blank') return this.current
       const category = this.selected === null ? 'blocked' : axiomNavigation(currentUrl, this.selected, this.authenticating, this.loginRevealed && page.isVisible())
       const loginPage = this.loginPopups.size > 0 || category === 'authentication' || category === 'return'
@@ -274,15 +378,26 @@ export class DesktopAxiomPage {
       return this.current
     }
     try {
-      const raw: unknown = await page.webContents.executeJavaScript(`(${readAxiomPage.toString()})()`)
+      const raw: unknown = await this.contents(page).executeJavaScript(`(${readAxiomPage.toString()})()`)
       const state = pageSchema.parse(raw)
-      if (generation !== this.generation || !this.matches(state.url) || !this.matches(page.webContents.getURL())) return this.current
+      if (generation !== this.generation || !this.matches(state.url) || !this.matches(this.contents(page).getURL())) return this.current
       this.update({ source: 'chatgpt-web', url: this.selected, title: state.title, revision: this.current.revision,
-        phase: state.composer ? 'ready' : page.webContents.isLoading() ? 'loading' : 'unavailable',
+        phase: state.composer ? 'ready' : this.contents(page).isLoading() ? 'loading' : 'unavailable',
         messages: state.messages, canSend: state.composer && state.sendPresent, draftPresent: state.draft.trim() !== '',
         siteStatus: state.siteStatus, limited: state.limited })
+      this.finishChoice(this.current)
     } catch (_unsupportedPage) { if (generation === this.generation) this.unavailable('unsupported-page') }
     return this.current
+  }
+
+  private finishChoice(snapshot: AxiomSnapshot): void {
+    const page = this.page
+    if (!this.returnAfterChoice || snapshot.phase !== 'ready' || snapshot.url !== this.selected
+      || !page || page.isDestroyed() || this.loginPopups.size > 0) return
+    this.returnAfterChoice = false
+    const focused = page.isFocused()
+    page.hide()
+    if (focused) this.revealNative?.()
   }
 
   private blockedNavigation(window: BrowserWindow): void {

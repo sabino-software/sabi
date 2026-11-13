@@ -154,6 +154,7 @@ export function createElectronBuilderConfig(
       'lib/preload-mandatory.cjs',
       'lib/preload-platform-account.cjs',
       'lib/preload-update-dialog.cjs',
+      'lib/preload-axiom-window.cjs',
       'lib/preload-welcome.cjs',
       'renderer/**/*',
       'package.json',

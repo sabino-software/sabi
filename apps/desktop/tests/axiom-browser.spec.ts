@@ -85,11 +85,11 @@ describe('browser message framing', () => {
     expect(values).toEqual([{ text: 'Original café\nsecond line' }, { next: true }])
     for (const size of [0, AXIOM_BROWSER_FRAME_LIMIT + 1]) {
       const header = Buffer.alloc(4); header.writeUInt32LE(size)
-      expect(() => new BrowserFrameDecoder().push(header, () => {})).toThrow()
+      expect(() => { new BrowserFrameDecoder().push(header, () => {}) }).toThrow()
     }
     for (const bytes of [Buffer.from([0xff]), Buffer.from('{')]) {
       const frame = Buffer.alloc(bytes.length + 4); frame.writeUInt32LE(bytes.length); bytes.copy(frame, 4)
-      expect(() => new BrowserFrameDecoder().push(frame, () => {})).toThrow()
+      expect(() => { new BrowserFrameDecoder().push(frame, () => {}) }).toThrow()
     }
   })
 })
@@ -169,4 +169,40 @@ describe.skipIf(process.platform === 'win32')('paired original browser transport
     await h.owner.showLogin()
     expect(h.openExternal).toHaveBeenCalledWith(selected)
   })
+})
+
+it.skipIf(process.platform === 'win32')('discovers an unbound toolbar Dot only after an explicit chooser and native approval', async () => {
+  const h = await fixture()
+  h.owner.disconnect()
+  const unarmed = h.helper()
+  await once(unarmed.child, 'exit')
+  expect(h.confirm).not.toHaveBeenCalled()
+  expect(await h.owner.choose(null)).toMatchObject({ url: null, phase: 'login-required', messages: [] })
+  await h.owner.connect('https://chatgpt.com/dots/old-binding')
+  const chosen = h.helper()
+  await expect.poll(() => chosen.frames.some(frame => frame.type === 'paired')).toBe(true)
+  expect(h.confirm).toHaveBeenCalledOnce()
+  expect(await h.owner.snapshot()).toEqual(snapshot)
+  await h.owner.connect('https://chatgpt.com/dots/old-binding')
+  expect(await h.owner.snapshot()).toEqual(snapshot)
+  await h.owner.connect(selected)
+})
+
+it.skipIf(process.platform === 'win32')('revokes an unbound approval on disconnect and a new explicit choice', async () => {
+  const h = await fixture()
+  await h.owner.choose(null)
+  const approval = Promise.withResolvers<boolean>()
+  h.confirm.mockImplementationOnce(() => approval.promise)
+  const old = h.helper()
+  await expect.poll(() => h.confirm.mock.calls.length).toBe(1)
+  const closed = once(old.child, 'exit')
+  await h.owner.choose('https://chatgpt.com/dots/different')
+  approval.resolve(true)
+  await closed
+  expect(old.frames.some(frame => frame.type === 'paired')).toBe(false)
+  expect((await h.owner.snapshot()).url).toBe('https://chatgpt.com/dots/different')
+  h.owner.disconnect()
+  const unarmed = h.helper()
+  await once(unarmed.child, 'exit')
+  expect(h.confirm).toHaveBeenCalledOnce()
 })

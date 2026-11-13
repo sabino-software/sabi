@@ -49,3 +49,20 @@ export function axiomNavigation(
   if (url.pathname === '/' && authenticating) return 'return'
   return 'blocked'
 }
+
+/**
+ * Admit original-site browsing only during an explicit, visible Dot chooser, with the same external auth allowlist.
+ * @param value Original site's requested main-frame destination.
+ * @param authenticating Whether an admitted authentication flow has begun.
+ * @param revealed Whether the user has explicitly revealed the chooser window.
+ * @returns Canonical conversation, authentication, or unobserved ChatGPT selection page; unrelated origins are blocked.
+ */
+export function axiomChooserNavigation(value: string, authenticating: boolean, revealed: boolean): AxiomNavigation | 'selection' {
+  const category = axiomNavigation(value, '', authenticating, revealed)
+  if (category === 'authentication') return category
+  if (!revealed) return 'blocked'
+  let url: URL
+  try { url = new URL(value) } catch (_invalidDestination) { return 'blocked' }
+  if (url.origin !== 'https://chatgpt.com' || url.username || url.password) return 'blocked'
+  try { axiomConversationUrl(value); return 'conversation' } catch (_notConversation) { return 'selection' }
+}

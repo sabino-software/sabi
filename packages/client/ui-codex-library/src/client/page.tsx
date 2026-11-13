@@ -1,14 +1,15 @@
 /** Connection management; conversations remain in the standard workspace sidebar. */
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, Input, IconLayersOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconLayersOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { AxiomBrowserSetup, AxiomTransportMode, DesktopAxiomCompanion } from './desktop-axiom.ts'
+import type { DotControlsInjected } from './dot-controls.tsx'
 import css from './page.module.css'
 
 /** Operations exposed by the native-conversation Host service. */
-export interface NativeConnectionsInjected {
+export interface NativeConnectionsInjected extends DotControlsInjected {
   /** Optional desktop-only browser companion controls; absent in ordinary Web. */
   readonly axiomCompanion?: DesktopAxiomCompanion
   /** Explicitly select the authenticated work subscription for future chats. */
@@ -19,8 +20,6 @@ export interface NativeConnectionsInjected {
   cancelCodexLogin(this: void): Promise<void>
   /** Import existing Codex threads into the standard workspace list. */
   syncCodex(this: void): Promise<{ imported: number }>
-  /** Bind the original Axiom conversation and open its native Session. */
-  connectAxiom(this: void, url: string): Promise<void>
   /** Reveal the original ChatGPT login in the desktop bridge. */
   showAxiomLogin(this: void): Promise<void>
 }
@@ -42,7 +41,7 @@ export function CodexLibraryIcon({ size }: PropsRuntime<'sidebar.panellist'>): R
  * @returns The connection-management page.
  */
 export function CodexLibraryPage({
-  useResource, t, syncCodex, connectAxiom, showAxiomLogin, startCodexLogin, cancelCodexLogin, axiomCompanion, useCodex,
+  useResource, t, syncCodex, chooseDot, useDot, showAxiomLogin, startCodexLogin, cancelCodexLogin, axiomCompanion, useCodex,
 }: PageProps): ReactNode {
   const [revision, setRevision] = useState(0)
   const [companionRevision, setCompanionRevision] = useState(0)
@@ -50,7 +49,7 @@ export function CodexLibraryPage({
   const [setup, setSetup] = useState<AxiomBrowserSetup | null>(null)
   const [transportBusy, setTransportBusy] = useState(false)
   const [transportError, setTransportError] = useState(false)
-  const [url, setUrl] = useState('')
+  const dot = useDot(value => value)
   const [busy, setBusy] = useState<'sync' | 'connect' | 'login' | 'codex-login' | 'codex-cancel' | 'codex-select' | null>(null)
   const [authUrl, setAuthUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -94,7 +93,7 @@ export function CodexLibraryPage({
     setImported(null)
     try {
       if (action === 'sync') setImported((await syncCodex()).imported)
-      else if (action === 'connect') await connectAxiom(url)
+      else if (action === 'connect') await chooseDot()
       else if (action === 'login') await showAxiomLogin()
       else if (action === 'codex-select') await useCodex()
       else if (action === 'codex-cancel') { await cancelCodexLogin(); setAuthUrl(null) }
@@ -116,7 +115,8 @@ export function CodexLibraryPage({
     }
   }
   const disabled = busy !== null || transportBusy || status.value?.syncing === true
-  const axiomDisabled = disabled || transportError || (axiomCompanion !== undefined && transport === null)
+  const axiomDisabled = disabled || status.value?.axiom.available !== true || transportError
+    || (axiomCompanion !== undefined && transport === null)
     || (transport === 'browser' && setup?.available !== true)
   return <section className={css.page} aria-label={t('title')}>
     <header className={css.header}>
@@ -189,18 +189,15 @@ export function CodexLibraryPage({
           </details>}
         </>}
       </div>}
-      <form className={css.form} onSubmit={(event) => { event.preventDefault(); if (!axiomDisabled) void run('connect') }}>
-        <label htmlFor="native-axiom-url">{t('url')}</label>
-        <Input id="native-axiom-url" type="url" value={url} required autoComplete="off" spellCheck={false}
-          onChange={(event) => { setUrl(event.currentTarget.value) }} placeholder="https://chatgpt.com/dots/…" />
-        <div className={css.actions}>
-          <Button type="submit" size="sm" variant="outline" disabled={axiomDisabled || status.value?.axiom.available !== true}>
-            {t(busy === 'connect' ? 'connecting' : 'connect')}
-          </Button>
-          <Button type="button" size="sm" variant="outline" disabled={axiomDisabled || status.value?.axiom.available !== true}
-            onClick={() => { void run('login') }}>{t(busy === 'login' ? 'openingLogin' : 'login')}</Button>
-        </div>
-      </form>
+      {dot.pending && <p role="status">{t('dotSelectionPending')}</p>}
+      {dot.failed && <p role="alert">{t('dotSelectionError')}</p>}
+      <div className={css.actions}>
+        <Button type="button" size="sm" variant="outline"
+          disabled={axiomDisabled || !dot.preferences?.enabled || dot.busy}
+          onClick={() => { void run('connect') }}>{t(busy === 'connect' || dot.busy ? 'connecting' : 'connect')}</Button>
+        <Button type="button" size="sm" variant="outline" disabled={axiomDisabled || !dot.preferences?.enabled}
+          onClick={() => { void run('login') }}>{t(busy === 'login' ? 'openingLogin' : 'login')}</Button>
+      </div>
     </section>
   </section>
 }

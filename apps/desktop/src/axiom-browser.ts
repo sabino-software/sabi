@@ -44,6 +44,7 @@ export class BrowserAxiomPage {
   private key: string | undefined
   private peer: { socket: Socket; pairId: string; tabId: number; documentId: string } | undefined
   private pairing = false
+  private choosing = false
   private nextId = 1
   private readonly sockets = new Set<Socket>()
   private readonly pending = new Map<number, Pending>()
@@ -58,11 +59,41 @@ export class BrowserAxiomPage {
     signal?.throwIfAborted()
     if (this.disposed) throw new Error('Original browser bridge is closed')
     const url = axiomConversationUrl(value)
+    if (this.choosing) {
+      if (this.selected !== url) return this.snapshot()
+      this.choosing = false
+    }
     if (this.selected !== url) { this.disconnect(); this.selected = url }
+    const epoch = this.epoch
     await this.start()
     signal?.throwIfAborted()
+    if (epoch !== this.epoch) return this.current
     if (this.peer) return this.snapshot()
     this.update({ ...empty(url, 'login-required'), siteStatus: this.options.pairingNotice?.() ?? 'Open this Dot in your regular browser, then click the Skeinlet extension to connect it.' })
+    return this.current
+  }
+
+  /**
+   * @param hintUrl Known canonical Dot, or null to admit one toolbar-selected Dot after native confirmation.
+   * @returns Current safe state.
+   */
+  async choose(hintUrl: string | null): Promise<AxiomSnapshot> {
+    if (hintUrl !== null) {
+      const url = axiomConversationUrl(hintUrl)
+      if (this.selected === url && this.peer && this.current.phase === 'ready') return this.snapshot()
+      this.disconnect()
+      const state = await this.connect(url)
+      if (this.selected === url) this.choosing = true
+      return state
+    }
+    if (this.peer && this.current.phase === 'ready') return this.snapshot()
+    if (this.disposed) throw new Error('Original browser bridge is closed')
+    this.disconnect()
+    this.choosing = true
+    const epoch = this.epoch
+    await this.start()
+    if (epoch !== this.epoch) return this.current
+    this.update({ ...empty(null, 'login-required'), siteStatus: this.options.pairingNotice?.() ?? 'Open your Dot in your regular browser, then click the Skeinlet extension to select it.' })
     return this.current
   }
 
@@ -112,7 +143,11 @@ export class BrowserAxiomPage {
 
   /** Reveal only the selected regular-browser Dot, leaving its normal login flow under browser ownership. */
   async showLogin(): Promise<void> {
-    if (this.selected === null) throw new Error('Select the original Dot first')
+    if (this.selected === null) {
+      if (!this.choosing) throw new Error('Select the original Dot first')
+      await this.options.openExternal('https://chatgpt.com/')
+      return
+    }
     if (this.peer) await this.request('show', {})
     else await this.options.openExternal(this.selected)
   }
@@ -121,6 +156,7 @@ export class BrowserAxiomPage {
   disconnect(): void {
     this.epoch++
     this.pairing = false
+    this.choosing = false
     this.selected = null
     for (const socket of this.sockets) socket.destroy()
     this.peer?.socket.destroy()
@@ -235,7 +271,9 @@ export class BrowserAxiomPage {
           offered = true
           clearTimeout(deadline)
           const pair = browserPairSchema.parse(value)
-          if (this.pairing || this.selected === null || axiomConversationUrl(pair.url) !== this.selected || pair.url !== this.selected) throw new Error('Unselected browser page')
+          const url = axiomConversationUrl(pair.url)
+          const unboundChoice = this.choosing && this.selected === null
+          if (this.pairing || pair.url !== url || (!unboundChoice && url !== this.selected)) throw new Error('Unselected browser page')
           this.pairing = true
           const selected = this.selected
           const epoch = this.epoch
@@ -245,9 +283,10 @@ export class BrowserAxiomPage {
               return
             }
             this.peer?.socket.destroy()
+            this.selected = url
             const pairId = randomBytes(16).toString('hex')
             this.peer = { socket, pairId, tabId: pair.tabId, documentId: pair.documentId }
-            socket.write(encodeBrowserFrame({ type: 'paired', version: 1, pairId, url: selected }))
+            socket.write(encodeBrowserFrame({ type: 'paired', version: 1, pairId, url }))
             void this.snapshot()
           }).catch((_pairingUnavailable: unknown) => { socket.destroy() }).finally(() => { if (this.epoch === epoch) this.pairing = false })
           return

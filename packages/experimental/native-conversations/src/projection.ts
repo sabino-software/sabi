@@ -42,6 +42,7 @@ export const nativeBindingSequenceProjection = {
   apply: (state, event) => pluginRecordOf(event)?.type === BINDING_RECORD ? event.seq : state,
 } satisfies ProjectionDefinition<'nativeBindingSequence', SessionSeq | null>
 
+/** Durable marker for a verified completed boundary in the original Codex thread. */
 export const CODEX_CUT_RECORD = 'plugin:native-conversations/codex-cut'
 const cutSchema: z.ZodType<NativeCodexCut> = z.object({
   sourceId: z.string().min(1).transform(value => brandString<NativeConversationId>(value)), turnId: z.string().min(1),
@@ -52,6 +53,7 @@ export interface NativeCodexCutState extends NativeCodexCut {
   readonly lastEvidenceSeq: SessionSeq | null
   readonly inheritedPartial: boolean
 }
+/** Host projection of the latest verified source cut and any subsequent inherited evidence. */
 export const nativeCodexCutProjection = {
   key: 'nativeCodexCut', stateVersion: 2,
   stateSchema: z.object({
@@ -80,7 +82,11 @@ export const nativeCodexCutProjection = {
   },
 } satisfies ProjectionDefinition<'nativeCodexCut', NativeCodexCutState | null>
 
-/** @param session - Owning Session. @param cut - Verified original boundary. */
+/**
+ * Append a verified completed source boundary to its owning local Session.
+ * @param session - Owning Session.
+ * @param cut - Verified original boundary.
+ */
 export function appendCodexCut(session: Session, cut: NativeCodexCut): void {
   appendPluginRecord(session, CODEX_CUT_RECORD, cutSchema.parse(cut))
 }
@@ -107,7 +113,12 @@ export const nativeStepInputProjection = {
   },
 } satisfies ProjectionDefinition<'nativeStepInput', NativeStepInputState>
 
-/** @param state - Current projected boundary. @param position - The committed request position. @returns Matching admitted IDs. */
+/**
+ * Read admitted input identities only for the currently open matching request position.
+ * @param state - Current projected boundary.
+ * @param position - The committed request position.
+ * @returns Matching admitted IDs, or an empty list outside that open step.
+ */
 export function admittedNativeInputIds(
   state: NativeStepInputState, position: { readonly turn: number; readonly step: number },
 ): readonly MessageId[] {

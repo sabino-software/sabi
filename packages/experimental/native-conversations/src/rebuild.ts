@@ -8,7 +8,15 @@ import type { SourceSessionAssignment } from './source-index.ts'
 import { BINDING_RECORD, bindingSchema } from './projection.ts'
 import { sourceSessionId } from './history.ts'
 
-/** Only navigation/index state is compensated; process interruption is not an atomic transaction. */
+/**
+ * Replace an eligible inactive Codex mirror while retaining the original as archived evidence.
+ * Only navigation/index state is compensated; process interruption is not an atomic transaction.
+ * @param ctx - Host services used to verify, create, attach, and archive the mirrors.
+ * @param sources - Canonical source-to-local-Session assignments.
+ * @param oldId - Existing top-level, inactive, unpinned mirror to replace.
+ * @param blocked - Session identities blocked from activation during uncertain recovery.
+ * @returns Replacement Session identity and the archived original identity.
+ */
 export async function rebuildCodexMirror(
   ctx: Context,
   sources: Pick<KvTable<SessionId, SourceSessionAssignment>, 'get' | 'put'>,

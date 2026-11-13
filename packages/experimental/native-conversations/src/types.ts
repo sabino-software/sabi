@@ -39,7 +39,12 @@ export interface NativeConversationStatus {
     readonly selected: boolean
     readonly error: string | null
   }
-  readonly axiom: { readonly available: boolean; readonly phase: string }
+  readonly axiom: {
+    readonly available: boolean
+    readonly phase: string
+    /** Existing original selection, absent for older Hosts or unavailable when several cached Dots need a fresh choice. */
+    readonly preferredUrl?: string | null
+  }
   readonly syncing: boolean
 }
 

@@ -11,6 +11,8 @@
     "src/css-modules.d.ts"
   ],
   "references": [
+    { "path": "../store" },
+    { "path": "../ui-settings-general/tsconfig.client.json" },
     {
       "path": "../../../vendor/cordis"
     },

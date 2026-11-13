@@ -32,10 +32,20 @@ vi.mock('electron', async () => {
       loadURL = vi.fn(async (url: string) => { this.url = url })
       isDestroyed(): boolean { return this.destroyed }
       isVisible(): boolean { return this.visible }
+      isFocused(): boolean { return this.visible }
       show(): void { this.visible = true }
       hide(): void { this.visible = false }
       destroy(): void { this.destroyed = true; this.emit('closed') }
     } }
+})
+
+vi.mock('../src/axiom-window.ts', async () => {
+  const { BrowserWindow } = await import('electron')
+  return { createAxiomWebsiteWindow: (options: Electron.BrowserWindowConstructorOptions) => {
+    const window = new BrowserWindow(options)
+    Object.assign(window.webContents, { loadURL: (url: string) => window.loadURL(url) })
+    return { window, contents: window.webContents }
+  } }
 })
 
 import { BrowserWindow } from 'electron'
@@ -62,6 +72,26 @@ async function connect(): Promise<{ owner: DesktopAxiomPage; page: WindowFixture
 }
 
 describe('Axiom login windows', () => {
+  it('returns a chosen ready Dot to native chat once and preserves an explicitly reopened website', async () => {
+    const revealNative = vi.fn()
+    const owner = new DesktopAxiomPage(() => {}, () => 'en', revealNative)
+    owners.push(owner)
+    await owner.choose(null)
+    const page = fixture.windows.at(-1) as WindowFixture
+    page.url = selected
+    page.webContents.emit('did-navigate-in-page', {}, selected, true)
+    expect(await owner.snapshot()).toMatchObject({ phase: 'ready', url: selected })
+    expect(page.visible).toBe(false)
+    expect(revealNative).toHaveBeenCalledOnce()
+    owner.showLogin()
+    await owner.connect(selected)
+    expect(page.visible).toBe(true)
+    expect(revealNative).toHaveBeenCalledOnce()
+    await owner.choose(selected)
+    expect(page.visible).toBe(false)
+    expect(revealNative).toHaveBeenCalledTimes(2)
+  })
+
   it('admits official authentication redirects without reading or exporting their page content', async () => {
     const { owner, page } = await connect()
     const allowed = { preventDefault: vi.fn() }
@@ -175,4 +205,63 @@ describe('Axiom login windows', () => {
     expect(page.openHandler({ url: 'https://accounts.google.com/o/oauth2/v2/auth' })).toEqual({ action: 'deny' })
   })
 
+})
+
+it('chooses a committed main-frame Dot without observing landing, auth, or unrelated ChatGPT pages', async () => {
+  const publish = vi.fn()
+  const owner = new DesktopAxiomPage(publish)
+  owners.push(owner)
+  expect(await owner.choose(null)).toMatchObject({ url: null, phase: 'login-required', messages: [] })
+  const page = fixture.windows.at(-1) as WindowFixture
+  expect(page.loadURL).toHaveBeenCalledWith('https://chatgpt.com/')
+  expect(page.visible).toBe(true)
+  expect(page.webContents.executeJavaScript).not.toHaveBeenCalled()
+  await owner.connect('https://chatgpt.com/dots/old-binding')
+  expect(page.loadURL).toHaveBeenCalledTimes(1)
+  for (const url of ['https://auth.openai.com/log-in?state=PRIVATE_AUTH', 'https://chatgpt.com/c/unrelated']) {
+    page.url = url
+    page.webContents.emit('did-finish-load')
+    expect(await owner.snapshot()).toMatchObject({ url: null, messages: [], canSend: false })
+  }
+  expect(page.webContents.executeJavaScript).not.toHaveBeenCalled()
+  page.url = selected
+  page.webContents.emit('did-navigate-in-page', {}, selected, false)
+  expect(await owner.snapshot()).toMatchObject({ url: null, messages: [] })
+  page.webContents.emit('did-navigate-in-page', {}, selected, true)
+  expect(await owner.snapshot()).toMatchObject({ url: selected, phase: 'ready' })
+  expect(page.webContents.executeJavaScript).toHaveBeenCalled()
+  await owner.connect('https://chatgpt.com/dots/old-binding')
+  expect(page.loadURL).toHaveBeenCalledTimes(1)
+  await owner.connect(selected)
+  const blocked = { isMainFrame: true, url: 'https://chatgpt.com/dots/other', preventDefault: vi.fn() }
+  page.webContents.emit('will-frame-navigate', blocked)
+  expect(blocked.preventDefault).toHaveBeenCalledOnce()
+  expect(JSON.stringify(publish.mock.calls)).not.toContain('PRIVATE_AUTH')
+})
+
+it('reuses a ready selected Dot without opening another chooser or revealing unnecessary sign-in', async () => {
+  const { owner, page } = await connect()
+  expect(await owner.choose(selected)).toMatchObject({ url: selected, phase: 'ready' })
+  expect(await owner.choose(null)).toMatchObject({ url: selected, phase: 'ready' })
+  expect(page.visible).toBe(false)
+  expect(fixture.windows).toHaveLength(1)
+  page.webContents.emit('will-redirect', { preventDefault: vi.fn() }, 'https://auth.openai.com/log-in', false, true)
+  page.url = 'https://auth.openai.com/log-in?state=PRIVATE_AUTH'
+  expect(await owner.choose(selected)).toMatchObject({ url: selected, phase: 'login-required', messages: [] })
+  expect(page.visible).toBe(true)
+})
+
+it('actually closes the original website and its popups, and waits for an explicit choice before reopening', async () => {
+  const { owner, page } = await connect()
+  owner.showLogin()
+  const popup = new BrowserWindow({ show: true }) as unknown as WindowFixture
+  page.webContents.emit('did-create-window', popup)
+  page.destroyed = true
+  page.emit('closed')
+  expect(popup.destroyed).toBe(true)
+  expect(await owner.snapshot()).toMatchObject({ phase: 'disconnected', url: null, messages: [] })
+  await owner.connect(selected)
+  expect(fixture.windows).toHaveLength(2)
+  expect(await owner.choose(selected)).toMatchObject({ phase: 'ready', url: selected })
+  expect(fixture.windows).toHaveLength(3)
 })

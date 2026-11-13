@@ -44,7 +44,7 @@ function mount(options: {
     if (options.failSync) throw new Error('Codex app-server connection lost')
     return { imported: 2 }
   })
-  const connectAxiom = vi.fn(async (_url: string) => {})
+  const chooseDot = vi.fn(async () => {})
   const showAxiomLogin = vi.fn(async () => {})
   const useResource = ((address: string) => {
     addresses.push(address)
@@ -54,9 +54,12 @@ function mount(options: {
   }) as PageProps['useResource']
   render(<CodexLibraryPage {...{
     ...options.axiomCompanion === undefined ? {} : { axiomCompanion: options.axiomCompanion },
-    useResource, t: makeTranslate(en), syncCodex, connectAxiom, showAxiomLogin, startCodexLogin, cancelCodexLogin, useCodex,
+    useDot: selector => selector({ preferences: { enabled: true, showInSidebar: false },
+      busy: false, pending: false, failed: false, preferencesFailed: false }),
+    setDotPreferences: async () => {}, useResource, t: makeTranslate(en), syncCodex, chooseDot, showAxiomLogin,
+    startCodexLogin, cancelCodexLogin, useCodex,
   } as PageProps} />)
-  return { addresses, syncCodex, connectAxiom, showAxiomLogin, startCodexLogin, cancelCodexLogin, useCodex,
+  return { addresses, syncCodex, chooseDot, showAxiomLogin, startCodexLogin, cancelCodexLogin, useCodex,
     completeLogin: () => { authenticated = true; loginPhase = 'succeeded' },
   }
 }
@@ -97,14 +100,13 @@ describe('Native conversation connections', () => {
     expect(actions.addresses.at(-1)).toContain('revision=1')
   })
 
-  it('connects the exact entered original Axiom URL and opens login only on request', async () => {
+  it('selects Dot without a URL field and opens login only on request', async () => {
     const actions = mount()
-    expect(actions.connectAxiom).not.toHaveBeenCalled()
+    expect(actions.chooseDot).not.toHaveBeenCalled()
     expect(actions.showAxiomLogin).not.toHaveBeenCalled()
-    const url = 'https://chatgpt.com/dots/original~opaque'
-    fireEvent.change(screen.getByRole('textbox', { name: 'Existing ChatGPT Dot URL' }), { target: { value: url } })
-    fireEvent.submit(screen.getByRole('textbox', { name: 'Existing ChatGPT Dot URL' }).closest('form')!)
-    await waitFor(() =>{  expect(actions.connectAxiom).toHaveBeenCalledWith(url) })
+    expect(screen.queryByRole('textbox')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Axiom' }))
+    await waitFor(() => { expect(actions.chooseDot).toHaveBeenCalledExactlyOnceWith() })
     await waitFor(() =>{  expect(screen.getByRole('button', { name: 'Open ChatGPT login' }).hasAttribute('disabled')).toBe(false) })
     fireEvent.click(screen.getByRole('button', { name: 'Open ChatGPT login' }))
     await waitFor(() =>{  expect(actions.showAxiomLogin).toHaveBeenCalledTimes(1) })
@@ -118,7 +120,7 @@ describe('Native conversation connections', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sync Codex conversations' }))
     await screen.findByRole('alert')
     expect(screen.getByRole('alert').textContent).toBe('Codex app-server connection lost')
-    expect(actions.connectAxiom).not.toHaveBeenCalled()
+    expect(actions.chooseDot).not.toHaveBeenCalled()
   })
   it('starts Codex OAuth only on request, exposes a safe browser link, and confirms account completion', async () => {
     const actions = mount({ authenticated: false })
@@ -168,7 +170,8 @@ function companion(initial: 'browser' | 'embedded' = 'browser', available = true
   const transport = vi.fn(async () => mode)
   const selectTransport = vi.fn(async (next: 'browser' | 'embedded') => { mode = next })
   const browserSetup = vi.fn(async () => metadata)
-  return { transport, selectTransport, browserSetup }
+  return { transport, selectTransport, browserSetup, preferences: async () => ({ enabled: true, showInSidebar: false }),
+    setPreferences: async () => {}, choose: async () => ({ url: null, phase: 'loading' as const }), subscribe: () => () => {} }
 }
 
 describe('optional Axiom browser companion controls', () => {
@@ -181,7 +184,7 @@ describe('optional Axiom browser companion controls', () => {
     const bridge = companion()
     mount({ axiomCompanion: bridge })
     const selector = await screen.findByRole('combobox', { name: 'Axiom sign-in connection' })
-    await waitFor(() => expect((selector as HTMLSelectElement).value).toBe('browser'))
+    await waitFor(() => { expect((selector as HTMLSelectElement).value).toBe('browser') })
     expect(bridge.selectTransport).not.toHaveBeenCalled()
     expect(screen.getByText('/app/axiom-browser/extension')).toBeTruthy()
     expect(screen.getByText('/app/axiom-browser/registration.mjs')).toBeTruthy()
@@ -198,18 +201,15 @@ describe('optional Axiom browser companion controls', () => {
     bridge.selectTransport.mockImplementation(async (mode) => { await waiting.promise; await original(mode) })
     const actions = mount({ axiomCompanion: bridge })
     const selector = screen.getByRole('combobox', { name: 'Axiom sign-in connection' })
-    await waitFor(() => expect(selector.hasAttribute('disabled')).toBe(false))
+    await waitFor(() => { expect(selector.hasAttribute('disabled')).toBe(false) })
     fireEvent.change(selector, { target: { value: 'browser' } })
     expect(screen.getByRole('button', { name: 'Connect Axiom' }).hasAttribute('disabled')).toBe(true)
-    const input = screen.getByRole('textbox', { name: 'Existing ChatGPT Dot URL' })
-    const url = 'https://chatgpt.com/dots/exact~browser'
-    fireEvent.change(input, { target: { value: url } })
-    fireEvent.submit(input.closest('form')!)
-    expect(actions.connectAxiom).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Axiom' }))
+    expect(actions.chooseDot).not.toHaveBeenCalled()
     waiting.resolve(undefined)
-    await waitFor(() => expect((selector as HTMLSelectElement).value).toBe('browser'))
-    fireEvent.submit(input.closest('form')!)
-    await waitFor(() => expect(actions.connectAxiom).toHaveBeenCalledExactlyOnceWith(url))
+    await waitFor(() => { expect((selector as HTMLSelectElement).value).toBe('browser') })
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Axiom' }))
+    await waitFor(() => { expect(actions.chooseDot).toHaveBeenCalledExactlyOnceWith() })
     expect(bridge.selectTransport).toHaveBeenCalledExactlyOnceWith('browser')
   })
 
@@ -218,7 +218,7 @@ describe('optional Axiom browser companion controls', () => {
     bridge.selectTransport.mockRejectedValue(new Error('PRIVATE_NATIVE_PATH'))
     mount({ axiomCompanion: bridge })
     const selector = screen.getByRole('combobox', { name: 'Axiom sign-in connection' })
-    await waitFor(() => expect(selector.hasAttribute('disabled')).toBe(false))
+    await waitFor(() => { expect(selector.hasAttribute('disabled')).toBe(false) })
     fireEvent.change(selector, { target: { value: 'browser' } })
     const error = await screen.findByRole('alert')
     expect(error.textContent).toBe(en.axiomTransportError)
@@ -245,7 +245,7 @@ describe('optional Axiom browser companion controls', () => {
     expect(bridge.selectTransport).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Connect Axiom' }).hasAttribute('disabled')).toBe(true)
     fireEvent.change(screen.getByRole('combobox', { name: 'Axiom sign-in connection' }), { target: { value: 'embedded' } })
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Connect Axiom' }).hasAttribute('disabled')).toBe(false))
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Connect Axiom' }).hasAttribute('disabled')).toBe(false) })
     expect(bridge.selectTransport).toHaveBeenCalledExactlyOnceWith('embedded')
   })
 })

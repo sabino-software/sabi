@@ -20,3 +20,9 @@
 .sourceBadge { display: inline-flex; align-items: center; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; white-space: nowrap; }
 .headerBadge { display: inline-flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; white-space: nowrap; }
 @media (max-width: 767px) { .page { padding: 24px 20px 16px; } }
+
+.dotAction { display: flex; align-items: center; gap: var(--dsh-sidebar-label-gap); flex-shrink: 0; min-height: 36px; margin: 0 0 8px; padding: 8px var(--dsh-sidebar-row-padding); border: 0; border-radius: var(--dsw-radius-md); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; cursor: pointer; }
+.dotAction[data-wide='false'] { width: 36px; height: 36px; padding: 0; justify-content: center; }
+.dotAction:hover { background: var(--dsw-alias-bg-layer-1); }
+.dotAction:focus-visible { outline: 1px solid var(--dsw-alias-state-business-primary); }
+.preferenceRow { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 16px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l2); font-size: 14px; }

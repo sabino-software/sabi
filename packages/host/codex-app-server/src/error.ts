@@ -18,8 +18,11 @@ const MESSAGES: Record<CodexAppServerErrorCode, string> = {
 
 /** A failed submitted mutation is never implicitly retried, because it may already have committed. */
 export class CodexAppServerError extends HarnessError {
+  /** Whether a submitted mutation may have committed despite this failure. */
   readonly outcomeUnknown: boolean
+  /** Original numeric RPC rejection code, or null for non-RPC failures. */
   readonly rpcCode: number | null
+  /** Sanitized upstream RPC error classification, or null when unavailable. */
   readonly rpcErrorType: string | null
 
   /**

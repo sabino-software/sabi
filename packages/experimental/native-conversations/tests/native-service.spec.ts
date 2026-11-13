@@ -27,6 +27,7 @@ import NativeConversations from '../src/index.ts'
 import { BINDING_RECORD, CODEX_CUT_RECORD } from '../src/projection.ts'
 import { sourceSessionId } from '../src/history.ts'
 import type { NativeConversationId } from '../src/types.ts'
+import type { AxiomSnapshot, AxiomTransport } from '../src/axiom-types.ts'
 
 async function fixture(verifiedTurns = false) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'native-service-')))
@@ -127,6 +128,35 @@ function authoredText(session: Session): string[] {
 }
 
 describe.skipIf(process.platform === 'win32')('native conversation service', () => {
+  it('restores one assigned Dot selection from cached metadata and leaves several Dots for an explicit choice', async () => {
+    const h = await fixture()
+    let page: AxiomSnapshot = { source: 'chatgpt-web', url: null, title: 'Axiom', revision: 0, phase: 'disconnected',
+      messages: [], canSend: false, draftPresent: false, siteStatus: null, limited: true }
+    const transport: AxiomTransport = {
+      acquire: async () => () => {},
+      connect: async (url) => { page = { ...page, url, phase: 'ready', canSend: true }; return page },
+      snapshot: async () => page,
+      send: async () => { throw new Error('Selecting a saved Dot must not submit a message') },
+      showLogin: async () => {}, disconnect: async () => {},
+    }
+    const first = await h.open()
+    expect((await first.ctx.nativeConversations.status()).axiom.preferredUrl).toBeNull()
+    first.ctx.nativeConversations.attachAxiomTransport(transport)
+    const one = 'https://chatgpt.com/dots/fixture~one'
+    await first.ctx.nativeConversations.connectAxiom(one)
+    expect((await first.ctx.nativeConversations.status()).axiom.preferredUrl).toBe(one)
+    await first.ctx.fiber.dispose()
+    const second = await h.open()
+    expect((await second.ctx.nativeConversations.status()).axiom.preferredUrl).toBe(one)
+    second.ctx.nativeConversations.attachAxiomTransport(transport)
+    const two = 'https://chatgpt.com/dots/fixture~two'
+    await second.ctx.nativeConversations.connectAxiom(two)
+    expect((await second.ctx.nativeConversations.status()).axiom.preferredUrl).toBe(two)
+    await second.ctx.fiber.dispose()
+    const third = await h.open()
+    expect((await third.ctx.nativeConversations.status()).axiom.preferredUrl).toBeNull()
+  })
+
   it('forks a verified completed source cut independently and resumes the child-owned binding', async () => {
     const h = await fixture(true)
     const { ctx } = await h.open()

@@ -42,6 +42,7 @@ export class CodexRpcPeer {
   private failure: CodexAppServerError | undefined
   private readonly pending = new Map<CodexRequestId, Pending>()
   private readonly incoming = new Map<CodexRequestId, Incoming>()
+  /** Resolves when the owned WebSocket closes. */
   readonly closed: Promise<void>
 
   /**

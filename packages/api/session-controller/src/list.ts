@@ -43,6 +43,7 @@ const imageLimitsSchema = z.object({
  * Advance the Session-list metadata projection by one committed event.
  * @param state - metadata before the event.
  * @param event - next committed Session event.
+ * @param sourceContent - Whether observed native content makes the Session nonblank.
  * @returns the original or advanced metadata value.
  */
 export function applySessionListMetadata(

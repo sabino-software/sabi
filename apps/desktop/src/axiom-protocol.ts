@@ -56,8 +56,20 @@ export interface AxiomBrowserSetup {
   readonly extensionId: string
 }
 
+/** Device-local feature availability and optional sidebar visibility. */
+export interface AxiomPreferences {
+  readonly enabled: boolean
+  readonly showInSidebar: boolean
+}
+
 /** Desktop original-page adapter; website authentication remains with the selected browser owner. */
 export interface DesktopAxiomBridge {
+  /** @returns Saved feature availability and optional sidebar visibility. */
+  preferences(): Promise<AxiomPreferences>
+  /** @param preferences Exact feature choices. @returns After saving and revoking disabled connections. */
+  setPreferences(preferences: AxiomPreferences): Promise<void>
+  /** @param hintUrl Known canonical Dot, or null to choose on the original website. @returns Sanitized source state. */
+  choose(hintUrl: string | null): Promise<AxiomSnapshot>
   /** @returns Current original-page transport. */
   transport(): Promise<AxiomTransportMode>
   /** @param mode Explicit original-page transport. @returns After revoking the previous connection. */

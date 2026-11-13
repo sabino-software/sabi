@@ -2,7 +2,7 @@ import { DesktopAxiomPage } from './axiom-bridge.ts'
 import { BrowserAxiomPage } from './axiom-browser.ts'
 import { axiomBrowserCopy } from './axiom-browser-copy.ts'
 import { DesktopAxiomOwner } from './axiom-owner.ts'
-import { readAxiomTransport, saveAxiomTransport } from './axiom-transport-setting.ts'
+import { readAxiomPreferences, readAxiomTransport, saveAxiomPreferences, saveAxiomTransport } from './axiom-transport-setting.ts'
 import { AXIOM_EXTENSION_ID, AXIOM_NATIVE_HOST } from './axiom-browser-protocol.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
@@ -520,8 +520,12 @@ async function main(): Promise<void> {
       return result.response === 0
     },
   })
-  const axiomPage = new DesktopAxiomOwner({ browser: browserAxiom, embedded: new DesktopAxiomPage(publishAxiom) },
-    readAxiomTransport(app.getPath('userData')), (mode) => { saveAxiomTransport(app.getPath('userData'), mode) })
+  const embeddedAxiom = new DesktopAxiomPage(publishAxiom, () => locale.id, () => {
+    if (mainWindow !== undefined && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus() }
+  })
+  const axiomPage = new DesktopAxiomOwner({ browser: browserAxiom, embedded: embeddedAxiom },
+    readAxiomTransport(app.getPath('userData')), (mode) => { saveAxiomTransport(app.getPath('userData'), mode) },
+    readAxiomPreferences(app.getPath('userData')), (value) => { saveAxiomPreferences(app.getPath('userData'), value) })
   app.on('will-quit', () => { axiomPage.disconnect(); browserAxiom.dispose() })
   let injections: readonly unknown[] = []
   let welcomeBackend: DesktopWelcomeBackend | undefined
@@ -904,6 +908,16 @@ async function main(): Promise<void> {
       || !event.senderFrame.url.startsWith('dsh-app://app/')) throw new Error('Rejected Platform command')
     return owner
   }
+  ipcMain.handle(DESKTOP_IPC.axiomPreferences, (event) => { assertMainApplication(event); return axiomPage.preferences() })
+  ipcMain.handle(DESKTOP_IPC.axiomSetPreferences, (event, value: unknown) => {
+    assertMainApplication(event)
+    axiomPage.setPreferences(value)
+  })
+  ipcMain.handle(DESKTOP_IPC.axiomChoose, (event, hintUrl: unknown) => {
+    assertMainApplication(event)
+    if (hintUrl !== null && typeof hintUrl !== 'string') throw new Error('Invalid Dot selection hint')
+    return axiomPage.choose(hintUrl)
+  })
   ipcMain.handle(DESKTOP_IPC.axiomTransport, (event) => { assertMainApplication(event); return axiomPage.transport() })
   ipcMain.handle(DESKTOP_IPC.axiomSelectTransport, (event, mode: unknown) => {
     assertMainApplication(event)
@@ -1274,8 +1288,8 @@ async function main(): Promise<void> {
     ...process.platform === 'darwin' || process.platform === 'win32'
       ? [{ label: currentDesktopLocale().messages.cliCommandMenu, click: () => { void commandManager.show() } }] : [],
     { type: 'separator' },
+    { label: currentDesktopLocale().messages.reloadPageMenu, click: () => { embeddedAxiom.reloadFocused() } },
     ...development ? [
-      { label: currentDesktopLocale().messages.reloadPageMenu, role: 'reload' as const },
       { label: currentDesktopLocale().messages.restartAppHostMenu, click: () => {
         if (quitting) return
         app.relaunch()

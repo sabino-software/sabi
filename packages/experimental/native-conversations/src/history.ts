@@ -27,6 +27,7 @@ export interface SourceCheckpoint {
 const checkpointSchema: z.ZodType<SourceCheckpoint> = z.object({
   ids: z.array(z.string()), hydrated: z.boolean(), historyLimited: z.boolean(),
 }).strict()
+/** Durable record of source identities already mirrored into a local Session. */
 export const CHECKPOINT_RECORD = 'plugin:native-conversations/checkpoint'
 declare module '@deepseek-ai/dsh-session/types' {
   interface PluginRecordMap {
@@ -34,6 +35,7 @@ declare module '@deepseek-ai/dsh-session/types' {
     'plugin:native-conversations/checkpoint': SourceCheckpoint
   }
 }
+/** Host projection of mirrored source identities and history completeness. */
 export const sourceCheckpointProjection = {
   key: 'nativeConversationCheckpoint', stateVersion: 1, stateSchema: checkpointSchema,
   init: (): SourceCheckpoint => ({ ids: [], hydrated: false, historyLimited: false }),
@@ -43,12 +45,26 @@ export const sourceCheckpointProjection = {
   },
 } satisfies ProjectionDefinition<'nativeConversationCheckpoint', SourceCheckpoint>
 
-/** Stable local identity lets catalog refreshes reuse a Session without opening every log. */
+/**
+ * Derive a stable local identity so catalog refreshes can reuse a Session without opening every log.
+ * @param source - Original execution source namespace.
+ * @param sourceId - Opaque conversation identity within that source.
+ * @returns Deterministic local Session identity for the source conversation.
+ */
 export function sourceSessionId(source: string, sourceId: string): SessionId {
   return SessionId(`session-${createHash('sha256').update(`${source}\0${sourceId}`).digest('hex').slice(0, 32)}`)
 }
 
-/** Append observed text at the next turn supplied by the owning turn-boundary reader. */
+/**
+ * Append observed text at the next turn supplied by the owning turn-boundary reader.
+ * @param session - Local Session receiving completed source messages.
+ * @param checkpoint - Previously mirrored message identities and history completeness.
+ * @param messages - Observed source messages in chronological order.
+ * @param provider - Original execution provider attached to assistant messages.
+ * @param model - Original model identity attached to assistant messages.
+ * @param historyLimited - Whether the source returned an incomplete history.
+ * @param nextTurn - Next available local turn number.
+ */
 export function appendSourceMessages(
   session: Session, checkpoint: SourceCheckpoint, messages: readonly SourceMessage[],
   provider: string, model: string, historyLimited: boolean, nextTurn: number,
@@ -98,10 +114,16 @@ const pageSchema = z.object({
   }).loose()),
   nextCursor: z.string().nullable(),
 }).loose()
+/** One observed source message or inert operation, optionally grouped by its original turn. */
 export type SourceHistoryEntry = (
   { readonly kind: 'message'; readonly message: SourceMessage } | { readonly kind: 'activity'; readonly activity: NativeCodexActivity }
 ) & { readonly sourceTurnId?: string }
-/** Original item order, including inert source operation cards. In-progress source turns are omitted until settled. */
+/**
+ * Parse original item order, including inert source operations; omit excluded in-progress turns until settled.
+ * @param value - Original Codex items/list response envelope.
+ * @param excludedTurns - Original turn identities to omit from this history page.
+ * @returns Ordered source entries and the next page cursor.
+ */
 export function parseCodexHistoryEntries(
   value: CodexJsonObject, excludedTurns: ReadonlySet<string> = new Set(),
 ): { entries: SourceHistoryEntry[]; nextCursor: string | null } {
@@ -198,7 +220,11 @@ export function appendCodexHistoryTurns(
     appendPluginRecord(session, CHECKPOINT_RECORD, { ids: [...seen], hydrated: true, historyLimited: false })
   }
 }
-/** Validate official items/list envelopes and retain user and assistant authored text. */
+/**
+ * Validate official items/list envelopes and retain user and assistant authored text.
+ * @param value - Original Codex items/list response envelope.
+ * @returns Source text messages and the next page cursor, excluding operation entries.
+ */
 export function parseCodexHistoryPage(value: CodexJsonObject): { messages: SourceMessage[]; nextCursor: string | null } {
   const page = parseCodexHistoryEntries(value)
   return { messages: page.entries.flatMap(entry => entry.kind === 'message' ? [entry.message] : []), nextCursor: page.nextCursor }

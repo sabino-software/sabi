@@ -14,6 +14,7 @@ import { registerCodexRequests } from './codex-requests.ts'
 import { codexItemActivity } from './codex-items.ts'
 import type { NativeCodexActivity } from './codex-activity-types.ts'
 
+/** Provider identity for turns executed by the original work Codex daemon. */
 export const CODEX_PROVIDER = 'codex-app-server'
 const threadSchema = z.object({ id: z.string(), status: z.object({ type: z.string() }).loose() }).loose()
 const modelSchema = z.object({

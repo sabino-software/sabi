@@ -85,6 +85,7 @@ function mountShell({ collapsed = false, width = 300, drawer = false, shortcuts 
         owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
         opts?: { hookContext?: SidebarSectionHookContext },
       ) => {
+        if (key === 'sidebar.primary.action') return <button data-testid="primary-action-seat" data-wide={owner.wide}>Feature action</button>
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
         if (key === 'sidebar.toggle.badge') return null
@@ -741,4 +742,13 @@ it.each([false, true])('moves hidden sidebar focus only to an available opener (
   const expected = hasOpener ? screen.getByRole('button', { name: 'Open navigation' }) : previous
   expect(document.activeElement).toBe(expected)
   if (hasOpener) expect(expected.hasAttribute('data-dsh-automatic-focus')).toBe(true)
+})
+
+it('places feature actions directly after New Session before the scrolling history', () => {
+  mountShell()
+  const newSession = screen.getAllByRole('button', { name: 'New session' }).at(-1)!
+  const action = screen.getByTestId('primary-action-seat')
+  expect(newSession.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(action.closest('[data-sidebar-scrollport]')).toBeNull()
+  expect(action.getAttribute('data-wide')).toBe('true')
 })

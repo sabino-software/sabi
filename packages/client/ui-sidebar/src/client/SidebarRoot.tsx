@@ -401,6 +401,8 @@ export function SidebarRoot({
         </Tooltip>
       )}
 
+      {renderSlot('sidebar.primary.action', { wide })}
+
       <div className={css.scrollRegion}>
         <div
           ref={scrollHandoff.bindViewportRef}

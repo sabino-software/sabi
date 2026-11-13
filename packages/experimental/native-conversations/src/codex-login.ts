@@ -10,7 +10,11 @@ const completed = z.object({ loginId: z.string().nullable(), success: z.boolean(
 const FAILURE = 'Codex sign-in could not be confirmed. Check the work Codex application before trying again.'
 interface Attempt { readonly generation: number; loginId: string | null; timer?: ReturnType<typeof setTimeout> }
 
-/** Validate an authorization URL without logging its OAuth transaction fields. */
+/**
+ * Validate an authorization URL without logging its OAuth transaction fields.
+ * @param value - Authorization link returned by the work daemon.
+ * @returns The validated official authorization URL.
+ */
 export function codexAuthorizationUrl(value: string): string {
   const url = new URL(value)
   if (!['https://auth.openai.com', 'https://chatgpt.com'].includes(url.origin) || url.username || url.password || url.hash) {
@@ -38,10 +42,16 @@ export class NativeCodexLoginController {
     })]
   }
 
-  /** @returns Credential-free state of this controller's attempt. */
+  /**
+   * Read the owned sign-in attempt's current state.
+   * @returns Credential-free state of this controller's attempt.
+   */
   status(): NativeCodexLoginStatus { return this.current }
 
-  /** @returns The daemon's validated authorization link for the explicit browser action. */
+  /**
+   * Start an owned browser sign-in attempt and verify its completion through the work daemon.
+   * @returns The daemon's validated authorization link for the explicit browser action.
+   */
   async start(): Promise<{ authUrl: string }> {
     if (this.disposed || this.active || this.current.phase === 'cancelling') throw new Error('A Codex sign-in attempt is already active or unavailable.')
     let owned: Attempt = { generation: this.transport.status().generation, loginId: null }
