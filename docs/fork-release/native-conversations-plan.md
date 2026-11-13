@@ -14,6 +14,8 @@ The owner-only `nativeConversations/rebuildCodexMirror` operation creates a new 
 
 Installed-app checks rebuilt two affected prototype mirrors, with both original log hashes unchanged and both original Codex IDs preserved. The real historical chat opened in the native renderer without starting inference. The controlled imported history reopened after an app restart. Sidebar synchronization imported zero duplicates. A new chat created through the installed UI used work Codex, returned the expected reply, and reopened after restart. Runtime inventory showed all five Harness reporting plugins disabled and unmounted; the existing work credential file remained byte-identical. Original Axiom history and interaction still require authenticated live acceptance.
 
+The installed context correction continued an existing clean Codex chat, executed one `skeinlet/bash` call with exactly `pwd`, and saved one byte-exact human message without framework JSON. Canonical readback confirmed the original thread ID and completed tool result. The eight-turn native history reopened after a full app restart without a history error or raw framework JSON. Six extra local test mirrors were archived; their canonical Codex sources remain unchanged, and one named acceptance chat stays available.
+
 Implementation and acceptance:
 
 1. Persist source bindings and hydrate original messages into ordinary Sessions without duplicating source messages on reopen.
