@@ -753,6 +753,6 @@ it('places feature actions directly after New Session before the scrolling histo
   expect(newSession.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(action.closest('[data-sidebar-scrollport]')).toBeNull()
   expect(action.getAttribute('data-wide')).toBe('true')
-  expect(newSession.classList.contains(css.primaryAction)).toBe(true)
-  expect(action.classList.contains(css.primaryAction)).toBe(true)
+  expect(newSession.classList.contains(css.primaryAction ?? '')).toBe(true)
+  expect(action.classList.contains(css.primaryAction ?? '')).toBe(true)
 })
