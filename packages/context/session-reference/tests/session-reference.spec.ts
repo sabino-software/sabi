@@ -662,24 +662,24 @@ describe('session reference discovery and preparation', () => {
     const ctx = await harness()
     const target = ctx.sessions.create(SessionId('target'))
     const source = ctx.sessions.create(SessionId('source'))
-    let release: (() => void) | undefined
+    const releases: (() => void)[] = []
     ctx.on('workspace/session-presentation', async () => {
-      await new Promise<void>((resolve) => { release = resolve })
+      await new Promise<void>((resolve) => { releases.push(resolve) })
       return { visibility: 'hidden' }
     })
     const read = vi.spyOn(ctx.sessionQuery, 'readSurface')
     for (const discover of [true, false]) {
-      release = undefined
+      releases.length = 0
       const abort = new AbortController()
       const pending = discover
         ? ctx.sessionReferenceResolver.listCandidates(fakeAgent(target), '', 1, abort.signal)
         : ctx.sessionReferenceResolver.prepare(fakeAgent(target), [], [{ sessionId: source.id }],
           { provider: 'seed', model: 'seed' }, abort.signal)
-      await vi.waitFor(() => { expect(release).toBeTypeOf('function') })
+      await vi.waitFor(() => { expect(releases).not.toHaveLength(0) })
       const cancelled = expect(pending).rejects.toThrow(expectCode('SESSION_REFERENCE_CANCELLED'))
       abort.abort('reference dismissed')
       await cancelled
-      release?.()
+      for (const release of releases) release()
     }
     expect(read).not.toHaveBeenCalled()
   })
